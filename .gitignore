@@ -2,3 +2,5 @@ glyph
 
 *.dylib
 *.a
+
+*.dSYM
