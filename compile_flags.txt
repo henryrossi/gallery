@@ -1,0 +1,9 @@
+-Iinclude
+-Llib
+-lglfw3
+-framework
+OpenGL
+-framework
+Cocoa
+-framework
+IOKit

@@ -1,0 +1,8 @@
+Language: Cpp
+AlignArrayOfStructures: None
+BracedInitializerIndentWidth: 8
+BreakBeforeBinaryOperators: All
+Cpp11BracedListStyle: false
+IndentWidth: 8
+TabWidth: 8
+
