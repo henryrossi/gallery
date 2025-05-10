@@ -1,5 +1,7 @@
 glyph
 
+VulkanSDK
+
 *.dylib
 *.a
 

@@ -1,8 +1,11 @@
 -Iinclude
+-IVulkanSDK/1.4.309.0/macOS/include
 -Llib
+-LVulkanSDK/1.4.309.0/macOS/lib
+-rpath 
+VulkanSDK/1.4.309.0/macOS/lib
 -lglfw3
--framework
-OpenGL
+-lvulkan
 -framework
 Cocoa
 -framework

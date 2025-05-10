@@ -1,4 +1,4 @@
-Language: Cpp
+Language: C
 AlignArrayOfStructures: None
 BracedInitializerIndentWidth: 8
 BreakBeforeBinaryOperators: All
