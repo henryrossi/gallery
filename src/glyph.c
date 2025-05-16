@@ -27,6 +27,13 @@ static VkFormat swapchain_format;
 static VkExtent2D swapchain_extent;
 static uint32_t swapchain_image_views_count;
 static VkImageView *swapchain_image_views;
+static uint32_t swapchain_framebuffer_count;
+static VkFramebuffer *swapchain_framebuffers;
+static VkRenderPass render_pass;
+static VkPipelineLayout pipeline_layout;
+static VkPipeline graphics_pipeline;
+static VkCommandPool command_pool;
+static VkCommandBuffer command_buffer;
 
 static const char *device_exts[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -520,10 +527,47 @@ static int create_instance(void) {
         return 1;
 }
 
+// Create render pass. Returns 1 on success, 0 on failure.
+static int create_render_pass(void) {
+        VkAttachmentDescription color_attachment = { 0 };
+        color_attachment.format = swapchain_format;
+        color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference color_attach_ref = { 0 };
+        color_attach_ref.attachment = 0;
+        color_attach_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass = { 0 };
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments = &color_attach_ref;
+
+        VkRenderPassCreateInfo createinfo = { 0 };
+        createinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        createinfo.attachmentCount = 1;
+        createinfo.pAttachments = &color_attachment;
+        createinfo.subpassCount = 1;
+        createinfo.pSubpasses = &subpass;
+
+        VkResult res
+            = vkCreateRenderPass(device, &createinfo, NULL, &render_pass);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to create render pass: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+        return 1;
+}
+
 // Create graphics pipeline. Returns 1 on success, 0 on failure.
 static int create_graphics_pipeline(void) {
         VkShaderModule vert = create_shader_module(device, "shaders/vert.spv");
         VkShaderModule frag = create_shader_module(device, "shaders/frag.spv");
+        // need to properly clean up shader modules
         if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) {
                 return 0;
         }
@@ -547,11 +591,245 @@ static int create_graphics_pipeline(void) {
                 frag_stage_info,
         };
 
+        VkDynamicState dynamic_states[] = {
+                VK_DYNAMIC_STATE_VIEWPORT,
+                VK_DYNAMIC_STATE_SCISSOR,
+        };
+        VkPipelineDynamicStateCreateInfo dynamic_state = { 0 };
+        dynamic_state.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic_state.dynamicStateCount
+            = sizeof(dynamic_states) / sizeof(dynamic_states[0]);
+        dynamic_state.pDynamicStates = dynamic_states;
+
+        VkPipelineVertexInputStateCreateInfo vertex_input_info = { 0 };
+        vertex_input_info.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertex_input_info.vertexBindingDescriptionCount = 0;
+        vertex_input_info.vertexAttributeDescriptionCount = 0;
+
+        VkPipelineInputAssemblyStateCreateInfo input_assembly = { 0 };
+        input_assembly.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        input_assembly.primitiveRestartEnable = VK_FALSE;
+
+        VkPipelineViewportStateCreateInfo viewport_state = { 0 };
+        viewport_state.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewport_state.viewportCount = 1;
+        viewport_state.scissorCount = 1;
+
+        VkPipelineRasterizationStateCreateInfo rasterizer = { 0 };
+        rasterizer.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizer.depthClampEnable = VK_FALSE;
+        rasterizer.rasterizerDiscardEnable = VK_FALSE;
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizer.lineWidth = 1.0f;
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer.depthBiasEnable = VK_FALSE;
+
+        VkPipelineMultisampleStateCreateInfo multisampling = { 0 };
+        multisampling.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling.sampleShadingEnable = VK_FALSE;
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+        VkPipelineColorBlendAttachmentState color_blend_attachment = { 0 };
+        color_blend_attachment.colorWriteMask
+            = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+              | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        color_blend_attachment.blendEnable = VK_FALSE;
+
+        VkPipelineColorBlendStateCreateInfo color_blending = { 0 };
+        color_blending.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        color_blending.logicOpEnable = VK_FALSE;
+        color_blending.logicOp = VK_LOGIC_OP_COPY;
+        color_blending.attachmentCount = 1;
+        color_blending.pAttachments = &color_blend_attachment;
+
+        VkPipelineLayoutCreateInfo pipeline_layout_info = { 0 };
+        pipeline_layout_info.sType
+            = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipeline_layout_info.setLayoutCount = 0;
+        pipeline_layout_info.pushConstantRangeCount = 0;
+
+        VkResult res = vkCreatePipelineLayout(device, &pipeline_layout_info,
+                                              NULL, &pipeline_layout);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to create pipeline layout: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        VkGraphicsPipelineCreateInfo pipeline_info = { 0 };
+        pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipeline_info.stageCount = 2;
+        pipeline_info.pStages = shader_stages;
+        pipeline_info.pVertexInputState = &vertex_input_info;
+        pipeline_info.pInputAssemblyState = &input_assembly;
+        pipeline_info.pViewportState = &viewport_state;
+        pipeline_info.pRasterizationState = &rasterizer;
+        pipeline_info.pMultisampleState = &multisampling;
+        pipeline_info.pDepthStencilState = NULL;
+        pipeline_info.pColorBlendState = &color_blending;
+        pipeline_info.pDynamicState = &dynamic_state;
+        pipeline_info.layout = pipeline_layout;
+        pipeline_info.renderPass = render_pass;
+        pipeline_info.subpass = 0;
+        pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+        pipeline_info.basePipelineIndex = -1;
+
+        res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1,
+                                        &pipeline_info, NULL,
+                                        &graphics_pipeline);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to create graphics pipelines: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
         vkDestroyShaderModule(device, vert, NULL);
         vkDestroyShaderModule(device, frag, NULL);
 
         return 1;
 }
+
+// Create framebuffers. Returns 1 on success, 0 on failure.
+static int create_framebuffers(void) {
+        swapchain_framebuffer_count = swapchain_image_views_count;
+        swapchain_framebuffers
+            = malloc(sizeof(VkFramebuffer) * swapchain_framebuffer_count);
+
+        for (uint32_t i = 0; i < swapchain_framebuffer_count; i++) {
+                VkImageView attachments[] = {
+                        swapchain_image_views[i],
+                };
+
+                VkFramebufferCreateInfo createinfo = { 0 };
+                createinfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+                createinfo.renderPass = render_pass;
+                createinfo.attachmentCount = 1;
+                createinfo.pAttachments = attachments;
+                createinfo.width = swapchain_extent.width;
+                createinfo.height = swapchain_extent.height;
+                createinfo.layers = 1;
+
+                VkResult res = vkCreateFramebuffer(device, &createinfo, NULL,
+                                                   swapchain_framebuffers + i);
+                if (res != VK_SUCCESS) {
+                        fprintf(stderr, "Failed to create framebuffer: %s\n",
+                                string_VkResult(res));
+                        return 0;
+                }
+        }
+
+        return 1;
+}
+
+// Creates a command pool. Returns 1 on success, 0 on failure.
+static int create_command_pool(void) {
+        queue_family_indicies_t indicies = find_queue_families(physical_device);
+
+        VkCommandPoolCreateInfo createinfo = { 0 };
+        createinfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        createinfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        createinfo.queueFamilyIndex = indicies.graphics.index;
+
+        VkResult res
+            = vkCreateCommandPool(device, &createinfo, NULL, &command_pool);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to create command pool: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        return 1;
+}
+
+// Create command buffer. Return 1 on success, 0 on failure.
+static int create_command_buffer(void) {
+        VkCommandBufferAllocateInfo allocinfo = { 0 };
+        allocinfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocinfo.commandPool = command_pool;
+        allocinfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocinfo.commandBufferCount = 1;
+
+        VkResult res
+            = vkAllocateCommandBuffers(device, &allocinfo, &command_buffer);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to allocate command buffers: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        return 1;
+}
+
+// Write commands into the command buffer. Returns 1 on success, 0 on failure
+static int record_command_buffer(VkCommandBuffer cmd_buffer,
+                                 uint32_t image_index) {
+        VkCommandBufferBeginInfo begininfo = { 0 };
+        begininfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begininfo.flags = 0;
+        begininfo.pInheritanceInfo = NULL;
+
+        VkResult res = vkBeginCommandBuffer(cmd_buffer, &begininfo);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr,
+                        "Failed to being command buffer recording: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        VkClearValue clear_value = { { { 0.3f, 0.3f, 0.3f, 1.0f } } };
+        VkRenderPassBeginInfo passinfo = {
+                .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                .renderPass = render_pass,
+                .framebuffer = swapchain_framebuffers[image_index],
+                .renderArea.offset = { 0, 0 },
+                .renderArea.extent = swapchain_extent,
+                .clearValueCount = 1,
+                .pClearValues = &clear_value,
+        };
+
+        vkCmdBeginRenderPass(cmd_buffer, &passinfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          graphics_pipeline);
+
+        VkViewport viewport = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .width = (float)swapchain_extent.width,
+                .height = (float)swapchain_extent.height,
+                .minDepth = 0.0f,
+                .maxDepth = 1.0f,
+        };
+        vkCmdSetViewport(cmd_buffer, 0, 1, &viewport);
+
+        VkRect2D scissor = {
+                .offset = { 0, 0 },
+                .extent = swapchain_extent,
+        };
+        vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
+
+        vkCmdDraw(cmd_buffer, 3, 1, 0, 0);
+        vkCmdEndRenderPass(cmd_buffer);
+
+        res = vkEndCommandBuffer(cmd_buffer);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to record command buffer: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        return 1;
+}
+
+void draw_frame(void) {}
 
 int main(int argc, char **argv) {
         window = init_window();
@@ -577,21 +855,41 @@ int main(int argc, char **argv) {
         if (!create_image_views()) {
                 return 1;
         }
+        if (!create_render_pass()) {
+                return 1;
+        }
         if (!create_graphics_pipeline()) {
+                return 1;
+        }
+        if (!create_framebuffers()) {
+                return 1;
+        }
+        if (!create_command_pool()) {
+                return 1;
+        }
+        if (!create_command_buffer()) {
                 return 1;
         }
 
         while (!glfwWindowShouldClose(window)) {
                 glfwPollEvents();
+                draw_frame();
         }
 
         if (enable_validation_layers) {
                 destroy_debug_utils_messenger_ext(instance, debug_messenger,
                                                   NULL);
         }
+        vkDestroyCommandPool(device, command_pool, NULL);
+        for (uint32_t i = 0; i < swapchain_framebuffer_count; i++) {
+                vkDestroyFramebuffer(device, swapchain_framebuffers[i], NULL);
+        }
         for (uint32_t i = 0; i < swapchain_image_views_count; i++) {
                 vkDestroyImageView(device, swapchain_image_views[i], NULL);
         }
+        vkDestroyPipeline(device, graphics_pipeline, NULL);
+        vkDestroyPipelineLayout(device, pipeline_layout, NULL);
+        vkDestroyRenderPass(device, render_pass, NULL);
         vkDestroySwapchainKHR(device, swapchain, NULL);
         vkDestroyDevice(device, NULL);
         vkDestroySurfaceKHR(instance, surface, NULL);
