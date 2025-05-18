@@ -13,6 +13,9 @@
 const uint32_t default_window_width = 800;
 const uint32_t default_window_height = 600;
 
+#define MAX_FRAMES_IN_FLIGHT 2
+uint32_t current_frame = 0;
+
 static VkInstance instance;
 static VkDevice device;
 static VkPhysicalDevice physical_device = VK_NULL_HANDLE;
@@ -33,15 +36,23 @@ static VkRenderPass render_pass;
 static VkPipelineLayout pipeline_layout;
 static VkPipeline graphics_pipeline;
 static VkCommandPool command_pool;
-static VkCommandBuffer command_buffer;
-static VkSemaphore image_available_semaphore;
-static VkSemaphore render_finished_semaphore;
-static VkFence inflight_fence;
+static VkCommandBuffer command_buffer[MAX_FRAMES_IN_FLIGHT];
+static VkSemaphore image_available_semaphore[MAX_FRAMES_IN_FLIGHT];
+static VkSemaphore render_finished_semaphore[MAX_FRAMES_IN_FLIGHT];
+static VkFence inflight_fence[MAX_FRAMES_IN_FLIGHT];
+
+static uint32_t framebuffer_resized = 0;
 
 static const char *device_exts[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         "VK_KHR_portability_subset",
 };
+
+static void framebuffer_resize_callback(GLFWwindow *window, int width,
+                                        int height) {
+        // glfwGetWindowUserPointer
+        framebuffer_resized = 1;
+}
 
 static GLFWwindow *init_window(void) {
         glfwInit();
@@ -51,6 +62,9 @@ static GLFWwindow *init_window(void) {
 
         GLFWwindow *window = glfwCreateWindow(
             default_window_width, default_window_height, "glyph", NULL, NULL);
+        // glfwSetWindowUserPointer
+        glfwSetFramebufferSizeCallback(window, framebuffer_resize_callback);
+
         return window;
 }
 
@@ -755,6 +769,44 @@ static int create_framebuffers(void) {
         return 1;
 }
 
+static void cleanup_swapchain(void) {
+        for (uint32_t i = 0; i < swapchain_framebuffer_count; i++) {
+                vkDestroyFramebuffer(device, swapchain_framebuffers[i], NULL);
+        }
+        for (uint32_t i = 0; i < swapchain_image_views_count; i++) {
+                vkDestroyImageView(device, swapchain_image_views[i], NULL);
+        }
+        vkDestroySwapchainKHR(device, swapchain, NULL);
+}
+
+// Recreates swap chain. Returns 1 on success, 0 on failure.
+static int recreate_swapchain(void) {
+        int width = 0, height = 0;
+        glfwGetFramebufferSize(window, &width, &height);
+        while (width == 0 || height == 0) {
+                glfwGetFramebufferSize(window, &width, &height);
+                glfwWaitEvents();
+        }
+
+        vkDeviceWaitIdle(device);
+
+        cleanup_swapchain();
+
+        int res = create_swapchain();
+        if (!res)
+                return 0;
+
+        res = create_image_views();
+        if (!res)
+                return 0;
+
+        res = create_framebuffers();
+        if (!res)
+                return 0;
+
+        return 1;
+}
+
 // Creates a command pool. Returns 1 on success, 0 on failure.
 static int create_command_pool(void) {
         queue_family_indicies_t indicies = find_queue_families(physical_device);
@@ -777,14 +829,15 @@ static int create_command_pool(void) {
 
 // Create command buffer. Return 1 on success, 0 on failure.
 static int create_command_buffer(void) {
-        VkCommandBufferAllocateInfo allocinfo = { 0 };
-        allocinfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocinfo.commandPool = command_pool;
-        allocinfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocinfo.commandBufferCount = 1;
+        VkCommandBufferAllocateInfo allocinfo = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .commandPool = command_pool,
+                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
+        };
 
         VkResult res
-            = vkAllocateCommandBuffers(device, &allocinfo, &command_buffer);
+            = vkAllocateCommandBuffers(device, &allocinfo, command_buffer);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to allocate command buffers: %s\n",
                         string_VkResult(res));
@@ -864,27 +917,33 @@ static int create_sync_objects(void) {
                 .flags = VK_FENCE_CREATE_SIGNALED_BIT,
         };
 
-        VkResult res = vkCreateSemaphore(device, &semaphore_info, NULL,
-                                         &image_available_semaphore);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr,
-                        "Failed to create image available semaphore: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-        res = vkCreateSemaphore(device, &semaphore_info, NULL,
-                                &render_finished_semaphore);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr,
-                        "Failed to create render finished semaphore: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-        res = vkCreateFence(device, &fence_info, NULL, &inflight_fence);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create in flight fence: %s\n",
-                        string_VkResult(res));
-                return 0;
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                VkResult res = vkCreateSemaphore(device, &semaphore_info, NULL,
+                                                 image_available_semaphore + i);
+                if (res != VK_SUCCESS) {
+                        fprintf(
+                            stderr,
+                            "Failed to create image available semaphore: %s\n",
+                            string_VkResult(res));
+                        return 0;
+                }
+                res = vkCreateSemaphore(device, &semaphore_info, NULL,
+                                        render_finished_semaphore + i);
+                if (res != VK_SUCCESS) {
+                        fprintf(
+                            stderr,
+                            "Failed to create render finished semaphore: %s\n",
+                            string_VkResult(res));
+                        return 0;
+                }
+                res = vkCreateFence(device, &fence_info, NULL,
+                                    inflight_fence + i);
+                if (res != VK_SUCCESS) {
+                        fprintf(stderr,
+                                "Failed to create in flight fence: %s\n",
+                                string_VkResult(res));
+                        return 0;
+                }
         }
 
         return 1;
@@ -892,35 +951,45 @@ static int create_sync_objects(void) {
 
 // Submit a frame to be drawn. Returns 1 on success, 0 on failure.
 static int draw_frame(void) {
-        vkWaitForFences(device, 1, &inflight_fence, VK_TRUE, UINT64_MAX);
-        vkResetFences(device, 1, &inflight_fence);
+        vkWaitForFences(device, 1, inflight_fence + current_frame, VK_TRUE,
+                        UINT64_MAX);
 
         uint32_t image_index;
-        vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
-                              image_available_semaphore, VK_NULL_HANDLE,
-                              &image_index);
+        VkResult res
+            = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+                                    image_available_semaphore[current_frame],
+                                    VK_NULL_HANDLE, &image_index);
+        if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR
+            || framebuffer_resized) {
+                framebuffer_resized = 0;
+                recreate_swapchain();
+        } else if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to acquire swap chain image: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
 
-        vkResetCommandBuffer(command_buffer, 0);
-        record_command_buffer(command_buffer, image_index);
+        vkResetFences(device, 1, inflight_fence + current_frame);
 
-        VkSemaphore wait_semaphores[] = { image_available_semaphore };
-        VkSemaphore signal_semaphores[] = { render_finished_semaphore };
+        vkResetCommandBuffer(command_buffer[current_frame], 0);
+        record_command_buffer(command_buffer[current_frame], image_index);
+
         VkPipelineStageFlags wait_stages[] = {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         };
         VkSubmitInfo submit_info = {
                 .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                 .waitSemaphoreCount = 1,
-                .pWaitSemaphores = wait_semaphores,
+                .pWaitSemaphores = image_available_semaphore + current_frame,
                 .pWaitDstStageMask = wait_stages,
                 .commandBufferCount = 1,
-                .pCommandBuffers = &command_buffer,
+                .pCommandBuffers = command_buffer + current_frame,
                 .signalSemaphoreCount = 1,
-                .pSignalSemaphores = signal_semaphores,
+                .pSignalSemaphores = render_finished_semaphore + current_frame,
         };
 
-        VkResult res
-            = vkQueueSubmit(graphics_queue, 1, &submit_info, inflight_fence);
+        res = vkQueueSubmit(graphics_queue, 1, &submit_info,
+                            inflight_fence[current_frame]);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to sumbit draw command buffer: %s\n",
                         string_VkResult(res));
@@ -931,14 +1000,23 @@ static int draw_frame(void) {
         VkPresentInfoKHR present_info = {
                 .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
                 .waitSemaphoreCount = 1,
-                .pWaitSemaphores = signal_semaphores,
+                .pWaitSemaphores = render_finished_semaphore + current_frame,
                 .swapchainCount = 1,
                 .pSwapchains = swapchains,
                 .pImageIndices = &image_index,
                 .pResults = NULL,
         };
 
-        vkQueuePresentKHR(presentation_queue, &present_info);
+        res = vkQueuePresentKHR(presentation_queue, &present_info);
+        if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
+                recreate_swapchain();
+        } else if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to present swap chain image: %s",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 
         return 1;
 }
@@ -996,20 +1074,16 @@ int main(int argc, char **argv) {
                 destroy_debug_utils_messenger_ext(instance, debug_messenger,
                                                   NULL);
         }
-        vkDestroySemaphore(device, image_available_semaphore, NULL);
-        vkDestroySemaphore(device, render_finished_semaphore, NULL);
-        vkDestroyFence(device, inflight_fence, NULL);
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                vkDestroySemaphore(device, image_available_semaphore[i], NULL);
+                vkDestroySemaphore(device, render_finished_semaphore[i], NULL);
+                vkDestroyFence(device, inflight_fence[i], NULL);
+        }
         vkDestroyCommandPool(device, command_pool, NULL);
-        for (uint32_t i = 0; i < swapchain_framebuffer_count; i++) {
-                vkDestroyFramebuffer(device, swapchain_framebuffers[i], NULL);
-        }
-        for (uint32_t i = 0; i < swapchain_image_views_count; i++) {
-                vkDestroyImageView(device, swapchain_image_views[i], NULL);
-        }
+        cleanup_swapchain();
         vkDestroyPipeline(device, graphics_pipeline, NULL);
         vkDestroyPipelineLayout(device, pipeline_layout, NULL);
         vkDestroyRenderPass(device, render_pass, NULL);
-        vkDestroySwapchainKHR(device, swapchain, NULL);
         vkDestroyDevice(device, NULL);
         vkDestroySurfaceKHR(instance, surface, NULL);
         vkDestroyInstance(instance, NULL);
