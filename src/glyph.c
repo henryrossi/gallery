@@ -43,6 +43,17 @@ static VkFence inflight_fence[MAX_FRAMES_IN_FLIGHT];
 
 static uint32_t framebuffer_resized = 0;
 
+typedef struct {
+        float pos[2];
+        float color[3];
+} vertex;
+
+const vertex verticies[] = {
+        { { 0.0f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
+        { { 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f } },
+        { { -0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f } },
+};
+
 static const char *device_exts[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         "VK_KHR_portability_subset",
@@ -634,11 +645,34 @@ static int create_graphics_pipeline(void) {
                 .pDynamicStates = dynamic_states,
         };
 
+        VkVertexInputBindingDescription vertex_binding_desc = {
+                .binding = 0,
+                .stride = sizeof(vertex),
+                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        };
+
+        VkVertexInputAttributeDescription vertex_attr_desc[2] = {
+                {
+                        .binding = 0,
+                        .location = 0,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(vertex, pos),
+                },
+                {
+                        .binding = 0,
+                        .location = 1,
+                        .format = VK_FORMAT_R32G32B32_SFLOAT,
+                        .offset = offsetof(vertex, color),
+                },
+        };
+
         VkPipelineVertexInputStateCreateInfo vertex_input_info = {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .vertexBindingDescriptionCount = 0,
-                .vertexAttributeDescriptionCount = 0,
+                .vertexBindingDescriptionCount = 1,
+                .pVertexBindingDescriptions = &vertex_binding_desc,
+                .vertexAttributeDescriptionCount = 2,
+                .pVertexAttributeDescriptions = vertex_attr_desc,
         };
 
         VkPipelineInputAssemblyStateCreateInfo input_assembly = {
@@ -1021,16 +1055,26 @@ static int draw_frame(void) {
         return 1;
 }
 
+// Create vertex buffers. Returns 1 on success, 0 on failure.
+static int create_vertex_buffer(void) {
+        VkBufferCreateInfo create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = sizeof(verticies[0]),
+        };
+
+        return 1;
+}
+
 int main(int argc, char **argv) {
         window = init_window();
 
         if (!create_instance()) {
                 return 1;
         }
-        if (!create_surface()) {
+        if (enable_validation_layers && !setup_debug_messenger(instance)) {
                 return 1;
         }
-        if (enable_validation_layers && !setup_debug_messenger(instance)) {
+        if (!create_surface()) {
                 return 1;
         }
         if (!pick_physical_device()) {
@@ -1055,6 +1099,9 @@ int main(int argc, char **argv) {
                 return 1;
         }
         if (!create_command_pool()) {
+                return 1;
+        }
+        if (!create_vertex_buffer()) {
                 return 1;
         }
         if (!create_command_buffer()) {

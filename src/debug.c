@@ -18,7 +18,7 @@ const uint32_t enable_validation_layers = 0;
 const uint32_t enable_validation_layers = 1;
 #endif
 
-// Proxy functions ofr debug extension
+// Proxy functions for debug extension
 static VkResult create_debug_utils_messenger_ext(
     VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
     const VkAllocationCallbacks *pAllocator,
@@ -33,6 +33,7 @@ static VkResult create_debug_utils_messenger_ext(
         }
 }
 
+// Proxy function for debug extension
 static void
 destroy_debug_utils_messenger_ext(VkInstance instance,
                                   VkDebugUtilsMessengerEXT debugMessenger,
