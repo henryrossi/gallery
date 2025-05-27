@@ -1,0 +1,46 @@
+#include "glyph.h"
+
+#include <stdio.h>
+
+// Create semaphores and fences. Returns 1 on success, 0 on failure.
+static int create_sync_objects(glyph_state *state) {
+        VkSemaphoreCreateInfo semaphore_info = {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        };
+        VkFenceCreateInfo fence_info = {
+                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+        };
+
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                VkResult res
+                    = vkCreateSemaphore(state->device, &semaphore_info, NULL,
+                                        state->image_available_semaphore + i);
+                if (res != VK_SUCCESS) {
+                        fprintf(
+                            stderr,
+                            "Failed to create image available semaphore: %s\n",
+                            string_VkResult(res));
+                        return 0;
+                }
+                res = vkCreateSemaphore(state->device, &semaphore_info, NULL,
+                                        state->render_finished_semaphore + i);
+                if (res != VK_SUCCESS) {
+                        fprintf(
+                            stderr,
+                            "Failed to create render finished semaphore: %s\n",
+                            string_VkResult(res));
+                        return 0;
+                }
+                res = vkCreateFence(state->device, &fence_info, NULL,
+                                    state->inflight_fence + i);
+                if (res != VK_SUCCESS) {
+                        fprintf(stderr,
+                                "Failed to create in flight fence: %s\n",
+                                string_VkResult(res));
+                        return 0;
+                }
+        }
+
+        return 1;
+}

@@ -6,18 +6,6 @@
 
 VkDebugUtilsMessengerEXT debug_messenger;
 
-const char *validation_layers[] = {
-        "VK_LAYER_KHRONOS_validation",
-};
-uint32_t validation_layer_count
-    = sizeof(validation_layers) / sizeof(validation_layers[0]);
-
-#ifdef NDEBUG
-const uint32_t enable_validation_layers = 0;
-#else
-const uint32_t enable_validation_layers = 1;
-#endif
-
 // Proxy functions for debug extension
 static VkResult create_debug_utils_messenger_ext(
     VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
@@ -89,7 +77,14 @@ static int setup_debug_messenger(VkInstance instance) {
 // Returns 1 on success, 0 on failure.
 static int check_validation_layer_support(void) {
         uint32_t available_count = 0;
-        vkEnumerateInstanceLayerProperties(&available_count, NULL);
+        VkResult res
+            = vkEnumerateInstanceLayerProperties(&available_count, NULL);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr,
+                        "Failed to enumerate instance layer props: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
 
         VkLayerProperties *available
             = malloc(sizeof(VkLayerProperties) * available_count);
