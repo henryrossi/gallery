@@ -51,6 +51,8 @@ typedef struct {
   VkFence inflight_fence[MAX_FRAMES_IN_FLIGHT];
   VkBuffer vertex_buffer;
   VkDeviceMemory vertex_buffer_memory;
+  VkBuffer index_buffer;
+  VkDeviceMemory index_buffer_memory;
 
   uint32_t framebuffer_resized;
 } glyph_state;

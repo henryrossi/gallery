@@ -4,30 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "buffer.c"
 #include "debug.c"
 #include "device.c"
 #include "shader.c"
 #include "surface.c"
+#include "swapchain.c"
 #include "sync.c"
-#include "vulkan/vulkan_core.h"
-
-glyph_state state = {
-        .current_frame = 0,
-        .physical_device = VK_NULL_HANDLE,
-        .surface = VK_NULL_HANDLE,
-        .framebuffer_resized = 0,
-};
-
-typedef struct {
-        float pos[2];
-        float color[3];
-} vertex;
-
-const vertex vertices[] = {
-        { { 0.0f, -0.5f }, { 1.0f, 1.0f, 1.0f } },
-        { { 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f } },
-        { { -0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f } },
-};
 
 static queue_family_indicies_t find_queue_families(glyph_state *state,
                                                    VkPhysicalDevice device) {
@@ -58,183 +41,6 @@ static queue_family_indicies_t find_queue_families(glyph_state *state,
         free(queue_families);
 
         return indicies;
-}
-
-swapchain_support_details_t query_swapchain_support(glyph_state *state,
-                                                    VkPhysicalDevice device) {
-        swapchain_support_details_t details = { 0 };
-        VkSurfaceKHR surface = state->surface;
-
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface,
-                                                  &details.capabilities);
-
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface,
-                                             &details.formats_count, NULL);
-        details.formats
-            = malloc(sizeof(VkSurfaceFormatKHR) * details.formats_count);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(
-            device, surface, &details.formats_count, details.formats);
-
-        vkGetPhysicalDeviceSurfacePresentModesKHR(
-            device, surface, &details.present_modes_count, NULL);
-        details.present_modes
-            = malloc(sizeof(VkPresentModeKHR) * details.present_modes_count);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
-                                                  &details.present_modes_count,
-                                                  details.present_modes);
-
-        return details;
-}
-
-VkExtent2D choose_swap_extent(glyph_state *state,
-                              VkSurfaceCapabilitiesKHR cap) {
-        if (cap.currentExtent.width != UINT32_MAX) {
-                return cap.currentExtent;
-        }
-        int width, height;
-        glfwGetFramebufferSize(state->window, &width, &height);
-
-        VkExtent2D actual = { width, height };
-
-        if (actual.width < cap.minImageExtent.width) {
-                actual.width = cap.minImageExtent.width;
-        } else if (actual.width > cap.maxImageExtent.width) {
-                actual.width = cap.maxImageExtent.width;
-        }
-        if (actual.height < cap.minImageExtent.height) {
-                actual.height = cap.minImageExtent.height;
-        } else if (actual.height > cap.maxImageExtent.height) {
-                actual.height = cap.maxImageExtent.height;
-        }
-
-        return actual;
-}
-
-VkPresentModeKHR choose_sc_present_mode(swapchain_support_details_t details) {
-        for (uint32_t i = 0; i < details.present_modes_count; i++) {
-                if (details.present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
-                        return details.present_modes[i];
-                }
-        }
-        return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkSurfaceFormatKHR
-choose_sc_surface_format(swapchain_support_details_t details) {
-        for (uint32_t i = 0; i < details.formats_count; i++) {
-                VkSurfaceFormatKHR format = details.formats[i];
-                if (format.format == VK_FORMAT_B8G8R8A8_SRGB
-                    && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                        return format;
-                }
-        }
-        return details.formats[0];
-}
-
-// Creates swapchain. Returns 1 on success, 0 on failure.
-static int create_swapchain(glyph_state *state) {
-        swapchain_support_details_t support
-            = query_swapchain_support(state, state->physical_device);
-
-        VkSurfaceFormatKHR surface_format = choose_sc_surface_format(support);
-        VkPresentModeKHR present_mode = choose_sc_present_mode(support);
-        VkExtent2D extent = choose_swap_extent(state, support.capabilities);
-
-        uint32_t image_count = support.capabilities.minImageCount + 1;
-        if (support.capabilities.maxImageCount > 0
-            && image_count > support.capabilities.maxImageCount) {
-                image_count = support.capabilities.maxImageCount;
-        }
-
-        VkSwapchainCreateInfoKHR createinfo = {
-                .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-                .surface = state->surface,
-                .minImageCount = image_count,
-                .imageFormat = surface_format.format,
-                .imageColorSpace = surface_format.colorSpace,
-                .imageExtent = extent,
-                .imageArrayLayers = 1,
-                .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        };
-
-        queue_family_indicies_t indicies
-            = find_queue_families(state, state->physical_device);
-        uint32_t queue_family_indicies[]
-            = { indicies.graphics.index, indicies.presentation.index };
-
-        if (indicies.graphics.index != indicies.presentation.index) {
-                createinfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-                createinfo.queueFamilyIndexCount = 2;
-                createinfo.pQueueFamilyIndices = queue_family_indicies;
-        } else {
-                createinfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        }
-
-        createinfo.preTransform = support.capabilities.currentTransform;
-        createinfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        createinfo.presentMode = present_mode;
-        createinfo.clipped = VK_TRUE;
-        createinfo.oldSwapchain = VK_NULL_HANDLE;
-
-        free(support.formats);
-        free(support.present_modes);
-
-        VkResult res = vkCreateSwapchainKHR(state->device, &createinfo, NULL,
-                                            &state->swapchain);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create swapchain: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        vkGetSwapchainImagesKHR(state->device, state->swapchain,
-                                &state->swapchain_images_count, NULL);
-        state->swapchain_images
-            = malloc(sizeof(VkImage) * state->swapchain_images_count);
-        vkGetSwapchainImagesKHR(state->device, state->swapchain,
-                                &state->swapchain_images_count,
-                                state->swapchain_images);
-        state->swapchain_format = surface_format.format;
-        state->swapchain_extent = extent;
-
-        return 1;
-}
-
-// Creates image views. Returns 1 on success, 0 on failure.
-static int create_image_views(glyph_state *state) {
-        state->swapchain_image_views_count = state->swapchain_images_count;
-        state->swapchain_image_views
-            = malloc(sizeof(VkImageView) * state->swapchain_image_views_count);
-
-        for (uint32_t i = 0; i < state->swapchain_image_views_count; i++) {
-                VkImageViewCreateInfo createinfo = {
-                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                        .image = state->swapchain_images[i],
-                        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                        .format = state->swapchain_format,
-                        .components.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                        .components.g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                        .components.b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                        .components.a = VK_COMPONENT_SWIZZLE_IDENTITY,
-                        .subresourceRange.aspectMask
-                        = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .subresourceRange.baseMipLevel = 0,
-                        .subresourceRange.levelCount = 1,
-                        .subresourceRange.baseArrayLayer = 0,
-                        .subresourceRange.layerCount = 1,
-                };
-
-                VkResult res
-                    = vkCreateImageView(state->device, &createinfo, NULL,
-                                        &state->swapchain_image_views[i]);
-                if (res != VK_SUCCESS) {
-                        fprintf(stderr, "Failed to create image view: %s\n",
-                                string_VkResult(res));
-                        return 0;
-                }
-        }
-
-        return 1;
 }
 
 typedef struct {
@@ -545,80 +351,6 @@ static int create_graphics_pipeline(glyph_state *state) {
         return 1;
 }
 
-// Create framebuffers. Returns 1 on success, 0 on failure.
-static int create_framebuffers(glyph_state *state) {
-        state->swapchain_framebuffer_count = state->swapchain_image_views_count;
-        state->swapchain_framebuffers = malloc(
-            sizeof(VkFramebuffer) * state->swapchain_framebuffer_count);
-
-        for (uint32_t i = 0; i < state->swapchain_framebuffer_count; i++) {
-                VkImageView attachments[] = {
-                        state->swapchain_image_views[i],
-                };
-
-                VkFramebufferCreateInfo createinfo = {
-                        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-                        .renderPass = state->render_pass,
-                        .attachmentCount = 1,
-                        .pAttachments = attachments,
-                        .width = state->swapchain_extent.width,
-                        .height = state->swapchain_extent.height,
-                        .layers = 1,
-                };
-
-                VkResult res
-                    = vkCreateFramebuffer(state->device, &createinfo, NULL,
-                                          state->swapchain_framebuffers + i);
-                if (res != VK_SUCCESS) {
-                        fprintf(stderr, "Failed to create framebuffer: %s\n",
-                                string_VkResult(res));
-                        return 0;
-                }
-        }
-
-        return 1;
-}
-
-static void cleanup_swapchain(glyph_state *state) {
-        for (uint32_t i = 0; i < state->swapchain_framebuffer_count; i++) {
-                vkDestroyFramebuffer(state->device,
-                                     state->swapchain_framebuffers[i], NULL);
-        }
-        for (uint32_t i = 0; i < state->swapchain_image_views_count; i++) {
-                vkDestroyImageView(state->device,
-                                   state->swapchain_image_views[i], NULL);
-        }
-        vkDestroySwapchainKHR(state->device, state->swapchain, NULL);
-}
-
-// Recreates swap chain. Returns 1 on success, 0 on failure.
-static int recreate_swapchain(glyph_state *state) {
-        int width = 0, height = 0;
-        glfwGetFramebufferSize(state->window, &width, &height);
-        while (width == 0 || height == 0) {
-                glfwGetFramebufferSize(state->window, &width, &height);
-                glfwWaitEvents();
-        }
-
-        vkDeviceWaitIdle(state->device);
-
-        cleanup_swapchain(state);
-
-        int res = create_swapchain(state);
-        if (!res)
-                return 0;
-
-        res = create_image_views(state);
-        if (!res)
-                return 0;
-
-        res = create_framebuffers(state);
-        if (!res)
-                return 0;
-
-        return 1;
-}
-
 // Creates a command pool. Returns 1 on success, 0 on failure.
 static int create_command_pool(glyph_state *state) {
         queue_family_indicies_t indicies
@@ -712,9 +444,11 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         VkBuffer vertex_buffers[] = { state->vertex_buffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers, offsets);
+        vkCmdBindIndexBuffer(cmd_buffer, state->index_buffer, 0,
+                             VK_INDEX_TYPE_UINT16);
 
-        uint32_t vertices_size = sizeof(vertices) / sizeof(vertices[0]);
-        vkCmdDraw(cmd_buffer, vertices_size, 1, 0, 0);
+        uint32_t indices_size = sizeof(indices) / sizeof(indices[0]);
+        vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
         vkCmdEndRenderPass(cmd_buffer);
 
         res = vkEndCommandBuffer(cmd_buffer);
@@ -805,184 +539,14 @@ static int draw_frame(glyph_state *state) {
         return 1;
 }
 
-// ?
-int64_t find_memory_type(VkPhysicalDevice phy_device, uint32_t type_filter,
-                         VkMemoryPropertyFlags props) {
-        VkPhysicalDeviceMemoryProperties mem_props;
-        vkGetPhysicalDeviceMemoryProperties(phy_device, &mem_props);
-
-        for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
-                if (type_filter & (1 << i)
-                    && (mem_props.memoryTypes[i].propertyFlags & props)
-                           == props) {
-                        return i;
-                }
-        }
-
-        return -1;
-}
-
-typedef struct {
-        VkDevice device;
-        VkPhysicalDevice physical_device;
-        VkDeviceSize size;
-        VkBufferUsageFlags usage;
-        VkMemoryPropertyFlags props;
-        VkBuffer *buffer;
-        VkDeviceMemory *memory;
-} buffer_create_info;
-
-// Create a buffer. Returns 1 on success, 0 on failure.
-static int create_buffer(buffer_create_info params) {
-        VkBufferCreateInfo create_info = {
-                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                .size = params.size,
-                .usage = params.usage,
-                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        };
-
-        VkResult res
-            = vkCreateBuffer(params.device, &create_info, NULL, params.buffer);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create buffer: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        VkMemoryRequirements mem_requirements;
-        vkGetBufferMemoryRequirements(params.device, *params.buffer,
-                                      &mem_requirements);
-
-        int64_t mem_type = find_memory_type(
-            params.physical_device, mem_requirements.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        if (mem_type < 0) {
-                fprintf(stderr, "Failed to find suitable memory type\n");
-                return 0;
-        }
-
-        VkMemoryAllocateInfo alloc_info = {
-                .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                .allocationSize = mem_requirements.size,
-                .memoryTypeIndex = mem_type,
-        };
-
-        res = vkAllocateMemory(params.device, &alloc_info, NULL, params.memory);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to allocate buffer memory: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        vkBindBufferMemory(params.device, *params.buffer, *params.memory, 0);
-
-        return 1;
-}
-
-typedef struct {
-        VkDevice device;
-        VkQueue graphics_queue;
-        VkCommandPool cmdpool;
-        VkBuffer src;
-        VkBuffer dst;
-        VkDeviceSize size;
-} copy_buffer_info;
-
-static void copy_buffer(copy_buffer_info params) {
-        VkCommandBufferAllocateInfo alloc_info = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                .commandPool = params.cmdpool,
-                .commandBufferCount = 1,
-        };
-
-        VkCommandBuffer cmd_buffer;
-        vkAllocateCommandBuffers(params.device, &alloc_info, &cmd_buffer);
-
-        VkCommandBufferBeginInfo begin_info = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        };
-        vkBeginCommandBuffer(cmd_buffer, &begin_info);
-
-        VkBufferCopy copy_region = {
-                .srcOffset = 0,
-                .dstOffset = 0,
-                .size = params.size,
-        };
-        vkCmdCopyBuffer(cmd_buffer, params.src, params.dst, 1, &copy_region);
-
-        vkEndCommandBuffer(cmd_buffer);
-
-        VkSubmitInfo submit_info = {
-                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                .commandBufferCount = 1,
-                .pCommandBuffers = &cmd_buffer,
-        };
-        vkQueueSubmit(params.graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-        vkQueueWaitIdle(params.graphics_queue);
-
-        vkFreeCommandBuffers(params.device, params.cmdpool, 1, &cmd_buffer);
-}
-
-// Create vertex buffers. Returns 1 on success, 0 on failure.
-static int create_vertex_buffer(glyph_state *state) {
-        VkDevice device = state->device;
-        VkDeviceSize size = sizeof(vertices);
-
-        VkBuffer staging_buffer;
-        VkDeviceMemory staging_buffer_memory;
-        buffer_create_info staging = {
-                .device = device,
-                .physical_device = state->physical_device,
-                .size = size,
-                .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                         | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                .buffer = &staging_buffer,
-                .memory = &staging_buffer_memory,
-        };
-        if (!create_buffer(staging)) {
-                return 0;
-        }
-
-        void *data;
-        vkMapMemory(device, staging_buffer_memory, 0, size, 0, &data);
-        memcpy(data, vertices, size);
-        vkUnmapMemory(device, staging_buffer_memory);
-
-        buffer_create_info vertex = {
-                .device = device,
-                .physical_device = state->physical_device,
-                .size = size,
-                .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT
-                         | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                .props = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                .buffer = &state->vertex_buffer,
-                .memory = &state->vertex_buffer_memory,
-        };
-        if (!create_buffer(vertex)) {
-                return 0;
-        }
-
-        copy_buffer_info params = {
-                .device = device,
-                .graphics_queue = state->graphics_queue,
-                .cmdpool = state->command_pool,
-                .src = staging_buffer,
-                .dst = state->vertex_buffer,
-                .size = size,
-        };
-        copy_buffer(params);
-
-        vkDestroyBuffer(device, staging_buffer, NULL);
-        vkFreeMemory(device, staging_buffer_memory, NULL);
-
-        return 1;
-}
-
 int main(int argc, char **argv) {
+
+        glyph_state state = {
+                .current_frame = 0,
+                .physical_device = VK_NULL_HANDLE,
+                .surface = VK_NULL_HANDLE,
+                .framebuffer_resized = 0,
+        };
 
         if (!init_window(&state)) {
                 return 1;
@@ -1024,6 +588,9 @@ int main(int argc, char **argv) {
         if (!create_vertex_buffer(&state)) {
                 return 1;
         }
+        if (!create_index_buffer(&state)) {
+                return 1;
+        }
         if (!create_command_buffer(&state)) {
                 return 1;
         }
@@ -1053,6 +620,8 @@ int main(int argc, char **argv) {
         cleanup_swapchain(&state);
         vkDestroyBuffer(device, state.vertex_buffer, NULL);
         vkFreeMemory(device, state.vertex_buffer_memory, NULL);
+        vkDestroyBuffer(device, state.index_buffer, NULL);
+        vkFreeMemory(device, state.index_buffer_memory, NULL);
         vkDestroyPipeline(device, state.graphics_pipeline, NULL);
         vkDestroyPipelineLayout(device, state.pipeline_layout, NULL);
         vkDestroyRenderPass(device, state.render_pass, NULL);
