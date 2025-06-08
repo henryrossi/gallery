@@ -42,6 +42,9 @@ typedef struct {
   uint32_t swapchain_framebuffer_count;
   VkFramebuffer *swapchain_framebuffers;
   VkRenderPass render_pass;
+  VkDescriptorSetLayout descriptor_set_layout;
+  VkDescriptorPool descriptor_pool;
+  VkDescriptorSet descriptor_sets[MAX_FRAMES_IN_FLIGHT];
   VkPipelineLayout pipeline_layout;
   VkPipeline graphics_pipeline;
   VkCommandPool command_pool;
@@ -53,6 +56,10 @@ typedef struct {
   VkDeviceMemory vertex_buffer_memory;
   VkBuffer index_buffer;
   VkDeviceMemory index_buffer_memory;
+  VkImage texture_image;
+  VkDeviceMemory texture_memory;
+  VkImageView texture_view;
+  VkSampler texture_sampler;
 
   uint32_t framebuffer_resized;
 } glyph_state;
@@ -80,5 +87,13 @@ typedef struct {
 
 static swapchain_support_details_t
 query_swapchain_support(glyph_state *state, VkPhysicalDevice device);
+
+static VkCommandBuffer begin_single_time_commands(VkDevice device,
+                                                  VkCommandPool pool);
+static void end_single_time_commands(VkDevice device, VkQueue graphics_queue,
+                                     VkCommandPool pool, VkCommandBuffer buffer);
+static VkVertexInputBindingDescription get_vertex_binding_desc(void);
+static VkVertexInputAttributeDescription get_vertex_attr_desc_pos(void);
+static VkVertexInputAttributeDescription get_vertex_attr_desc_tex_coord(void);
 
 #endif // _GLYPH_H

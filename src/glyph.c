@@ -5,9 +5,10 @@
 #include <stdlib.h>
 
 #include "buffer.c"
+#include "command.c"
 #include "debug.c"
 #include "device.c"
-#include "shader.c"
+#include "graphics_pipeline.c"
 #include "surface.c"
 #include "swapchain.c"
 #include "sync.c"
@@ -50,23 +51,6 @@ typedef struct {
 
 static extensions_t get_required_extensions(void) {
         extensions_t exts = { 0 };
-
-        // The following is useful for checking the existence of an
-        // extension uint32_t supported_ext_count = 0;
-        // vkEnumerateInstanceExtensionProperties(NULL,
-        // &supported_ext_count,
-        //                                        NULL);
-        // VkExtensionProperties *supported_exts
-        //     = malloc(sizeof(VkExtensionProperties) *
-        //     supported_ext_count);
-        // vkEnumerateInstanceExtensionProperties(NULL,
-        // &supported_ext_count,
-        //                                        supported_exts);
-        // printf("Available supported extensions:\n");
-        // for (uint32_t i = 0; i < supported_ext_count; i++) {
-        //         printf("  %s\n", supported_exts[i].extensionName);
-        // }
-        // free(supported_exts);
 
         uint32_t glfw_ext_count = 0;
         const char **glfw_exts
@@ -132,267 +116,6 @@ static int create_instance(glyph_state *state) {
         return 1;
 }
 
-// Create render pass. Returns 1 on success, 0 on failure.
-static int create_render_pass(glyph_state *state) {
-        VkAttachmentDescription color_attachment = {
-                .format = state->swapchain_format,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        };
-
-        VkAttachmentReference color_attach_ref = {
-                .attachment = 0,
-                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        };
-
-        VkSubpassDescription subpass = {
-                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                .colorAttachmentCount = 1,
-                .pColorAttachments = &color_attach_ref,
-        };
-
-        VkSubpassDependency dependency = {
-                .srcSubpass = VK_SUBPASS_EXTERNAL,
-                .dstSubpass = 0,
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask = 0,
-                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        };
-
-        VkRenderPassCreateInfo createinfo = {
-                .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                .attachmentCount = 1,
-                .pAttachments = &color_attachment,
-                .subpassCount = 1,
-                .pSubpasses = &subpass,
-                .dependencyCount = 1,
-                .pDependencies = &dependency,
-        };
-
-        VkResult res = vkCreateRenderPass(state->device, &createinfo, NULL,
-                                          &state->render_pass);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create render pass: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-        return 1;
-}
-
-// Create graphics pipeline. Returns 1 on success, 0 on failure.
-static int create_graphics_pipeline(glyph_state *state) {
-        VkShaderModule vert
-            = create_shader_module(state->device, "shaders/vert.spv");
-        VkShaderModule frag
-            = create_shader_module(state->device, "shaders/frag.spv");
-        // need to properly clean up shader modules
-        if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) {
-                return 0;
-        }
-
-        VkPipelineShaderStageCreateInfo vert_stage_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                .module = vert,
-                .pName = "main",
-        };
-
-        VkPipelineShaderStageCreateInfo frag_stage_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .module = frag,
-                .pName = "main",
-        };
-
-        VkPipelineShaderStageCreateInfo shader_stages[] = {
-                vert_stage_info,
-                frag_stage_info,
-        };
-
-        VkDynamicState dynamic_states[] = {
-                VK_DYNAMIC_STATE_VIEWPORT,
-                VK_DYNAMIC_STATE_SCISSOR,
-        };
-        VkPipelineDynamicStateCreateInfo dynamic_state = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                .dynamicStateCount
-                = sizeof(dynamic_states) / sizeof(dynamic_states[0]),
-                .pDynamicStates = dynamic_states,
-        };
-
-        VkVertexInputBindingDescription vertex_binding_desc = {
-                .binding = 0,
-                .stride = sizeof(vertex),
-                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-        };
-
-        VkVertexInputAttributeDescription vertex_attr_desc[2] = {
-                {
-                        .binding = 0,
-                        .location = 0,
-                        .format = VK_FORMAT_R32G32_SFLOAT,
-                        .offset = offsetof(vertex, pos),
-                },
-                {
-                        .binding = 0,
-                        .location = 1,
-                        .format = VK_FORMAT_R32G32B32_SFLOAT,
-                        .offset = offsetof(vertex, color),
-                },
-        };
-
-        VkPipelineVertexInputStateCreateInfo vertex_input_info = {
-                .sType
-                = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .vertexBindingDescriptionCount = 1,
-                .pVertexBindingDescriptions = &vertex_binding_desc,
-                .vertexAttributeDescriptionCount = 2,
-                .pVertexAttributeDescriptions = vertex_attr_desc,
-        };
-
-        VkPipelineInputAssemblyStateCreateInfo input_assembly = {
-                .sType
-                = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                .primitiveRestartEnable = VK_FALSE,
-        };
-
-        VkPipelineViewportStateCreateInfo viewport_state = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                .viewportCount = 1,
-                .scissorCount = 1,
-        };
-
-        VkPipelineRasterizationStateCreateInfo rasterizer = {
-                .sType
-                = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .depthClampEnable = VK_FALSE,
-                .rasterizerDiscardEnable = VK_FALSE,
-                .polygonMode = VK_POLYGON_MODE_FILL,
-                .lineWidth = 1.0f,
-                .cullMode = VK_CULL_MODE_BACK_BIT,
-                .frontFace = VK_FRONT_FACE_CLOCKWISE,
-                .depthBiasEnable = VK_FALSE,
-        };
-
-        VkPipelineMultisampleStateCreateInfo multisampling = {
-                .sType
-                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                .sampleShadingEnable = VK_FALSE,
-                .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-        };
-
-        VkPipelineColorBlendAttachmentState color_blend_attachment = {
-                .colorWriteMask
-                = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
-                  | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-                .blendEnable = VK_FALSE,
-        };
-
-        VkPipelineColorBlendStateCreateInfo color_blending = {
-                .sType
-                = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                .logicOpEnable = VK_FALSE,
-                .logicOp = VK_LOGIC_OP_COPY,
-                .attachmentCount = 1,
-                .pAttachments = &color_blend_attachment,
-        };
-
-        VkPipelineLayoutCreateInfo pipeline_layout_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .setLayoutCount = 0,
-                .pushConstantRangeCount = 0,
-        };
-
-        VkResult res
-            = vkCreatePipelineLayout(state->device, &pipeline_layout_info, NULL,
-                                     &state->pipeline_layout);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create pipeline layout: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        VkGraphicsPipelineCreateInfo pipeline_info = {
-                .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                .stageCount = 2,
-                .pStages = shader_stages,
-                .pVertexInputState = &vertex_input_info,
-                .pInputAssemblyState = &input_assembly,
-                .pViewportState = &viewport_state,
-                .pRasterizationState = &rasterizer,
-                .pMultisampleState = &multisampling,
-                .pDepthStencilState = NULL,
-                .pColorBlendState = &color_blending,
-                .pDynamicState = &dynamic_state,
-                .layout = state->pipeline_layout,
-                .renderPass = state->render_pass,
-                .subpass = 0,
-                .basePipelineHandle = VK_NULL_HANDLE,
-                .basePipelineIndex = -1,
-        };
-
-        res = vkCreateGraphicsPipelines(state->device, VK_NULL_HANDLE, 1,
-                                        &pipeline_info, NULL,
-                                        &state->graphics_pipeline);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create graphics pipelines: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        vkDestroyShaderModule(state->device, vert, NULL);
-        vkDestroyShaderModule(state->device, frag, NULL);
-
-        return 1;
-}
-
-// Creates a command pool. Returns 1 on success, 0 on failure.
-static int create_command_pool(glyph_state *state) {
-        queue_family_indicies_t indicies
-            = find_queue_families(state, state->physical_device);
-
-        VkCommandPoolCreateInfo createinfo = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-                .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-                .queueFamilyIndex = indicies.graphics.index,
-        };
-
-        VkResult res = vkCreateCommandPool(state->device, &createinfo, NULL,
-                                           &state->command_pool);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create command pool: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        return 1;
-}
-
-// Create command buffer. Return 1 on success, 0 on failure.
-static int create_command_buffer(glyph_state *state) {
-        VkCommandBufferAllocateInfo allocinfo = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                .commandPool = state->command_pool,
-                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
-        };
-
-        VkResult res = vkAllocateCommandBuffers(state->device, &allocinfo,
-                                                state->command_buffer);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to allocate command buffers: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        return 1;
-}
-
 // Write commands into the command buffer. Returns 1 on success, 0 on failure
 static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
                                  uint32_t image_index) {
@@ -446,6 +169,10 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers, offsets);
         vkCmdBindIndexBuffer(cmd_buffer, state->index_buffer, 0,
                              VK_INDEX_TYPE_UINT16);
+
+        vkCmdBindDescriptorSets(
+            cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, state->pipeline_layout,
+            0, 1, &state->descriptor_sets[state->current_frame], 0, NULL);
 
         uint32_t indices_size = sizeof(indices) / sizeof(indices[0]);
         vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
@@ -576,13 +303,31 @@ int main(int argc, char **argv) {
         if (!create_render_pass(&state)) {
                 return 1;
         }
+        if (!create_command_pool(&state)) {
+                return 1;
+        }
+        if (!create_texture_image(&state)) {
+                return 1;
+        }
+        if (!create_texture_image_view(&state)) {
+                return 1;
+        }
+        if (!create_texture_sampler(&state)) {
+                return 1;
+        }
+        if (!create_descriptor_set_layout(&state)) {
+                return 1;
+        }
+        if (!create_descriptor_pool(&state)) {
+                return 1;
+        }
+        if (!create_descriptor_sets(&state)) {
+                return 1;
+        }
         if (!create_graphics_pipeline(&state)) {
                 return 1;
         }
         if (!create_framebuffers(&state)) {
-                return 1;
-        }
-        if (!create_command_pool(&state)) {
                 return 1;
         }
         if (!create_vertex_buffer(&state)) {
@@ -618,13 +363,23 @@ int main(int argc, char **argv) {
         }
         vkDestroyCommandPool(device, state.command_pool, NULL);
         cleanup_swapchain(&state);
+
         vkDestroyBuffer(device, state.vertex_buffer, NULL);
         vkFreeMemory(device, state.vertex_buffer_memory, NULL);
         vkDestroyBuffer(device, state.index_buffer, NULL);
         vkFreeMemory(device, state.index_buffer_memory, NULL);
+
+        vkDestroySampler(device, state.texture_sampler, NULL);
+        vkDestroyImageView(device, state.texture_view, NULL);
+        vkDestroyImage(device, state.texture_image, NULL);
+        vkFreeMemory(device, state.texture_memory, NULL);
+
+        vkDestroyDescriptorPool(device, state.descriptor_pool, NULL);
+        vkDestroyDescriptorSetLayout(device, state.descriptor_set_layout, NULL);
         vkDestroyPipeline(device, state.graphics_pipeline, NULL);
         vkDestroyPipelineLayout(device, state.pipeline_layout, NULL);
         vkDestroyRenderPass(device, state.render_pass, NULL);
+
         vkDestroyDevice(device, NULL);
         vkDestroySurfaceKHR(state.instance, state.surface, NULL);
         vkDestroyInstance(state.instance, NULL);
