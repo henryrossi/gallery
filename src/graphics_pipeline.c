@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "shader.c"
+#include "vulkan/vulkan_core.h"
 
 // Create render pass. Returns 1 on success, 0 on failure.
 static int create_render_pass(glyph_state *state) {

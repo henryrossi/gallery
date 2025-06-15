@@ -315,6 +315,9 @@ int main(int argc, char **argv) {
         if (!create_texture_sampler(&state)) {
                 return 1;
         }
+        if (!create_uniform_buffer(&state)) {
+                return 1;
+        }
         if (!create_descriptor_set_layout(&state)) {
                 return 1;
         }
@@ -369,6 +372,10 @@ int main(int argc, char **argv) {
         vkDestroyBuffer(device, state.index_buffer, NULL);
         vkFreeMemory(device, state.index_buffer_memory, NULL);
 
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                vkDestroyBuffer(device, state.uniform_buffers[i], NULL);
+                vkFreeMemory(device, state.uniform_buffers_memory[i], NULL);
+        }
         vkDestroySampler(device, state.texture_sampler, NULL);
         vkDestroyImageView(device, state.texture_view, NULL);
         vkDestroyImage(device, state.texture_image, NULL);

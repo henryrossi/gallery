@@ -1,7 +1,7 @@
 #include "glyph.h"
 #include <stdio.h>
 
-const uint32_t default_window_width = 800;
+const uint32_t default_window_width = 1000;
 const uint32_t default_window_height = 600;
 
 static void framebuffer_resize_callback(GLFWwindow *window, int width,
@@ -15,7 +15,7 @@ static int init_window(glyph_state *state) {
         glfwInit();
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
         GLFWwindow *window = glfwCreateWindow(
             default_window_width, default_window_height, "glyph", NULL, NULL);

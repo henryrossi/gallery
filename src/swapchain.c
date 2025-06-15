@@ -236,6 +236,8 @@ static int recreate_swapchain(glyph_state *state) {
 
         vkDeviceWaitIdle(state->device);
 
+        update_uniform_buffer(state, state->current_frame);
+
         cleanup_swapchain(state);
 
         int res = create_swapchain(state);

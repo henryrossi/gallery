@@ -1,6 +1,9 @@
 #include "glyph.h"
 #include "vulkan/vulkan_core.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "../stb_image.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,6 +52,11 @@ static VkVertexInputAttributeDescription get_vertex_attr_desc_tex_coord(void) {
                 .offset = offsetof(vertex, tex_coord),
         };
 }
+
+typedef struct {
+        float xAdjustment;
+        float yAdjustment;
+} uniformBufferObject;
 
 // ?
 int64_t find_memory_type(VkPhysicalDevice phy_device, uint32_t type_filter,
@@ -458,8 +466,15 @@ static int create_texture_image(glyph_state *state) {
         // read image data from disk
         uint8_t *pixels = calloc(size, sizeof(uint8_t));
         for (int y = 0; y < tex_h; y++) {
-                pixels[y * tex_h + tex_w] = (uint8_t)y;
+                for (int x = 0; x < tex_w; x++) {
+                        pixels[y * tex_h * 4 + x * 4] = (uint8_t)y + 64;
+                }
         }
+
+        // int texWidth, texHeight, texChannels;
+        // stbi_uc *pixels = stbi_load("test.jpg", &texWidth, &texHeight,
+        //                             &texChannels, STBI_rgb_alpha);
+        // VkDeviceSize size = texWidth * texHeight * 4;
 
         VkBuffer staging_buffer;
         VkDeviceMemory staging_memory;
@@ -542,7 +557,7 @@ static int create_texture_sampler(glyph_state *state) {
                 .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                 .anisotropyEnable = VK_FALSE,
                 .maxAnisotropy = 1.0f,
-                .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+                .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
                 .unnormalizedCoordinates = VK_FALSE,
                 .compareEnable = VK_FALSE,
                 .compareOp = VK_COMPARE_OP_ALWAYS,
@@ -571,10 +586,23 @@ static int create_descriptor_set_layout(glyph_state *state) {
                 .pImmutableSamplers = NULL,
         };
 
+        VkDescriptorSetLayoutBinding ubo_layout_binding = {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .pImmutableSamplers = NULL,
+        };
+
+        VkDescriptorSetLayoutBinding layout_bindings[2] = {
+                tex_layout_binding,
+                ubo_layout_binding,
+        };
+
         VkDescriptorSetLayoutCreateInfo layout_info = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                .bindingCount = 1,
-                .pBindings = &tex_layout_binding,
+                .bindingCount = 2,
+                .pBindings = layout_bindings,
         };
 
         VkResult res = vkCreateDescriptorSetLayout(
@@ -588,15 +616,21 @@ static int create_descriptor_set_layout(glyph_state *state) {
 }
 
 static int create_descriptor_pool(glyph_state *state) {
-        VkDescriptorPoolSize pool_size = {
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+        VkDescriptorPoolSize pool_sizes[MAX_FRAMES_IN_FLIGHT] = {
+                {
+                        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                        .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+                },
+                {
+                        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                        .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+                },
         };
 
         VkDescriptorPoolCreateInfo pool_info = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-                .poolSizeCount = 1,
-                .pPoolSizes = &pool_size,
+                .poolSizeCount = 2,
+                .pPoolSizes = pool_sizes,
                 .maxSets = MAX_FRAMES_IN_FLIGHT,
         };
 
@@ -639,21 +673,90 @@ static int create_descriptor_sets(glyph_state *state) {
                         .sampler = state->texture_sampler,
                 };
 
-                VkWriteDescriptorSet descriptor_write = {
-                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet = state->descriptor_sets[i],
-                        .dstBinding = 0,
-                        .dstArrayElement = 0,
-                        .descriptorType
-                        = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                        .descriptorCount = 1,
-                        .pBufferInfo = 0,
-                        .pImageInfo = &image_info,
-                        .pTexelBufferView = 0,
+                VkDescriptorBufferInfo buffer_info = {
+                        .buffer = state->uniform_buffers[i],
+                        .offset = 0,
+                        .range = sizeof(uniformBufferObject),
                 };
-                vkUpdateDescriptorSets(state->device, 1, &descriptor_write, 0,
+
+                VkWriteDescriptorSet descriptor_write[2] = {
+                        {
+                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                .dstSet = state->descriptor_sets[i],
+                                .dstBinding = 0,
+                                .dstArrayElement = 0,
+                                .descriptorType
+                                = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                .descriptorCount = 1,
+                                .pImageInfo = &image_info,
+                        },
+                        {
+                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                .dstSet = state->descriptor_sets[i],
+                                .dstBinding = 1,
+                                .dstArrayElement = 0,
+                                .descriptorType
+                                = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                .descriptorCount = 1,
+                                .pBufferInfo = &buffer_info,
+                        },
+                };
+
+                vkUpdateDescriptorSets(state->device, 2, descriptor_write, 0,
                                        NULL);
         }
 
         return 1;
+}
+
+static int create_uniform_buffer(glyph_state *state) {
+        VkDeviceSize size = sizeof(uniformBufferObject);
+
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                buffer_create_info params = {
+                        .size = size,
+                        .buffer = &state->uniform_buffers[i],
+                        .memory = &state->uniform_buffers_memory[i],
+                        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                 | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        .device = state->device,
+                        .physical_device = state->physical_device,
+                };
+                if (!create_buffer(params)) {
+                        return 0;
+                }
+
+                vkMapMemory(state->device, state->uniform_buffers_memory[i], 0,
+                            size, 0, &state->uniform_buffers_mapped[i]);
+                update_uniform_buffer(state, i);
+        }
+
+        return 1;
+}
+
+static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame) {
+        uniformBufferObject ubo = { 1.0, 1.0 };
+
+        float drawingAreaWidthProportion
+            = (vertices[1].pos[0] - vertices[0].pos[0]) / 2;
+
+        float drawingAreaHeightProportion
+            = (vertices[2].pos[1] - vertices[1].pos[1]) / 2;
+
+        float surfaceWidth = state->swapchain_extent.width;
+        surfaceWidth *= drawingAreaWidthProportion;
+
+        float surfaceHeight = state->swapchain_extent.height;
+        surfaceHeight *= drawingAreaHeightProportion;
+
+        // this only works for square canvas sizes
+        // also resizing doesn't work
+        if (surfaceWidth > surfaceHeight) {
+                ubo.xAdjustment = surfaceHeight / surfaceWidth;
+        } else {
+                ubo.yAdjustment = surfaceWidth / surfaceHeight;
+        }
+
+        memcpy(state->uniform_buffers_mapped[currentFrame], &ubo, sizeof(ubo));
 }

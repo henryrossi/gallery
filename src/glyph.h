@@ -60,6 +60,9 @@ typedef struct {
   VkDeviceMemory texture_memory;
   VkImageView texture_view;
   VkSampler texture_sampler;
+  VkBuffer uniform_buffers[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory uniform_buffers_memory[MAX_FRAMES_IN_FLIGHT];
+  void *uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
 
   uint32_t framebuffer_resized;
 } glyph_state;
@@ -95,5 +98,6 @@ static void end_single_time_commands(VkDevice device, VkQueue graphics_queue,
 static VkVertexInputBindingDescription get_vertex_binding_desc(void);
 static VkVertexInputAttributeDescription get_vertex_attr_desc_pos(void);
 static VkVertexInputAttributeDescription get_vertex_attr_desc_tex_coord(void);
+static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame);
 
 #endif // _GLYPH_H
