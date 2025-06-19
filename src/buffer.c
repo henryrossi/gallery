@@ -1,5 +1,4 @@
-#include "glyph.h"
-#include "vulkan/vulkan_core.h"
+#include "buffer.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../stb_image.h"
@@ -7,9 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-const int tex_w = 64;
-const int tex_h = 64;
 
 typedef struct {
         float pos[2];
@@ -75,27 +71,21 @@ int64_t find_memory_type(VkPhysicalDevice phy_device, uint32_t type_filter,
         return -1;
 }
 
-typedef struct {
-        VkDevice device;
-        VkPhysicalDevice physical_device;
-        VkDeviceSize size;
-        VkBufferUsageFlags usage;
-        VkMemoryPropertyFlags props;
-        VkBuffer *buffer;
-        VkDeviceMemory *memory;
-} buffer_create_info;
-
 // Create a buffer. Returns 1 on success, 0 on failure.
-static int create_buffer(buffer_create_info params) {
-        VkBufferCreateInfo create_info = {
+static int createBuffer(BufferCreateInfo *createInfo) {
+        VkBuffer *pBuffer = createInfo->buffer;
+        VkDeviceMemory *pMemory = createInfo->memory;
+        VkDevice device = createInfo->device;
+        VkPhysicalDevice physicalDevice = createInfo->physical_device;
+
+        VkBufferCreateInfo vkCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                .size = params.size,
-                .usage = params.usage,
+                .size = createInfo->size,
+                .usage = createInfo->usage,
                 .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         };
 
-        VkResult res
-            = vkCreateBuffer(params.device, &create_info, NULL, params.buffer);
+        VkResult res = vkCreateBuffer(device, &vkCreateInfo, NULL, pBuffer);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create buffer: %s\n",
                         string_VkResult(res));
@@ -103,13 +93,12 @@ static int create_buffer(buffer_create_info params) {
         }
 
         VkMemoryRequirements mem_requirements;
-        vkGetBufferMemoryRequirements(params.device, *params.buffer,
-                                      &mem_requirements);
+        vkGetBufferMemoryRequirements(device, *pBuffer, &mem_requirements);
 
-        int64_t mem_type = find_memory_type(
-            params.physical_device, mem_requirements.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        int64_t mem_type
+            = find_memory_type(physicalDevice, mem_requirements.memoryTypeBits,
+                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                   | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         if (mem_type < 0) {
                 fprintf(stderr, "Failed to find suitable memory type\n");
                 return 0;
@@ -121,40 +110,32 @@ static int create_buffer(buffer_create_info params) {
                 .memoryTypeIndex = mem_type,
         };
 
-        res = vkAllocateMemory(params.device, &alloc_info, NULL, params.memory);
+        res = vkAllocateMemory(device, &alloc_info, NULL, pMemory);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to allocate buffer memory: %s\n",
                         string_VkResult(res));
                 return 0;
         }
 
-        vkBindBufferMemory(params.device, *params.buffer, *params.memory, 0);
+        vkBindBufferMemory(device, *pBuffer, *pMemory, 0);
 
         return 1;
 }
 
-typedef struct {
-        VkDevice device;
-        VkQueue graphics_queue;
-        VkCommandPool cmdpool;
-        VkBuffer src;
-        VkBuffer dst;
-        VkDeviceSize size;
-} copy_buffer_info;
+static void copyBuffer(CopyBufferInfo *copyInfo) {
+        VkCommandBuffer cmdBuffer
+            = begin_single_time_commands(copyInfo->device, copyInfo->cmdpool);
 
-static void copy_buffer(copy_buffer_info params) {
-        VkCommandBuffer cmd_buffer
-            = begin_single_time_commands(params.device, params.cmdpool);
-
-        VkBufferCopy copy_region = {
+        VkBufferCopy copyRegion = {
                 .srcOffset = 0,
                 .dstOffset = 0,
-                .size = params.size,
+                .size = copyInfo->size,
         };
-        vkCmdCopyBuffer(cmd_buffer, params.src, params.dst, 1, &copy_region);
+        vkCmdCopyBuffer(cmdBuffer, copyInfo->src, copyInfo->dst, 1,
+                        &copyRegion);
 
-        end_single_time_commands(params.device, params.graphics_queue,
-                                 params.cmdpool, cmd_buffer);
+        end_single_time_commands(copyInfo->device, copyInfo->graphics_queue,
+                                 copyInfo->cmdpool, cmdBuffer);
 }
 
 // Create vertex buffers. Returns 1 on success, 0 on failure.
@@ -164,7 +145,7 @@ static int create_vertex_buffer(glyph_state *state) {
 
         VkBuffer staging_buffer;
         VkDeviceMemory staging_buffer_memory;
-        buffer_create_info staging = {
+        BufferCreateInfo staging = {
                 .device = device,
                 .physical_device = state->physical_device,
                 .size = size,
@@ -174,7 +155,7 @@ static int create_vertex_buffer(glyph_state *state) {
                 .buffer = &staging_buffer,
                 .memory = &staging_buffer_memory,
         };
-        if (!create_buffer(staging)) {
+        if (!createBuffer(&staging)) {
                 return 0;
         }
 
@@ -183,7 +164,7 @@ static int create_vertex_buffer(glyph_state *state) {
         memcpy(data, vertices, size);
         vkUnmapMemory(device, staging_buffer_memory);
 
-        buffer_create_info vertex = {
+        BufferCreateInfo vertex = {
                 .device = device,
                 .physical_device = state->physical_device,
                 .size = size,
@@ -193,11 +174,11 @@ static int create_vertex_buffer(glyph_state *state) {
                 .buffer = &state->vertex_buffer,
                 .memory = &state->vertex_buffer_memory,
         };
-        if (!create_buffer(vertex)) {
+        if (!createBuffer(&vertex)) {
                 return 0;
         }
 
-        copy_buffer_info params = {
+        CopyBufferInfo params = {
                 .device = device,
                 .graphics_queue = state->graphics_queue,
                 .cmdpool = state->command_pool,
@@ -205,7 +186,7 @@ static int create_vertex_buffer(glyph_state *state) {
                 .dst = state->vertex_buffer,
                 .size = size,
         };
-        copy_buffer(params);
+        copyBuffer(&params);
 
         vkDestroyBuffer(device, staging_buffer, NULL);
         vkFreeMemory(device, staging_buffer_memory, NULL);
@@ -220,7 +201,7 @@ static int create_index_buffer(glyph_state *state) {
         VkBuffer staging_buffer;
         VkDeviceMemory staging_memory;
 
-        buffer_create_info staging_params = {
+        BufferCreateInfo staging_params = {
                 .size = size,
                 .buffer = &staging_buffer,
                 .memory = &staging_memory,
@@ -230,7 +211,7 @@ static int create_index_buffer(glyph_state *state) {
                 .device = state->device,
                 .physical_device = state->physical_device,
         };
-        if (!create_buffer(staging_params)) {
+        if (!createBuffer(&staging_params)) {
                 return 0;
         }
 
@@ -239,7 +220,7 @@ static int create_index_buffer(glyph_state *state) {
         memcpy(data, indices, size);
         vkUnmapMemory(state->device, staging_memory);
 
-        buffer_create_info index_params = {
+        BufferCreateInfo index_params = {
                 .size = size,
                 .buffer = &state->index_buffer,
                 .memory = &state->index_buffer_memory,
@@ -249,11 +230,11 @@ static int create_index_buffer(glyph_state *state) {
                 .device = state->device,
                 .physical_device = state->physical_device,
         };
-        if (!create_buffer(index_params)) {
+        if (!createBuffer(&index_params)) {
                 return 0;
         }
 
-        copy_buffer_info copy_params = {
+        CopyBufferInfo copy_params = {
                 .size = size,
                 .src = staging_buffer,
                 .dst = state->index_buffer,
@@ -261,7 +242,7 @@ static int create_index_buffer(glyph_state *state) {
                 .cmdpool = state->command_pool,
                 .graphics_queue = state->graphics_queue,
         };
-        copy_buffer(copy_params);
+        copyBuffer(&copy_params);
 
         vkDestroyBuffer(state->device, staging_buffer, NULL);
         vkFreeMemory(state->device, staging_memory, NULL);
@@ -269,38 +250,25 @@ static int create_index_buffer(glyph_state *state) {
         return 1;
 }
 
-typedef struct {
-        uint32_t width;
-        uint32_t height;
-        VkFormat format;
-        VkImageTiling tiling;
-        VkImageUsageFlags usage;
-        VkMemoryPropertyFlags props;
-        VkImage *image;
-        VkDeviceMemory *image_memory;
-        VkDevice device;
-        VkPhysicalDevice physical_device;
-} image_create_info;
-
 // Creates an image. Returns 1 on success, 0 on failure.
-static int create_image(image_create_info *params) {
+static int createImage(ImageCreateInfo *createInfo) {
         VkImageCreateInfo image_info = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
                 .imageType = VK_IMAGE_TYPE_2D,
-                .extent = { .width = params->width,
-                            .height = params->height,
+                .extent = { .width = createInfo->width,
+                            .height = createInfo->height,
                             .depth = 1 },
                 .mipLevels = 1,
                 .arrayLayers = 1,
-                .format = params->format,
-                .tiling = params->tiling,
+                .format = createInfo->format,
+                .tiling = createInfo->tiling,
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .usage = params->usage,
+                .usage = createInfo->usage,
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         };
-        VkResult res
-            = vkCreateImage(params->device, &image_info, NULL, params->image);
+        VkResult res = vkCreateImage(createInfo->device, &image_info, NULL,
+                                     createInfo->image);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create image: %s\n",
                         string_VkResult(res));
@@ -308,43 +276,34 @@ static int create_image(image_create_info *params) {
         }
 
         VkMemoryRequirements mem_reqs;
-        vkGetImageMemoryRequirements(params->device, *params->image, &mem_reqs);
+        vkGetImageMemoryRequirements(createInfo->device, *createInfo->image,
+                                     &mem_reqs);
 
         VkMemoryAllocateInfo alloc_info = {
                 .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                 .allocationSize = mem_reqs.size,
                 .memoryTypeIndex
-                = find_memory_type(params->physical_device,
-                                   mem_reqs.memoryTypeBits, params->props),
+                = find_memory_type(createInfo->physicalDevice,
+                                   mem_reqs.memoryTypeBits, createInfo->props),
         };
 
-        res = vkAllocateMemory(params->device, &alloc_info, NULL,
-                               params->image_memory);
+        res = vkAllocateMemory(createInfo->device, &alloc_info, NULL,
+                               createInfo->imageMemory);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to allocate image memory: %s\n",
                         string_VkResult(res));
                 return 0;
         }
 
-        vkBindImageMemory(params->device, *params->image, *params->image_memory,
-                          0);
+        vkBindImageMemory(createInfo->device, *createInfo->image,
+                          *createInfo->imageMemory, 0);
 
         return 1;
 }
 
-typedef struct {
-        VkBuffer buffer;
-        VkImage image;
-        uint32_t width;
-        uint32_t height;
-        VkDevice device;
-        VkCommandPool cmdpool;
-        VkQueue graphics_queue;
-} buffer_to_image_info;
-
-void copy_buffer_to_image(buffer_to_image_info *params) {
+void copyBufferToImage(CopyBufferToImageInfo *copyInfo) {
         VkCommandBuffer cmd_buffer
-            = begin_single_time_commands(params->device, params->cmdpool);
+            = begin_single_time_commands(copyInfo->device, copyInfo->cmdPool);
 
         VkBufferImageCopy region = {
                 .bufferOffset = 0,
@@ -357,34 +316,24 @@ void copy_buffer_to_image(buffer_to_image_info *params) {
                         .layerCount = 1,
                 },
                 .imageOffset = { 0, 0, 0},
-                .imageExtent = { params->width, params->height, 1 },
+                .imageExtent = { copyInfo->width, copyInfo->height, 1 },
         };
-        vkCmdCopyBufferToImage(cmd_buffer, params->buffer, params->image,
+        vkCmdCopyBufferToImage(cmd_buffer, copyInfo->buffer, copyInfo->image,
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                                &region);
 
-        end_single_time_commands(params->device, params->graphics_queue,
-                                 params->cmdpool, cmd_buffer);
+        end_single_time_commands(copyInfo->device, copyInfo->graphicsQueue,
+                                 copyInfo->cmdPool, cmd_buffer);
 }
 
-typedef struct {
-        VkImage image;
-        VkFormat format;
-        VkImageLayout old_layout;
-        VkImageLayout new_layout;
-        VkDevice device;
-        VkCommandPool cmdpool;
-        VkQueue graphics_queue;
-} transition_image_layout_info;
-
-void transition_image_layout(transition_image_layout_info *params) {
+void transitionImageLayout(TransitionImageLayoutInfo *params) {
         VkCommandBuffer cmd_buffer
-            = begin_single_time_commands(params->device, params->cmdpool);
+            = begin_single_time_commands(params->device, params->cmdPool);
 
         VkImageMemoryBarrier barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .oldLayout = params->old_layout,
-                .newLayout = params->new_layout,
+                .oldLayout = params->oldLayout,
+                .newLayout = params->newLayout,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .image = params->image,
@@ -402,14 +351,14 @@ void transition_image_layout(transition_image_layout_info *params) {
         VkPipelineStageFlags srcStage = 0;
         VkPipelineStageFlags dstStage = 0;
 
-        if (params->old_layout == VK_IMAGE_LAYOUT_UNDEFINED
-            && params->new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        if (params->oldLayout == VK_IMAGE_LAYOUT_UNDEFINED
+            && params->newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
                 barrier.srcAccessMask = 0;
                 barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
                 srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                 dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        } else if (params->old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-                   && params->new_layout
+        } else if (params->oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+                   && params->newLayout
                           == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
                 barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
                 barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -422,13 +371,13 @@ void transition_image_layout(transition_image_layout_info *params) {
         vkCmdPipelineBarrier(cmd_buffer, srcStage, dstStage, 0, 0, NULL, 0,
                              NULL, 1, &barrier);
 
-        end_single_time_commands(params->device, params->graphics_queue,
-                                 params->cmdpool, cmd_buffer);
+        end_single_time_commands(params->device, params->graphicsQueue,
+                                 params->cmdPool, cmd_buffer);
 }
 
-static int create_image_view(VkDevice device, VkImage image, VkFormat format,
-                             VkImageView *view) {
-        VkImageViewCreateInfo viewinfo = {
+static int createImageView(VkDevice device, VkImage image, VkFormat format,
+                           VkImageView *view) {
+        VkImageViewCreateInfo viewInfo = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                 .image = image,
                 .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -441,139 +390,13 @@ static int create_image_view(VkDevice device, VkImage image, VkFormat format,
                         .layerCount = 1,
                 },
         };
-        VkResult res = vkCreateImageView(device, &viewinfo, NULL, view);
+        VkResult res = vkCreateImageView(device, &viewInfo, NULL, view);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create image view: %s",
                         string_VkResult(res));
                 return 0;
         }
 
-        return 1;
-}
-
-static int create_texture_image_view(glyph_state *state) {
-        if (!create_image_view(state->device, state->texture_image,
-                               VK_FORMAT_R8G8B8A8_SRGB, &state->texture_view)) {
-                return 0;
-        }
-        return 1;
-}
-
-// Creates a texture image. Returns 1 on success, 0 on failure.
-static int create_texture_image(glyph_state *state) {
-        VkDeviceSize size = tex_w * tex_h * 4;
-
-        // read image data from disk
-        uint8_t *pixels = calloc(size, sizeof(uint8_t));
-        for (int y = 0; y < tex_h; y++) {
-                for (int x = 0; x < tex_w; x++) {
-                        pixels[y * tex_h * 4 + x * 4] = (uint8_t)y + 64;
-                }
-        }
-
-        // int texWidth, texHeight, texChannels;
-        // stbi_uc *pixels = stbi_load("test.jpg", &texWidth, &texHeight,
-        //                             &texChannels, STBI_rgb_alpha);
-        // VkDeviceSize size = texWidth * texHeight * 4;
-
-        VkBuffer staging_buffer;
-        VkDeviceMemory staging_memory;
-
-        buffer_create_info params = {
-                .size = size,
-                .buffer = &staging_buffer,
-                .memory = &staging_memory,
-                .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                         | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                .device = state->device,
-                .physical_device = state->physical_device,
-        };
-        if (!create_buffer(params)) {
-                return 0;
-        }
-
-        void *data;
-        vkMapMemory(state->device, staging_memory, 0, size, 0, &data);
-        memcpy(data, pixels, size);
-        vkUnmapMemory(state->device, staging_memory);
-
-        image_create_info image_info = {
-                .width = tex_w,
-                .height = tex_h,
-                .format = VK_FORMAT_R8G8B8A8_SRGB,
-                .tiling = VK_IMAGE_TILING_LINEAR,
-                .usage
-                = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                .props = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                .image = &state->texture_image,
-                .image_memory = &state->texture_memory,
-                .device = state->device,
-                .physical_device = state->physical_device,
-        };
-        if (!create_image(&image_info)) {
-                return 0;
-        }
-
-        transition_image_layout_info trans_info = {
-                .image = state->texture_image,
-                .format = VK_FORMAT_R8G8B8A8_SRGB,
-                .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .new_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .device = state->device,
-                .cmdpool = state->command_pool,
-                .graphics_queue = state->graphics_queue,
-        };
-        transition_image_layout(&trans_info);
-
-        buffer_to_image_info copy_info = {
-                .buffer = staging_buffer,
-                .image = state->texture_image,
-                .width = tex_w,
-                .height = tex_h,
-                .device = state->device,
-                .cmdpool = state->command_pool,
-                .graphics_queue = state->graphics_queue,
-        };
-        copy_buffer_to_image(&copy_info);
-
-        trans_info.old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        trans_info.new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        transition_image_layout(&trans_info);
-
-        vkDestroyBuffer(state->device, staging_buffer, NULL);
-        vkFreeMemory(state->device, staging_memory, NULL);
-
-        return 1;
-}
-
-static int create_texture_sampler(glyph_state *state) {
-        VkSamplerCreateInfo sampler_info = {
-                .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-                .magFilter = 0,
-                .minFilter = 0,
-                .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-                .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-                .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-                .anisotropyEnable = VK_FALSE,
-                .maxAnisotropy = 1.0f,
-                .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
-                .unnormalizedCoordinates = VK_FALSE,
-                .compareEnable = VK_FALSE,
-                .compareOp = VK_COMPARE_OP_ALWAYS,
-                .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-                .mipLodBias = 0.0f,
-                .minLod = 0.0f,
-                .maxLod = 0.0f,
-        };
-
-        VkResult res = vkCreateSampler(state->device, &sampler_info, NULL,
-                                       &state->texture_sampler);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create texture sampler: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
         return 1;
 }
 
@@ -669,8 +492,8 @@ static int create_descriptor_sets(glyph_state *state) {
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
                 VkDescriptorImageInfo image_info = {
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .imageView = state->texture_view,
-                        .sampler = state->texture_sampler,
+                        .imageView = state->canvas.imageView[i],
+                        .sampler = state->canvas.imageSampler,
                 };
 
                 VkDescriptorBufferInfo buffer_info = {
@@ -713,7 +536,7 @@ static int create_uniform_buffer(glyph_state *state) {
         VkDeviceSize size = sizeof(uniformBufferObject);
 
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-                buffer_create_info params = {
+                BufferCreateInfo params = {
                         .size = size,
                         .buffer = &state->uniform_buffers[i],
                         .memory = &state->uniform_buffers_memory[i],
@@ -723,7 +546,7 @@ static int create_uniform_buffer(glyph_state *state) {
                         .device = state->device,
                         .physical_device = state->physical_device,
                 };
-                if (!create_buffer(params)) {
+                if (!createBuffer(&params)) {
                         return 0;
                 }
 

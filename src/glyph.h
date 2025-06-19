@@ -23,6 +23,23 @@ uint32_t validation_layer_count =
 #define MAX_FRAMES_IN_FLIGHT 2
 
 typedef struct {
+  VkImage image[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory imageMemory[MAX_FRAMES_IN_FLIGHT];
+
+  VkImageView imageView[MAX_FRAMES_IN_FLIGHT];
+  VkSampler imageSampler;
+
+  uint32_t size;
+  uint32_t width;
+  uint32_t height;
+
+  void *mappedMemory[MAX_FRAMES_IN_FLIGHT];
+  VkBuffer stagingBuffer[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory stagingMemory[MAX_FRAMES_IN_FLIGHT];
+} Canvas;
+
+
+typedef struct {
   uint32_t current_frame;
 
   VkInstance instance;
@@ -56,10 +73,7 @@ typedef struct {
   VkDeviceMemory vertex_buffer_memory;
   VkBuffer index_buffer;
   VkDeviceMemory index_buffer_memory;
-  VkImage texture_image;
-  VkDeviceMemory texture_memory;
-  VkImageView texture_view;
-  VkSampler texture_sampler;
+  Canvas canvas;
   VkBuffer uniform_buffers[MAX_FRAMES_IN_FLIGHT];
   VkDeviceMemory uniform_buffers_memory[MAX_FRAMES_IN_FLIGHT];
   void *uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
@@ -94,10 +108,13 @@ query_swapchain_support(glyph_state *state, VkPhysicalDevice device);
 static VkCommandBuffer begin_single_time_commands(VkDevice device,
                                                   VkCommandPool pool);
 static void end_single_time_commands(VkDevice device, VkQueue graphics_queue,
-                                     VkCommandPool pool, VkCommandBuffer buffer);
+                                     VkCommandPool pool,
+                                     VkCommandBuffer buffer);
 static VkVertexInputBindingDescription get_vertex_binding_desc(void);
 static VkVertexInputAttributeDescription get_vertex_attr_desc_pos(void);
 static VkVertexInputAttributeDescription get_vertex_attr_desc_tex_coord(void);
 static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame);
+
+// static int rewriteCanvasContents(glyph_state *state);
 
 #endif // _GLYPH_H

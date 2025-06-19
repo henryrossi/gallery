@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "buffer.c"
+#include "canvas.c"
 #include "command.c"
 #include "debug.c"
 #include "device.c"
@@ -306,13 +307,7 @@ int main(int argc, char **argv) {
         if (!create_command_pool(&state)) {
                 return 1;
         }
-        if (!create_texture_image(&state)) {
-                return 1;
-        }
-        if (!create_texture_image_view(&state)) {
-                return 1;
-        }
-        if (!create_texture_sampler(&state)) {
+        if (!createCanvas(&state)) {
                 return 1;
         }
         if (!create_uniform_buffer(&state)) {
@@ -376,10 +371,8 @@ int main(int argc, char **argv) {
                 vkDestroyBuffer(device, state.uniform_buffers[i], NULL);
                 vkFreeMemory(device, state.uniform_buffers_memory[i], NULL);
         }
-        vkDestroySampler(device, state.texture_sampler, NULL);
-        vkDestroyImageView(device, state.texture_view, NULL);
-        vkDestroyImage(device, state.texture_image, NULL);
-        vkFreeMemory(device, state.texture_memory, NULL);
+
+        destroyCanvas(&state);
 
         vkDestroyDescriptorPool(device, state.descriptor_pool, NULL);
         vkDestroyDescriptorSetLayout(device, state.descriptor_set_layout, NULL);
