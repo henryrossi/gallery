@@ -1,7 +1,7 @@
 #include "buffer.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "../stb_image.h"
+#include "stb_image.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,9 +10,9 @@
 typedef struct {
         float pos[2];
         float tex_coord[2];
-} vertex;
+} canvasVertex;
 
-const vertex vertices[] = {
+const canvasVertex vertices[] = {
         { { -1.0f, -1.0f }, { 0.0f, 0.0f } },
         { { 0.5f, -1.0f }, { 1.0f, 0.0f } },
         { { 0.5f, 1.0f }, { 1.0f, 1.0f } },
@@ -26,7 +26,7 @@ const uint16_t indices[] = {
 static VkVertexInputBindingDescription get_vertex_binding_desc(void) {
         return (VkVertexInputBindingDescription){
                 .binding = 0,
-                .stride = sizeof(vertex),
+                .stride = sizeof(canvasVertex),
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
         };
 }
@@ -36,7 +36,7 @@ static VkVertexInputAttributeDescription get_vertex_attr_desc_pos(void) {
                 .binding = 0,
                 .location = 0,
                 .format = VK_FORMAT_R32G32_SFLOAT,
-                .offset = offsetof(vertex, pos),
+                .offset = offsetof(canvasVertex, pos),
         };
 }
 
@@ -45,7 +45,7 @@ static VkVertexInputAttributeDescription get_vertex_attr_desc_tex_coord(void) {
                 .binding = 0,
                 .location = 1,
                 .format = VK_FORMAT_R32G32_SFLOAT,
-                .offset = offsetof(vertex, tex_coord),
+                .offset = offsetof(canvasVertex, tex_coord),
         };
 }
 
@@ -55,14 +55,14 @@ typedef struct {
 } uniformBufferObject;
 
 // ?
-int64_t find_memory_type(VkPhysicalDevice phy_device, uint32_t type_filter,
-                         VkMemoryPropertyFlags props) {
-        VkPhysicalDeviceMemoryProperties mem_props;
-        vkGetPhysicalDeviceMemoryProperties(phy_device, &mem_props);
+int64_t findMemoryType(VkPhysicalDevice phyDevice, uint32_t typeFilter,
+                       VkMemoryPropertyFlags props) {
+        VkPhysicalDeviceMemoryProperties memProps;
+        vkGetPhysicalDeviceMemoryProperties(phyDevice, &memProps);
 
-        for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
-                if (type_filter & (1 << i)
-                    && (mem_props.memoryTypes[i].propertyFlags & props)
+        for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+                if (typeFilter & (1 << i)
+                    && (memProps.memoryTypes[i].propertyFlags & props)
                            == props) {
                         return i;
                 }
@@ -96,9 +96,9 @@ static int createBuffer(BufferCreateInfo *createInfo) {
         vkGetBufferMemoryRequirements(device, *pBuffer, &mem_requirements);
 
         int64_t mem_type
-            = find_memory_type(physicalDevice, mem_requirements.memoryTypeBits,
-                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                                   | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            = findMemoryType(physicalDevice, mem_requirements.memoryTypeBits,
+                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                 | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         if (mem_type < 0) {
                 fprintf(stderr, "Failed to find suitable memory type\n");
                 return 0;
@@ -275,16 +275,16 @@ static int createImage(ImageCreateInfo *createInfo) {
                 return 0;
         }
 
-        VkMemoryRequirements mem_reqs;
+        VkMemoryRequirements memReqs;
         vkGetImageMemoryRequirements(createInfo->device, *createInfo->image,
-                                     &mem_reqs);
+                                     &memReqs);
 
         VkMemoryAllocateInfo alloc_info = {
                 .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                .allocationSize = mem_reqs.size,
+                .allocationSize = memReqs.size,
                 .memoryTypeIndex
-                = find_memory_type(createInfo->physicalDevice,
-                                   mem_reqs.memoryTypeBits, createInfo->props),
+                = findMemoryType(createInfo->physicalDevice,
+                                 memReqs.memoryTypeBits, createInfo->props),
         };
 
         res = vkAllocateMemory(createInfo->device, &alloc_info, NULL,
@@ -558,6 +558,10 @@ static int create_uniform_buffer(glyph_state *state) {
         return 1;
 }
 
+static double convertVulkanScreenPosToGLFW(double pos, int windowLength) {
+        return ((pos + 1.0f) / 2) * windowLength;
+}
+
 static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame) {
         uniformBufferObject ubo = { 1.0, 1.0 };
 
@@ -574,7 +578,6 @@ static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame) {
         surfaceHeight *= drawingAreaHeightProportion;
 
         // this only works for square canvas sizes
-        // also resizing doesn't work
         if (surfaceWidth > surfaceHeight) {
                 ubo.xAdjustment = surfaceHeight / surfaceWidth;
         } else {
@@ -582,4 +585,22 @@ static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame) {
         }
 
         memcpy(state->uniform_buffers_mapped[currentFrame], &ubo, sizeof(ubo));
+
+        int w, h;
+        glfwGetWindowSize(state->window, &w, &h);
+        // update Canvas' window position data
+        state->canvas.windowX = convertVulkanScreenPosToGLFW(
+            vertices[0].pos[0] * ubo.xAdjustment, w);
+        state->canvas.windowY = convertVulkanScreenPosToGLFW(
+            vertices[0].pos[1] * ubo.yAdjustment, h);
+        state->canvas.windowWidth
+            = convertVulkanScreenPosToGLFW(vertices[1].pos[0] * ubo.xAdjustment,
+                                           w)
+              - convertVulkanScreenPosToGLFW(
+                  vertices[0].pos[0] * ubo.xAdjustment, w);
+        state->canvas.windowHeight
+            = convertVulkanScreenPosToGLFW(vertices[2].pos[1] * ubo.yAdjustment,
+                                           h)
+              - convertVulkanScreenPosToGLFW(
+                  vertices[1].pos[1] * ubo.yAdjustment, h);
 }

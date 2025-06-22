@@ -1,9 +1,60 @@
 #include "buffer.h"
-#include "glyph.h"
+#include "graphicsPipeline.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int createCanvasGraphicsPipeline(glyph_state *state) {
+        // Render Pass needs to be create before this function.
+
+        VkVertexInputBindingDescription vertexBindingDesc
+            = get_vertex_binding_desc();
+
+        VkVertexInputAttributeDescription vertexAttrDesc[2] = {
+                get_vertex_attr_desc_pos(),
+                get_vertex_attr_desc_tex_coord(),
+        };
+
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
+                .sType
+                = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                .vertexBindingDescriptionCount = 1,
+                .pVertexBindingDescriptions = &vertexBindingDesc,
+                .vertexAttributeDescriptionCount = 2,
+                .pVertexAttributeDescriptions = vertexAttrDesc,
+        };
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .pSetLayouts = &state->descriptor_set_layout,
+                .setLayoutCount = 1,
+                .pushConstantRangeCount = 0,
+        };
+
+        VkResult res = vkCreatePipelineLayout(
+            state->device, &pipelineLayoutInfo, NULL, &state->pipeline_layout);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to create pipeline layout: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        GraphicsPipelineCreateInfo createInfo = {
+                .device = state->device,
+                .pipeline = &state->graphics_pipeline,
+                .vertFile = "src/shaders/vert.spv",
+                .fragFile = "src/shaders/frag.spv",
+                .layout = state->pipeline_layout,
+                .vertexInputInfo = &vertexInputInfo,
+                .renderPass = state->render_pass,
+        };
+        if (!createGraphicsPipeline(&createInfo)) {
+                return 0;
+        }
+
+        return 1;
+}
 
 static int createCanvasSampler(glyph_state *state) {
         VkSamplerCreateInfo sampler_info = {
@@ -46,6 +97,37 @@ static int createCanvasImageViews(glyph_state *state) {
         return 1;
 }
 
+static void writeCanvasDataToImage(glyph_state *state, uint32_t currentFrame) {
+        Canvas canvas = state->canvas;
+        memcpy(canvas.mappedMemory[currentFrame], canvas.data, canvas.size);
+
+        TransitionImageLayoutInfo transInfo = {
+                .image = canvas.image[currentFrame],
+                .format = VK_FORMAT_R8G8B8A8_SRGB,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .device = state->device,
+                .cmdPool = state->command_pool,
+                .graphicsQueue = state->graphics_queue,
+        };
+        transitionImageLayout(&transInfo);
+
+        CopyBufferToImageInfo copyInfo = {
+                .buffer = canvas.stagingBuffer[currentFrame],
+                .image = canvas.image[currentFrame],
+                .width = tex_w,
+                .height = tex_h,
+                .device = state->device,
+                .cmdPool = state->command_pool,
+                .graphicsQueue = state->graphics_queue,
+        };
+        copyBufferToImage(&copyInfo);
+
+        transInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        transInfo.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        transitionImageLayout(&transInfo);
+}
+
 // Creates a texture image. Returns 1 on success, 0 on failure.
 static int createCanvas(glyph_state *state) {
         Canvas canvas = {
@@ -55,10 +137,10 @@ static int createCanvas(glyph_state *state) {
         };
 
         // read image data from disk
-        uint8_t *pixels = calloc(canvas.size, sizeof(uint8_t));
+        canvas.data = calloc(canvas.size, sizeof(uint8_t));
         for (int y = 0; y < tex_h; y++) {
                 for (int x = 0; x < tex_w; x++) {
-                        pixels[y * tex_h * 4 + x * 4] = (uint8_t)y + 64;
+                        canvas.data[y * tex_h * 4 + x * 4] = (uint8_t)y + 64;
                 }
         }
 
@@ -101,37 +183,12 @@ static int createCanvas(glyph_state *state) {
                 if (!createImage(&imageInfo)) {
                         return 0;
                 }
-
-                // pull into write to canvas image function
-                memcpy(canvas.mappedMemory[i], pixels, canvas.size);
-
-                TransitionImageLayoutInfo transInfo = {
-                        .image = canvas.image[i],
-                        .format = VK_FORMAT_R8G8B8A8_SRGB,
-                        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        .device = state->device,
-                        .cmdPool = state->command_pool,
-                        .graphicsQueue = state->graphics_queue,
-                };
-                transitionImageLayout(&transInfo);
-
-                CopyBufferToImageInfo copyInfo = {
-                        .buffer = canvas.stagingBuffer[i],
-                        .image = canvas.image[i],
-                        .width = tex_w,
-                        .height = tex_h,
-                        .device = state->device,
-                        .cmdPool = state->command_pool,
-                        .graphicsQueue = state->graphics_queue,
-                };
-                copyBufferToImage(&copyInfo);
-
-                transInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                transInfo.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                transitionImageLayout(&transInfo);
         }
         state->canvas = canvas;
+
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                writeCanvasDataToImage(state, i);
+        }
 
         if (!createCanvasImageViews(state)) {
                 return 0;

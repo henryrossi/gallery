@@ -1,5 +1,4 @@
 #include "glyph.h"
-#include "vulkan/vulkan_core.h"
 
 #include <stdint.h>
 #include <stdio.h>

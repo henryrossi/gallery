@@ -23,6 +23,12 @@ uint32_t validation_layer_count =
 #define MAX_FRAMES_IN_FLIGHT 2
 
 typedef struct {
+  float r;
+  float g;
+  float b;
+} Color;
+
+typedef struct {
   VkImage image[MAX_FRAMES_IN_FLIGHT];
   VkDeviceMemory imageMemory[MAX_FRAMES_IN_FLIGHT];
 
@@ -32,6 +38,15 @@ typedef struct {
   uint32_t size;
   uint32_t width;
   uint32_t height;
+  uint8_t *data;
+
+  Color color;
+  Color history[16];
+
+  double windowY;
+  double windowX;
+  double windowWidth;
+  double windowHeight;
 
   void *mappedMemory[MAX_FRAMES_IN_FLIGHT];
   VkBuffer stagingBuffer[MAX_FRAMES_IN_FLIGHT];
@@ -77,6 +92,13 @@ typedef struct {
   VkBuffer uniform_buffers[MAX_FRAMES_IN_FLIGHT];
   VkDeviceMemory uniform_buffers_memory[MAX_FRAMES_IN_FLIGHT];
   void *uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
+
+  struct {
+    VkPipeline grahpicsPipeline;
+    VkPipelineLayout pipelineLayout;
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexMemory;
+  } Quad;
 
   uint32_t framebuffer_resized;
 } glyph_state;

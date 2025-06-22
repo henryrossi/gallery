@@ -4,15 +4,46 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "GLFW/glfw3.h"
 #include "buffer.c"
 #include "canvas.c"
 #include "command.c"
 #include "debug.c"
 #include "device.c"
-#include "graphics_pipeline.c"
+#include "graphicsPipeline.c"
+#include "quad.c"
 #include "surface.c"
 #include "swapchain.c"
 #include "sync.c"
+
+static void processInput(glyph_state *state) {
+        if (glfwGetKey(state->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+                glfwSetWindowShouldClose(state->window, GLFW_TRUE);
+        }
+
+        int mouseState = glfwGetMouseButton(state->window, GLFW_MOUSE_BUTTON_1);
+        if (mouseState == GLFW_PRESS) {
+                Canvas canvas = state->canvas;
+                double x, y;
+                glfwGetCursorPos(state->window, &x, &y);
+
+                if (x > canvas.windowX
+                    && x < (canvas.windowX + canvas.windowWidth)
+                    && y > canvas.windowY
+                    && y < (canvas.windowY + canvas.windowHeight)) {
+
+                        double pixelX
+                            = ((x - canvas.windowX) / canvas.windowWidth)
+                              * canvas.width;
+                        double pixelY
+                            = ((y - canvas.windowY) / canvas.windowHeight)
+                              * canvas.height;
+                        canvas.data[(int)pixelY * (canvas.width * 4)
+                                    + ((int)pixelX * 4)]
+                            = 0;
+                }
+        }
+}
 
 static queue_family_indicies_t find_queue_families(glyph_state *state,
                                                    VkPhysicalDevice device) {
@@ -165,7 +196,8 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         };
         vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
-        VkBuffer vertex_buffers[] = { state->vertex_buffer };
+        VkBuffer vertex_buffers[]
+            = { state->vertex_buffer, state->Quad.vertexBuffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers, offsets);
         vkCmdBindIndexBuffer(cmd_buffer, state->index_buffer, 0,
@@ -177,6 +209,12 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
 
         uint32_t indices_size = sizeof(indices) / sizeof(indices[0]);
         vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
+
+        vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          state->Quad.grahpicsPipeline);
+        vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers + 1, offsets);
+        vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
+
         vkCmdEndRenderPass(cmd_buffer);
 
         res = vkEndCommandBuffer(cmd_buffer);
@@ -210,6 +248,8 @@ static int draw_frame(glyph_state *state) {
                         string_VkResult(res));
                 return 0;
         }
+
+        writeCanvasDataToImage(state, current_frame);
 
         vkResetFences(device, 1, state->inflight_fence + current_frame);
 
@@ -322,7 +362,7 @@ int main(int argc, char **argv) {
         if (!create_descriptor_sets(&state)) {
                 return 1;
         }
-        if (!create_graphics_pipeline(&state)) {
+        if (!createCanvasGraphicsPipeline(&state)) {
                 return 1;
         }
         if (!create_framebuffers(&state)) {
@@ -334,6 +374,12 @@ int main(int argc, char **argv) {
         if (!create_index_buffer(&state)) {
                 return 1;
         }
+        if (!createQuadGraphicsPipeline(&state)) {
+                return 1;
+        }
+        if (!createQuadVertexBuffer(&state)) {
+                return 1;
+        }
         if (!create_command_buffer(&state)) {
                 return 1;
         }
@@ -342,8 +388,9 @@ int main(int argc, char **argv) {
         }
 
         while (!glfwWindowShouldClose(state.window)) {
-                glfwPollEvents();
+                processInput(&state);
                 draw_frame(&state);
+                glfwPollEvents();
         }
         VkDevice device = state.device;
         vkDeviceWaitIdle(device);
@@ -373,6 +420,7 @@ int main(int argc, char **argv) {
         }
 
         destroyCanvas(&state);
+        destroyQuad(&state);
 
         vkDestroyDescriptorPool(device, state.descriptor_pool, NULL);
         vkDestroyDescriptorSetLayout(device, state.descriptor_set_layout, NULL);

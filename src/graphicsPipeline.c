@@ -1,4 +1,4 @@
-#include "glyph.h"
+#include "graphicsPipeline.h"
 
 #include <stdio.h>
 
@@ -57,11 +57,17 @@ static int create_render_pass(glyph_state *state) {
 }
 
 // Create graphics pipeline. Returns 1 on success, 0 on failure.
-static int create_graphics_pipeline(glyph_state *state) {
+static int createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo) {
+        VkDevice device = createInfo->device;
+
+        if (!createInfo->vertFile || !createInfo->fragFile) {
+                fprintf(stderr, "Shader filename is null pointer.\n");
+                return 0;
+        }
         VkShaderModule vert
-            = create_shader_module(state->device, "shaders/vert.spv");
+            = create_shader_module(device, createInfo->vertFile);
         VkShaderModule frag
-            = create_shader_module(state->device, "shaders/frag.spv");
+            = create_shader_module(device, createInfo->fragFile);
         // need to properly clean up shader modules
         if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) {
                 return 0;
@@ -95,23 +101,6 @@ static int create_graphics_pipeline(glyph_state *state) {
                 .dynamicStateCount
                 = sizeof(dynamic_states) / sizeof(dynamic_states[0]),
                 .pDynamicStates = dynamic_states,
-        };
-
-        VkVertexInputBindingDescription vertex_binding_desc
-            = get_vertex_binding_desc();
-
-        VkVertexInputAttributeDescription vertex_attr_desc[2] = {
-                get_vertex_attr_desc_pos(),
-                get_vertex_attr_desc_tex_coord(),
-        };
-
-        VkPipelineVertexInputStateCreateInfo vertex_input_info = {
-                .sType
-                = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .vertexBindingDescriptionCount = 1,
-                .pVertexBindingDescriptions = &vertex_binding_desc,
-                .vertexAttributeDescriptionCount = 2,
-                .pVertexAttributeDescriptions = vertex_attr_desc,
         };
 
         VkPipelineInputAssemblyStateCreateInfo input_assembly = {
@@ -150,7 +139,13 @@ static int create_graphics_pipeline(glyph_state *state) {
                 .colorWriteMask
                 = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
                   | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-                .blendEnable = VK_FALSE,
+                .blendEnable = VK_TRUE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
         };
 
         VkPipelineColorBlendStateCreateInfo color_blending = {
@@ -162,27 +157,11 @@ static int create_graphics_pipeline(glyph_state *state) {
                 .pAttachments = &color_blend_attachment,
         };
 
-        VkPipelineLayoutCreateInfo pipeline_layout_info = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .pSetLayouts = &state->descriptor_set_layout,
-                .setLayoutCount = 1,
-                .pushConstantRangeCount = 0,
-        };
-
-        VkResult res
-            = vkCreatePipelineLayout(state->device, &pipeline_layout_info, NULL,
-                                     &state->pipeline_layout);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create pipeline layout: %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-
-        VkGraphicsPipelineCreateInfo pipeline_info = {
+        VkGraphicsPipelineCreateInfo pipelineInfo = {
                 .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 .stageCount = 2,
                 .pStages = shader_stages,
-                .pVertexInputState = &vertex_input_info,
+                .pVertexInputState = createInfo->vertexInputInfo,
                 .pInputAssemblyState = &input_assembly,
                 .pViewportState = &viewport_state,
                 .pRasterizationState = &rasterizer,
@@ -190,24 +169,24 @@ static int create_graphics_pipeline(glyph_state *state) {
                 .pDepthStencilState = NULL,
                 .pColorBlendState = &color_blending,
                 .pDynamicState = &dynamic_state,
-                .layout = state->pipeline_layout,
-                .renderPass = state->render_pass,
+                .layout = createInfo->layout,
+                .renderPass = createInfo->renderPass,
                 .subpass = 0,
                 .basePipelineHandle = VK_NULL_HANDLE,
                 .basePipelineIndex = -1,
         };
 
-        res = vkCreateGraphicsPipelines(state->device, VK_NULL_HANDLE, 1,
-                                        &pipeline_info, NULL,
-                                        &state->graphics_pipeline);
+        VkResult res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1,
+                                                 &pipelineInfo, NULL,
+                                                 createInfo->pipeline);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create graphics pipelines: %s\n",
                         string_VkResult(res));
                 return 0;
         }
 
-        vkDestroyShaderModule(state->device, vert, NULL);
-        vkDestroyShaderModule(state->device, frag, NULL);
+        vkDestroyShaderModule(device, vert, NULL);
+        vkDestroyShaderModule(device, frag, NULL);
 
         return 1;
 }
