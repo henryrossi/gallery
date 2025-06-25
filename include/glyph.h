@@ -3,6 +3,7 @@
 
 #include "vulkan/vk_platform.h"
 #include "vulkan/vulkan_core.h"
+#include <stdalign.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -23,10 +24,32 @@ uint32_t validation_layer_count =
 #define MAX_FRAMES_IN_FLIGHT 2
 
 typedef struct {
+        float scale[16];
+        alignas(16)
+        float color[3];
+        alignas(16)
+        float trans[2]; 
+} quadUniform;
+
+
+typedef struct {
   float r;
   float g;
   float b;
 } Color;
+
+typedef struct {
+  VkPipeline grahpicsPipeline;
+  VkPipelineLayout pipelineLayout;
+  VkBuffer vertexBuffer;
+  VkDeviceMemory vertexMemory;
+  VkDescriptorSetLayout descriptorSetLayout;
+  VkDescriptorPool descriptorPool;
+  VkDescriptorSet descriptorSets[MAX_FRAMES_IN_FLIGHT];
+  VkBuffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory uniformsMemory[MAX_FRAMES_IN_FLIGHT];
+  void *uniformsMapped[MAX_FRAMES_IN_FLIGHT];
+} Quad;
 
 typedef struct {
   VkImage image[MAX_FRAMES_IN_FLIGHT];
@@ -52,7 +75,6 @@ typedef struct {
   VkBuffer stagingBuffer[MAX_FRAMES_IN_FLIGHT];
   VkDeviceMemory stagingMemory[MAX_FRAMES_IN_FLIGHT];
 } Canvas;
-
 
 typedef struct {
   uint32_t current_frame;
@@ -93,12 +115,7 @@ typedef struct {
   VkDeviceMemory uniform_buffers_memory[MAX_FRAMES_IN_FLIGHT];
   void *uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
 
-  struct {
-    VkPipeline grahpicsPipeline;
-    VkPipelineLayout pipelineLayout;
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexMemory;
-  } Quad;
+  Quad quad;
 
   uint32_t framebuffer_resized;
 } glyph_state;

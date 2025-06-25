@@ -197,7 +197,7 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
         VkBuffer vertex_buffers[]
-            = { state->vertex_buffer, state->Quad.vertexBuffer };
+            = { state->vertex_buffer, state->quad.vertexBuffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers, offsets);
         vkCmdBindIndexBuffer(cmd_buffer, state->index_buffer, 0,
@@ -211,8 +211,13 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
 
         vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          state->Quad.grahpicsPipeline);
+                          state->quad.grahpicsPipeline);
         vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers + 1, offsets);
+        vkCmdBindDescriptorSets(
+            cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            state->quad.pipelineLayout, 0, 1,
+            &state->quad.descriptorSets[state->current_frame], 0, NULL);
+
         vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(cmd_buffer);
@@ -390,6 +395,18 @@ int main(int argc, char **argv) {
         while (!glfwWindowShouldClose(state.window)) {
                 processInput(&state);
                 draw_frame(&state);
+                // uint32_t w = random();
+                // float xTrans = (float)w / (float)UINT32_MAX;
+                // quadUniform ubo = {
+                //         .mat3 = {
+                //                 1.0, 0.0, 0.0,
+                //                 0.0, 1.0, 0.0,
+                //                 0.0, 0.0, 1.0,
+                //         },
+                // };
+                // memcpy(state.quad.uniformsMapped[state.current_frame], &ubo,
+                //        sizeof(ubo));
+
                 glfwPollEvents();
         }
         VkDevice device = state.device;
