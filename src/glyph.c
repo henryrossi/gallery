@@ -1,5 +1,7 @@
 #include "glyph.h"
 
+#include "matrix.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,41 +9,122 @@
 #include "GLFW/glfw3.h"
 #include "buffer.c"
 #include "canvas.c"
+#include "cli.c"
 #include "command.c"
+#include "controlPanel.c"
 #include "debug.c"
 #include "device.c"
 #include "graphicsPipeline.c"
+#include "matrix.c"
 #include "quad.c"
 #include "surface.c"
 #include "swapchain.c"
 #include "sync.c"
 
+uint32_t frameCounter = 0;
+uint32_t prevFrame = 0;
+double prevTime = 0.0;
+
+// Returns 1 if pos is within the bounding box, 0 if not
+static inline int withinBoundingBox(BoundingBox *box, float xpos, float ypos) {
+        if (xpos > box->pos.x && xpos < box->pos.x + box->extent.x
+            && ypos > box->pos.y && ypos < box->pos.y + box->extent.y) {
+                return 1;
+        }
+        return 0;
+}
+
+int savePressed = 0;
 static void processInput(glyph_state *state) {
         if (glfwGetKey(state->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
                 glfwSetWindowShouldClose(state->window, GLFW_TRUE);
         }
 
+        if (glfwGetKey(state->window, GLFW_KEY_S) == GLFW_PRESS) {
+                savePressed = 1;
+        }
+        if (glfwGetKey(state->window, GLFW_KEY_S) == GLFW_RELEASE
+            && savePressed) {
+                int res = saveCanvasToPNG(&state->canvas);
+                if (res) {
+                        fprintf(stdout, "Saved file %s\n",
+                                state->canvas.filename);
+                } else {
+
+                        fprintf(stdout, "Failed to save file %s\n",
+                                state->canvas.filename);
+                }
+                savePressed = 0;
+        }
+
+        Canvas canvas = state->canvas;
+        double x, y;
+        glfwGetCursorPos(state->window, &x, &y);
+        int extentX, extentY;
+        glfwGetWindowSize(state->window, &extentX, &extentY);
+        float vulkanX = (x / extentX) * 2 - 1.0;
+        float vulkanY = (y / extentY) * 2 - 1.0;
+
         int mouseState = glfwGetMouseButton(state->window, GLFW_MOUSE_BUTTON_1);
         if (mouseState == GLFW_PRESS) {
-                Canvas canvas = state->canvas;
-                double x, y;
-                glfwGetCursorPos(state->window, &x, &y);
-
                 if (x > canvas.windowX
                     && x < (canvas.windowX + canvas.windowWidth)
                     && y > canvas.windowY
                     && y < (canvas.windowY + canvas.windowHeight)) {
 
-                        double pixelX
-                            = ((x - canvas.windowX) / canvas.windowWidth)
-                              * canvas.width;
-                        double pixelY
+                        int pixelX = ((x - canvas.windowX) / canvas.windowWidth)
+                                     * canvas.width;
+                        int pixelY
                             = ((y - canvas.windowY) / canvas.windowHeight)
                               * canvas.height;
-                        canvas.data[(int)pixelY * (canvas.width * 4)
-                                    + ((int)pixelX * 4)]
-                            = 0;
+
+                        Vec3 color = state->controlPanel.quadUniforms[0].color;
+                        canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)]
+                            = color.x * 255;
+                        canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)
+                                    + 1]
+                            = color.y * 255;
+                        canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)
+                                    + 2]
+                            = color.z * 255;
                 }
+
+                for (int i = 0; i < CONTROL_PANEL_QUAD_COUNT; i++) {
+                        BoundingBox box = getQuadBoundingBox(
+                            &state->controlPanel.quadUniforms[i].model,
+                            &state->controlPanel.quadUniforms[i].proj);
+                        if (withinBoundingBox(&box, vulkanX, vulkanY)) {
+                                if (((i > 0 && i <= CONTROL_PANEL_HISTORY_16)
+                                     || (i == CONTROL_PANEL_CREATOR_R_BUTTON)
+                                     || (i == CONTROL_PANEL_CREATOR_G_BUTTON)
+                                     || (i == CONTROL_PANEL_CREATOR_B_BUTTON)
+                                     || (i == CONTROL_PANEL_CREATOR_PREVIEW))
+                                    && state->controlPanel.clicked == 0) {
+                                        state->controlPanel.clicked = i;
+                                }
+                        }
+                }
+        }
+
+        if (mouseState == GLFW_RELEASE && state->controlPanel.clicked) {
+                uint32_t clicked = state->controlPanel.clicked;
+                if (clicked <= CONTROL_PANEL_HISTORY_16) {
+                        pickCurrentColorFromHistory(&state->controlPanel);
+                }
+                if (clicked == CONTROL_PANEL_CREATOR_PREVIEW) {
+                        pushCreatedColorToCurrent(&state->controlPanel);
+                }
+                state->controlPanel.clicked = 0;
+        }
+
+        if (state->controlPanel.clicked == CONTROL_PANEL_CREATOR_R_BUTTON
+            || state->controlPanel.clicked == CONTROL_PANEL_CREATOR_G_BUTTON
+            || state->controlPanel.clicked == CONTROL_PANEL_CREATOR_B_BUTTON) {
+                updateColorCreatorPreview(&state->controlPanel, vulkanX,
+                                          vulkanY);
+                updateCreatorButtonModelMatrix(&state->controlPanel,
+                                               state->swapchain_extent,
+                                               state->controlPanel.clicked);
         }
 }
 
@@ -178,7 +261,7 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
 
         vkCmdBeginRenderPass(cmd_buffer, &passinfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          state->graphics_pipeline);
+                          state->canvas.pipeline);
 
         VkViewport viewport = {
                 .x = 0.0f,
@@ -197,28 +280,21 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
         VkBuffer vertex_buffers[]
-            = { state->vertex_buffer, state->quad.vertexBuffer };
+            = { state->canvas.vertexBuffer, state->controlPanel.vertexBuffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers, offsets);
         vkCmdBindIndexBuffer(cmd_buffer, state->index_buffer, 0,
                              VK_INDEX_TYPE_UINT16);
 
         vkCmdBindDescriptorSets(
-            cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, state->pipeline_layout,
-            0, 1, &state->descriptor_sets[state->current_frame], 0, NULL);
+            cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            state->canvas.pipelineLayout, 0, 1,
+            &state->canvas.descriptorSets[state->current_frame], 0, NULL);
 
         uint32_t indices_size = sizeof(indices) / sizeof(indices[0]);
         vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
 
-        vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          state->quad.grahpicsPipeline);
-        vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers + 1, offsets);
-        vkCmdBindDescriptorSets(
-            cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-            state->quad.pipelineLayout, 0, 1,
-            &state->quad.descriptorSets[state->current_frame], 0, NULL);
-
-        vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
+        drawControlPanel(state, cmd_buffer, indices_size);
 
         vkCmdEndRenderPass(cmd_buffer);
 
@@ -234,6 +310,17 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
 
 // Submit a frame to be drawn. Returns 1 on success, 0 on failure.
 static int draw_frame(glyph_state *state) {
+
+        frameCounter++;
+        double time = glfwGetTime();
+        double delta = time - prevTime;
+        if (delta > 1.0) {
+                uint32_t frameDelta = frameCounter - prevFrame;
+                printf("FPS: %0.2f\n", (float)frameDelta / delta);
+                prevFrame = frameCounter;
+                prevTime = time;
+        }
+
         uint32_t current_frame = state->current_frame;
         VkDevice device = state->device;
         vkWaitForFences(device, 1, state->inflight_fence + current_frame,
@@ -248,6 +335,7 @@ static int draw_frame(glyph_state *state) {
             || state->framebuffer_resized) {
                 state->framebuffer_resized = 0;
                 recreate_swapchain(state);
+                return 1;
         } else if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to acquire swap chain image: %s\n",
                         string_VkResult(res));
@@ -314,12 +402,11 @@ static int draw_frame(glyph_state *state) {
 
 int main(int argc, char **argv) {
 
-        glyph_state state = {
-                .current_frame = 0,
-                .physical_device = VK_NULL_HANDLE,
-                .surface = VK_NULL_HANDLE,
-                .framebuffer_resized = 0,
-        };
+        glyph_state state = { 0 };
+
+        if (!parseCommandLineArgs(&state, argc, argv)) {
+                return 1;
+        }
 
         if (!init_window(&state)) {
                 return 1;
@@ -379,10 +466,7 @@ int main(int argc, char **argv) {
         if (!create_index_buffer(&state)) {
                 return 1;
         }
-        if (!createQuadGraphicsPipeline(&state)) {
-                return 1;
-        }
-        if (!createQuadVertexBuffer(&state)) {
+        if (!createControlPanel(&state)) {
                 return 1;
         }
         if (!create_command_buffer(&state)) {
@@ -395,17 +479,6 @@ int main(int argc, char **argv) {
         while (!glfwWindowShouldClose(state.window)) {
                 processInput(&state);
                 draw_frame(&state);
-                // uint32_t w = random();
-                // float xTrans = (float)w / (float)UINT32_MAX;
-                // quadUniform ubo = {
-                //         .mat3 = {
-                //                 1.0, 0.0, 0.0,
-                //                 0.0, 1.0, 0.0,
-                //                 0.0, 0.0, 1.0,
-                //         },
-                // };
-                // memcpy(state.quad.uniformsMapped[state.current_frame], &ubo,
-                //        sizeof(ubo));
 
                 glfwPollEvents();
         }
@@ -426,23 +499,26 @@ int main(int argc, char **argv) {
         vkDestroyCommandPool(device, state.command_pool, NULL);
         cleanup_swapchain(&state);
 
-        vkDestroyBuffer(device, state.vertex_buffer, NULL);
-        vkFreeMemory(device, state.vertex_buffer_memory, NULL);
+        vkDestroyBuffer(device, state.canvas.vertexBuffer, NULL);
+        vkFreeMemory(device, state.canvas.vertexBufferMemory, NULL);
         vkDestroyBuffer(device, state.index_buffer, NULL);
         vkFreeMemory(device, state.index_buffer_memory, NULL);
 
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-                vkDestroyBuffer(device, state.uniform_buffers[i], NULL);
-                vkFreeMemory(device, state.uniform_buffers_memory[i], NULL);
+                vkDestroyBuffer(device, state.canvas.uniformBuffers[i], NULL);
+                vkFreeMemory(device, state.canvas.uniformBuffersMemory[i],
+                             NULL);
         }
 
         destroyCanvas(&state);
-        destroyQuad(&state);
+        destroyControlPanel(&state);
+        destroyQuadVertexBuffer(&state);
 
-        vkDestroyDescriptorPool(device, state.descriptor_pool, NULL);
-        vkDestroyDescriptorSetLayout(device, state.descriptor_set_layout, NULL);
-        vkDestroyPipeline(device, state.graphics_pipeline, NULL);
-        vkDestroyPipelineLayout(device, state.pipeline_layout, NULL);
+        vkDestroyDescriptorPool(device, state.canvas.descriptorPool, NULL);
+        vkDestroyDescriptorSetLayout(device, state.canvas.descriptorSetLayout,
+                                     NULL);
+        vkDestroyPipeline(device, state.canvas.pipeline, NULL);
+        vkDestroyPipelineLayout(device, state.canvas.pipelineLayout, NULL);
         vkDestroyRenderPass(device, state.render_pass, NULL);
 
         vkDestroyDevice(device, NULL);

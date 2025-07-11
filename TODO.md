@@ -1,19 +1,14 @@
 
 Tasks to be completed:
 
-Add a uniform to fragment shader that will maintain the aspect ratio of the
-image. Background space will be filled from the clamp to border setting of
-the image sampler. This will need to be updated everytime the window is 
-resized. Basically everytime we need to recreate the swapchain I believe.
+Add keyboard shortcut to grab color under mouse on canvas to draw with.
 
-Handle user input to change pixel colors. To do this I need to map and fill a 
-staging buffer, transition image layout to TRANSFER_DST_OPTIMAL, copy buffer to 
-image, and transtion image layout back to SHADER_READ_ONLY_OPTIMAL. I will use
-pipeline barriers to synchronize reads and write on the image. These barriers 
-with the image layouts need to be set before and after every copy.
+Add save files with color history for each image to save colors between program uses.
 
-Add a color picker and a color history.
-
+A need a collection of Pipelines. There are several approaches.
+One approach is I identify every variable I would like to configure
+and generate pipelines from a config. These are Hashed so cached pipelines
+can be returned without being rebuilt.
 
 
 For when validation layers cannot be found:

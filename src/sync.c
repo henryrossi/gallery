@@ -1,4 +1,5 @@
-#include "glyph.h"
+#include "sync.h"
+#include "vulkan/vulkan_core.h"
 
 #include <stdio.h>
 
@@ -43,4 +44,17 @@ static int create_sync_objects(glyph_state *state) {
         }
 
         return 1;
+}
+
+static void cleanUnsafeSemaphore(VkQueue queue, VkSemaphore *semaphore) {
+        const VkPipelineStageFlags dstStage
+            = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        VkSubmitInfo submitInfo = {
+                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                .waitSemaphoreCount = 1,
+                .pWaitSemaphores = semaphore,
+                .pWaitDstStageMask = &dstStage,
+
+        };
+        vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 }

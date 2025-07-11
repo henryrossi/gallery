@@ -56,8 +56,22 @@ static int create_render_pass(glyph_state *state) {
         return 1;
 }
 
+/* State required to request a graphics pipeline:
+ *
+ * Shader filenames
+ * Color blending information?
+ * Vertex input state
+ *      Vertex binding
+ *      Vertex attr
+ * Pipeline layout (Handle)
+ *      Descriptor set layouts (Handle)
+ *              Uniform layout binding
+ * Render pass (Handle)
+ */
+
 // Create graphics pipeline. Returns 1 on success, 0 on failure.
-static int createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo) {
+static VkPipeline
+createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo) {
         VkDevice device = createInfo->device;
 
         if (!createInfo->vertFile || !createInfo->fragFile) {
@@ -70,47 +84,46 @@ static int createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo) {
             = create_shader_module(device, createInfo->fragFile);
         // need to properly clean up shader modules
         if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) {
-                return 0;
+                return VK_NULL_HANDLE;
         }
 
-        VkPipelineShaderStageCreateInfo vert_stage_info = {
+        VkPipelineShaderStageCreateInfo vertStageInfo = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage = VK_SHADER_STAGE_VERTEX_BIT,
                 .module = vert,
                 .pName = "main",
         };
 
-        VkPipelineShaderStageCreateInfo frag_stage_info = {
+        VkPipelineShaderStageCreateInfo fragStageInfo = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                 .module = frag,
                 .pName = "main",
         };
 
-        VkPipelineShaderStageCreateInfo shader_stages[] = {
-                vert_stage_info,
-                frag_stage_info,
+        VkPipelineShaderStageCreateInfo shaderStages[] = {
+                vertStageInfo,
+                fragStageInfo,
         };
 
-        VkDynamicState dynamic_states[] = {
+        VkDynamicState dynamicStates[] = {
                 VK_DYNAMIC_STATE_VIEWPORT,
                 VK_DYNAMIC_STATE_SCISSOR,
         };
-        VkPipelineDynamicStateCreateInfo dynamic_state = {
+        VkPipelineDynamicStateCreateInfo dynamicState = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
                 .dynamicStateCount
-                = sizeof(dynamic_states) / sizeof(dynamic_states[0]),
-                .pDynamicStates = dynamic_states,
+                = sizeof(dynamicStates) / sizeof(dynamicStates[0]),
+                .pDynamicStates = dynamicStates,
         };
 
-        VkPipelineInputAssemblyStateCreateInfo input_assembly = {
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly = {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                .primitiveRestartEnable = VK_FALSE,
+                .topology = createInfo->primativeTopology,
         };
 
-        VkPipelineViewportStateCreateInfo viewport_state = {
+        VkPipelineViewportStateCreateInfo viewportState = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
                 .viewportCount = 1,
                 .scissorCount = 1,
@@ -119,74 +132,53 @@ static int createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo) {
         VkPipelineRasterizationStateCreateInfo rasterizer = {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .depthClampEnable = VK_FALSE,
-                .rasterizerDiscardEnable = VK_FALSE,
-                .polygonMode = VK_POLYGON_MODE_FILL,
+                .polygonMode = createInfo->polygonMode,
                 .lineWidth = 1.0f,
-                .cullMode = VK_CULL_MODE_BACK_BIT,
-                .frontFace = VK_FRONT_FACE_CLOCKWISE,
-                .depthBiasEnable = VK_FALSE,
+                .cullMode = createInfo->cullMode,
+                .frontFace = createInfo->frontFace,
         };
 
         VkPipelineMultisampleStateCreateInfo multisampling = {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                .sampleShadingEnable = VK_FALSE,
                 .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
         };
 
-        VkPipelineColorBlendAttachmentState color_blend_attachment = {
-                .colorWriteMask
-                = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
-                  | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-                .blendEnable = VK_TRUE,
-                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-                .colorBlendOp = VK_BLEND_OP_ADD,
-                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-                .alphaBlendOp = VK_BLEND_OP_ADD,
-        };
-
-        VkPipelineColorBlendStateCreateInfo color_blending = {
+        VkPipelineColorBlendStateCreateInfo colorBlending = {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                .logicOpEnable = VK_FALSE,
-                .logicOp = VK_LOGIC_OP_COPY,
-                .attachmentCount = 1,
-                .pAttachments = &color_blend_attachment,
+                .attachmentCount = createInfo->blendAttachmentStatesCount,
+                .pAttachments = createInfo->blendAttachmentStates,
         };
 
         VkGraphicsPipelineCreateInfo pipelineInfo = {
                 .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 .stageCount = 2,
-                .pStages = shader_stages,
+                .pStages = shaderStages,
                 .pVertexInputState = createInfo->vertexInputInfo,
-                .pInputAssemblyState = &input_assembly,
-                .pViewportState = &viewport_state,
+                .pInputAssemblyState = &inputAssembly,
+                .pViewportState = &viewportState,
                 .pRasterizationState = &rasterizer,
                 .pMultisampleState = &multisampling,
-                .pDepthStencilState = NULL,
-                .pColorBlendState = &color_blending,
-                .pDynamicState = &dynamic_state,
-                .layout = createInfo->layout,
+                .pDepthStencilState = createInfo->depthStencilState,
+                .pColorBlendState = &colorBlending,
+                .pDynamicState = &dynamicState,
+                .layout = createInfo->pipelineLayout,
                 .renderPass = createInfo->renderPass,
-                .subpass = 0,
-                .basePipelineHandle = VK_NULL_HANDLE,
                 .basePipelineIndex = -1,
         };
 
-        VkResult res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1,
-                                                 &pipelineInfo, NULL,
-                                                 createInfo->pipeline);
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        VkResult res = vkCreateGraphicsPipelines(
+            device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &pipeline);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create graphics pipelines: %s\n",
                         string_VkResult(res));
-                return 0;
+                return VK_NULL_HANDLE;
         }
 
         vkDestroyShaderModule(device, vert, NULL);
         vkDestroyShaderModule(device, frag, NULL);
 
-        return 1;
+        return pipeline;
 }

@@ -1,8 +1,5 @@
 #include "buffer.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,8 +168,8 @@ static int create_vertex_buffer(glyph_state *state) {
                 .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT
                          | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                 .props = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                .buffer = &state->vertex_buffer,
-                .memory = &state->vertex_buffer_memory,
+                .buffer = &state->canvas.vertexBuffer,
+                .memory = &state->canvas.vertexBufferMemory,
         };
         if (!createBuffer(&vertex)) {
                 return 0;
@@ -183,7 +180,7 @@ static int create_vertex_buffer(glyph_state *state) {
                 .graphics_queue = state->graphics_queue,
                 .cmdpool = state->command_pool,
                 .src = staging_buffer,
-                .dst = state->vertex_buffer,
+                .dst = state->canvas.vertexBuffer,
                 .size = size,
         };
         copyBuffer(&params);
@@ -428,8 +425,9 @@ static int create_descriptor_set_layout(glyph_state *state) {
                 .pBindings = layout_bindings,
         };
 
-        VkResult res = vkCreateDescriptorSetLayout(
-            state->device, &layout_info, NULL, &state->descriptor_set_layout);
+        VkResult res
+            = vkCreateDescriptorSetLayout(state->device, &layout_info, NULL,
+                                          &state->canvas.descriptorSetLayout);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create descriptor set layout: %s\n",
                         string_VkResult(res));
@@ -458,7 +456,7 @@ static int create_descriptor_pool(glyph_state *state) {
         };
 
         VkResult res = vkCreateDescriptorPool(state->device, &pool_info, NULL,
-                                              &state->descriptor_pool);
+                                              &state->canvas.descriptorPool);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create descriptor pool: %s\n",
                         string_VkResult(res));
@@ -471,18 +469,18 @@ static int create_descriptor_pool(glyph_state *state) {
 static int create_descriptor_sets(glyph_state *state) {
         VkDescriptorSetLayout layouts[MAX_FRAMES_IN_FLIGHT];
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-                layouts[i] = state->descriptor_set_layout;
+                layouts[i] = state->canvas.descriptorSetLayout;
         }
 
         VkDescriptorSetAllocateInfo alloc_info = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                .descriptorPool = state->descriptor_pool,
+                .descriptorPool = state->canvas.descriptorPool,
                 .descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
                 .pSetLayouts = layouts,
         };
 
         VkResult res = vkAllocateDescriptorSets(state->device, &alloc_info,
-                                                state->descriptor_sets);
+                                                state->canvas.descriptorSets);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to allocate descriptor sets: %s\n",
                         string_VkResult(res));
@@ -497,7 +495,7 @@ static int create_descriptor_sets(glyph_state *state) {
                 };
 
                 VkDescriptorBufferInfo buffer_info = {
-                        .buffer = state->uniform_buffers[i],
+                        .buffer = state->canvas.uniformBuffers[i],
                         .offset = 0,
                         .range = sizeof(uniformBufferObject),
                 };
@@ -505,7 +503,7 @@ static int create_descriptor_sets(glyph_state *state) {
                 VkWriteDescriptorSet descriptor_write[2] = {
                         {
                                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                .dstSet = state->descriptor_sets[i],
+                                .dstSet = state->canvas.descriptorSets[i],
                                 .dstBinding = 0,
                                 .dstArrayElement = 0,
                                 .descriptorType
@@ -515,7 +513,7 @@ static int create_descriptor_sets(glyph_state *state) {
                         },
                         {
                                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                .dstSet = state->descriptor_sets[i],
+                                .dstSet = state->canvas.descriptorSets[i],
                                 .dstBinding = 1,
                                 .dstArrayElement = 0,
                                 .descriptorType
@@ -538,8 +536,8 @@ static int create_uniform_buffer(glyph_state *state) {
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
                 BufferCreateInfo params = {
                         .size = size,
-                        .buffer = &state->uniform_buffers[i],
-                        .memory = &state->uniform_buffers_memory[i],
+                        .buffer = &state->canvas.uniformBuffers[i],
+                        .memory = &state->canvas.uniformBuffersMemory[i],
                         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                         .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
                                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -550,8 +548,9 @@ static int create_uniform_buffer(glyph_state *state) {
                         return 0;
                 }
 
-                vkMapMemory(state->device, state->uniform_buffers_memory[i], 0,
-                            size, 0, &state->uniform_buffers_mapped[i]);
+                vkMapMemory(state->device,
+                            state->canvas.uniformBuffersMemory[i], 0, size, 0,
+                            &state->canvas.uniformBuffersMapped[i]);
                 update_uniform_buffer(state, i);
         }
 
@@ -584,7 +583,8 @@ static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame) {
                 ubo.yAdjustment = surfaceWidth / surfaceHeight;
         }
 
-        memcpy(state->uniform_buffers_mapped[currentFrame], &ubo, sizeof(ubo));
+        memcpy(state->canvas.uniformBuffersMapped[currentFrame], &ubo,
+               sizeof(ubo));
 
         int w, h;
         glfwGetWindowSize(state->window, &w, &h);
@@ -603,4 +603,29 @@ static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame) {
                                            h)
               - convertVulkanScreenPosToGLFW(
                   vertices[1].pos[1] * ubo.yAdjustment, h);
+}
+
+static int createUniformBuffer(UniformBufferCreateInfo *createInfo) {
+        VkDeviceSize size = createInfo->uniformSize;
+
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                BufferCreateInfo bufferInfo = {
+                        .device = createInfo->device,
+                        .buffer = createInfo->pBuffers[i],
+                        .memory = createInfo->pMemory[i],
+                        .size = size,
+                        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                 | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        .physical_device = createInfo->phyDevice,
+                };
+                if (!createBuffer(&bufferInfo)) {
+                        return 0;
+                }
+
+                vkMapMemory(createInfo->device, *createInfo->pMemory[i], 0,
+                            size, 0, createInfo->pMappedMemory[i]);
+        }
+
+        return 1;
 }

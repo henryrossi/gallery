@@ -5,15 +5,22 @@
 
 typedef struct {
         const VkDevice device;
-        VkPipeline *pipeline;
+        // PipelineCache
         const char *vertFile;
         const char *fragFile;
-        const VkPipelineLayout layout;
-        const VkRenderPass renderPass;
-        const VkPipelineVertexInputStateCreateInfo *vertexInputInfo;
+        VkPipelineVertexInputStateCreateInfo *vertexInputInfo;
+        VkPrimitiveTopology primativeTopology;
+        VkPolygonMode polygonMode;
+        VkCullModeFlags cullMode;
+        VkFrontFace frontFace;
+        uint32_t blendAttachmentStatesCount;
+        VkPipelineColorBlendAttachmentState *blendAttachmentStates;
+        VkPipelineDepthStencilStateCreateInfo *depthStencilState;
+        VkPipelineLayout pipelineLayout;
+        VkRenderPass renderPass;
 } GraphicsPipelineCreateInfo;
 
-static int createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo);
+static VkPipeline createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo);
  
 
 #endif // GLYPH_GRAPHICS_PIPELINE_H

@@ -3,9 +3,6 @@
 
 #include "glyph.h"
 
-const int tex_w = 64;
-const int tex_h = 64;
-
 typedef struct {
         VkDevice device;
         VkPhysicalDevice physical_device;
@@ -70,4 +67,17 @@ static void transitionImageLayout(TransitionImageLayoutInfo *params);
  
 static int createImageView(VkDevice device, VkImage image, VkFormat format,
                              VkImageView *view);
+
+
+typedef struct {
+  VkBuffer *pBuffers[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory *pMemory[MAX_FRAMES_IN_FLIGHT];
+  void **pMappedMemory[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceSize uniformSize;
+  VkDevice device;
+  VkPhysicalDevice phyDevice;
+} UniformBufferCreateInfo;
+
+static int createUniformBuffer(UniformBufferCreateInfo *createInfo);
+
 #endif // GLYPH_BUFFER_H

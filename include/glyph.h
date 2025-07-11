@@ -3,11 +3,15 @@
 
 #include "vulkan/vk_platform.h"
 #include "vulkan/vulkan_core.h"
+#include <stdio.h>
+#include <assert.h>
 #include <stdalign.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <vulkan/vk_enum_string_helper.h>
+
+#include "matrix.h"
 
 #ifdef NDEBUG
 const uint32_t enable_validation_layers = 0;
@@ -24,32 +28,10 @@ uint32_t validation_layer_count =
 #define MAX_FRAMES_IN_FLIGHT 2
 
 typedef struct {
-        float scale[16];
-        alignas(16)
-        float color[3];
-        alignas(16)
-        float trans[2]; 
-} quadUniform;
-
-
-typedef struct {
   float r;
   float g;
   float b;
 } Color;
-
-typedef struct {
-  VkPipeline grahpicsPipeline;
-  VkPipelineLayout pipelineLayout;
-  VkBuffer vertexBuffer;
-  VkDeviceMemory vertexMemory;
-  VkDescriptorSetLayout descriptorSetLayout;
-  VkDescriptorPool descriptorPool;
-  VkDescriptorSet descriptorSets[MAX_FRAMES_IN_FLIGHT];
-  VkBuffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
-  VkDeviceMemory uniformsMemory[MAX_FRAMES_IN_FLIGHT];
-  void *uniformsMapped[MAX_FRAMES_IN_FLIGHT];
-} Quad;
 
 typedef struct {
   VkImage image[MAX_FRAMES_IN_FLIGHT];
@@ -58,23 +40,91 @@ typedef struct {
   VkImageView imageView[MAX_FRAMES_IN_FLIGHT];
   VkSampler imageSampler;
 
+  void *mappedStagingImages[MAX_FRAMES_IN_FLIGHT];
+  VkBuffer stagingImageBuffers[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory stagingImagesMemory[MAX_FRAMES_IN_FLIGHT];
+
+
   uint32_t size;
   uint32_t width;
   uint32_t height;
   uint8_t *data;
-
-  Color color;
-  Color history[16];
 
   double windowY;
   double windowX;
   double windowWidth;
   double windowHeight;
 
-  void *mappedMemory[MAX_FRAMES_IN_FLIGHT];
-  VkBuffer stagingBuffer[MAX_FRAMES_IN_FLIGHT];
-  VkDeviceMemory stagingMemory[MAX_FRAMES_IN_FLIGHT];
+  VkDescriptorSetLayout descriptorSetLayout;
+  VkDescriptorPool descriptorPool;
+  VkDescriptorSet descriptorSets[MAX_FRAMES_IN_FLIGHT];
+  VkPipelineLayout pipelineLayout;
+  VkPipeline pipeline;
+  VkBuffer vertexBuffer;
+  VkDeviceMemory vertexBufferMemory;
+  VkBuffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory uniformBuffersMemory[MAX_FRAMES_IN_FLIGHT];
+  void *uniformBuffersMapped[MAX_FRAMES_IN_FLIGHT];
+
+  const char *filename;
+  uint32_t fileCreated;
 } Canvas;
+
+typedef struct {
+  Mat4 model;
+  alignas(16) Mat4 proj;
+  alignas(16) Vec3 color;
+} ControlPanelUniform;
+
+#define COLOR_HISTORY_LENGTH 16
+#define CONTROL_PANEL_QUAD_COUNT 1 + COLOR_HISTORY_LENGTH + 7
+
+typedef enum {
+  CONTROL_PANEL_CURRENT_COLOR,
+  CONTROL_PANEL_HISTORY_1,
+  CONTROL_PANEL_HISTORY_2,
+  CONTROL_PANEL_HISTORY_3,
+  CONTROL_PANEL_HISTORY_4,
+  CONTROL_PANEL_HISTORY_5,
+  CONTROL_PANEL_HISTORY_6,
+  CONTROL_PANEL_HISTORY_7,
+  CONTROL_PANEL_HISTORY_8,
+  CONTROL_PANEL_HISTORY_9,
+  CONTROL_PANEL_HISTORY_10,
+  CONTROL_PANEL_HISTORY_11,
+  CONTROL_PANEL_HISTORY_12,
+  CONTROL_PANEL_HISTORY_13,
+  CONTROL_PANEL_HISTORY_14,
+  CONTROL_PANEL_HISTORY_15,
+  CONTROL_PANEL_HISTORY_16,
+  CONTROL_PANEL_CREATOR_PREVIEW,
+  CONTROL_PANEL_CREATOR_R_BAR,
+  CONTROL_PANEL_CREATOR_R_BUTTON,
+  CONTROL_PANEL_CREATOR_G_BAR,
+  CONTROL_PANEL_CREATOR_G_BUTTON,
+  CONTROL_PANEL_CREATOR_B_BAR,
+  CONTROL_PANEL_CREATOR_B_BUTTON,
+} GlyphControlPanelUniformIndex;
+
+typedef struct {
+  VkPipeline Pipeline;
+  VkPipelineLayout pipelineLayout;
+  VkPipeline circlePipeline;
+  VkPipelineLayout circlePipelineLayout;
+
+  VkBuffer vertexBuffer;
+  VkDeviceMemory vertexMemory;
+  VkDescriptorSetLayout descriptorSetLayout;
+  VkDescriptorPool descriptorPool;
+  VkDescriptorSet descriptorSets[MAX_FRAMES_IN_FLIGHT];
+  VkBuffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory uniformsMemory[MAX_FRAMES_IN_FLIGHT];
+  void *uniformsMapped[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceSize alignedUniformSize;
+  Vec3 colors[COLOR_HISTORY_LENGTH + 1];
+  ControlPanelUniform quadUniforms[CONTROL_PANEL_QUAD_COUNT];
+  int32_t clicked;
+} ControlPanel;
 
 typedef struct {
   uint32_t current_frame;
@@ -96,26 +146,17 @@ typedef struct {
   uint32_t swapchain_framebuffer_count;
   VkFramebuffer *swapchain_framebuffers;
   VkRenderPass render_pass;
-  VkDescriptorSetLayout descriptor_set_layout;
-  VkDescriptorPool descriptor_pool;
-  VkDescriptorSet descriptor_sets[MAX_FRAMES_IN_FLIGHT];
-  VkPipelineLayout pipeline_layout;
-  VkPipeline graphics_pipeline;
   VkCommandPool command_pool;
   VkCommandBuffer command_buffer[MAX_FRAMES_IN_FLIGHT];
   VkSemaphore image_available_semaphore[MAX_FRAMES_IN_FLIGHT];
   VkSemaphore render_finished_semaphore[MAX_FRAMES_IN_FLIGHT];
   VkFence inflight_fence[MAX_FRAMES_IN_FLIGHT];
-  VkBuffer vertex_buffer;
-  VkDeviceMemory vertex_buffer_memory;
+
   VkBuffer index_buffer;
   VkDeviceMemory index_buffer_memory;
-  Canvas canvas;
-  VkBuffer uniform_buffers[MAX_FRAMES_IN_FLIGHT];
-  VkDeviceMemory uniform_buffers_memory[MAX_FRAMES_IN_FLIGHT];
-  void *uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
 
-  Quad quad;
+  Canvas canvas;
+  ControlPanel controlPanel;
 
   uint32_t framebuffer_resized;
 } glyph_state;

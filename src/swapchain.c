@@ -1,4 +1,5 @@
 #include "glyph.h"
+#include "sync.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -233,6 +234,10 @@ static int recreate_swapchain(glyph_state *state) {
                 glfwGetFramebufferSize(state->window, &width, &height);
                 glfwWaitEvents();
         }
+
+        cleanUnsafeSemaphore(
+            state->graphics_queue,
+            &state->image_available_semaphore[state->current_frame]);
 
         vkDeviceWaitIdle(state->device);
 
