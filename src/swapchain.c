@@ -255,7 +255,5 @@ static int recreate_swapchain(glyph_state *state) {
         if (!res)
                 return 0;
 
-        update_uniform_buffer(state, state->current_frame);
-
         return 1;
 }

@@ -46,6 +46,7 @@ static void printMat4(Mat4 *mat) {
                 printf("[ %.4f, %.4f, %.4f, %.4f ]\n", mat->m[i][0],
                        mat->m[i][1], mat->m[i][2], mat->m[i][3]);
         }
+        printf("\n");
 }
 
 static void printVec4(Vec4 *vec) {

@@ -1,8 +1,7 @@
-#version 450
+#version 450 core
 
 layout (binding = 1) uniform uniformBufferObject {
-	float xAdjustment;
-	float yAdjustment;
+	mat4 mvp;
 } ubo;
 
 layout (location = 0) in vec2 inPosition;
@@ -11,7 +10,7 @@ layout (location = 1) in vec2 inTexCoord;
 layout (location = 0) out vec2 texCoord;
 
 void main() {
-	vec2 adj = vec2(ubo.xAdjustment, ubo.yAdjustment);
-	gl_Position = vec4(adj * inPosition, 0.0, 1.0);
+	gl_Position = ubo.mvp * vec4(inPosition, 0.0, 1.0);
+	// gl_Position = vec4(inPosition, 0.0, 1.0);
 	texCoord = inTexCoord;
 }

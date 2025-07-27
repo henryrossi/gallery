@@ -1,5 +1,8 @@
 #include "buffer.h"
+#include "coordTransform.h"
+#include "glyph.h"
 #include "graphicsPipeline.h"
+#include "vulkan/vulkan_core.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -10,17 +13,279 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+        float pos[2];
+        float tex_coord[2];
+} canvasVertex;
+
+const canvasVertex vertices[] = {
+        { { -0.5f, -0.5f }, { 0.0f, 0.0f } },
+        { { 0.5f, -0.5f }, { 1.0f, 0.0f } },
+        { { 0.5f, 0.5f }, { 1.0f, 1.0f } },
+        { { -0.5f, 0.5f }, { 0.0f, 1.0f } },
+};
+
+static void updateCanvasUniformObject(Canvas *c, VkExtent2D screen) {
+        c->scale.x = ((float)screen.width) * 0.75;
+        c->scale.y = ((float)screen.height) * 0.75;
+        c->scale.z = 1.0;
+        c->pos.x = -((float)screen.width) * 0.125;
+
+        getPosCoordTransform(&c->scale, &c->pos, screen, true, &c->uniform.mvp);
+}
+
+static void drawCanvas(Canvas *c, VkCommandBuffer cmdBuffer, uint32_t frame,
+                       VkExtent2D *swapchainExtent, uint32_t indicesSize) {
+        memcpy(c->uniformBuffersMapped[frame], &c->uniform, sizeof(c->uniform));
+
+        VkDeviceSize offset = 0;
+
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          c->pipeline);
+        vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &c->vertexBuffer, &offset);
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                c->pipelineLayout, 0, 1,
+                                &c->descriptorSets[frame], 0, NULL);
+
+        vkCmdDrawIndexed(cmdBuffer, indicesSize, 1, 0, 0, 0);
+}
+
+// Create vertex buffers. Returns 1 on success, 0 on failure.
+static int create_vertex_buffer(glyph_state *state) {
+        VkDevice device = state->device;
+        VkDeviceSize size = sizeof(vertices);
+
+        VkBuffer staging_buffer;
+        VkDeviceMemory staging_buffer_memory;
+        BufferCreateInfo staging = {
+                .device = device,
+                .physical_device = state->physical_device,
+                .size = size,
+                .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                         | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                .buffer = &staging_buffer,
+                .memory = &staging_buffer_memory,
+        };
+        if (!createBuffer(&staging)) {
+                return 0;
+        }
+
+        void *data;
+        vkMapMemory(device, staging_buffer_memory, 0, size, 0, &data);
+        memcpy(data, vertices, size);
+        vkUnmapMemory(device, staging_buffer_memory);
+
+        BufferCreateInfo vertex = {
+                .device = device,
+                .physical_device = state->physical_device,
+                .size = size,
+                .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT
+                         | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                .props = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                .buffer = &state->canvas.vertexBuffer,
+                .memory = &state->canvas.vertexBufferMemory,
+        };
+        if (!createBuffer(&vertex)) {
+                return 0;
+        }
+
+        CopyBufferInfo params = {
+                .device = device,
+                .graphics_queue = state->graphics_queue,
+                .cmdpool = state->command_pool,
+                .src = staging_buffer,
+                .dst = state->canvas.vertexBuffer,
+                .size = size,
+        };
+        copyBuffer(&params);
+
+        vkDestroyBuffer(device, staging_buffer, NULL);
+        vkFreeMemory(device, staging_buffer_memory, NULL);
+
+        return 1;
+}
+
+static int create_descriptor_set_layout(glyph_state *state) {
+        VkDescriptorSetLayoutBinding tex_layout_binding = {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = NULL,
+        };
+
+        VkDescriptorSetLayoutBinding ubo_layout_binding = {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .pImmutableSamplers = NULL,
+        };
+
+        VkDescriptorSetLayoutBinding layout_bindings[2] = {
+                tex_layout_binding,
+                ubo_layout_binding,
+        };
+
+        VkDescriptorSetLayoutCreateInfo layout_info = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = 2,
+                .pBindings = layout_bindings,
+        };
+
+        VkResult res
+            = vkCreateDescriptorSetLayout(state->device, &layout_info, NULL,
+                                          &state->canvas.descriptorSetLayout);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to create descriptor set layout: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+        return 1;
+}
+
+static int create_descriptor_pool(glyph_state *state) {
+        VkDescriptorPoolSize pool_sizes[MAX_FRAMES_IN_FLIGHT] = {
+                {
+                        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                        .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+                },
+                {
+                        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                        .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+                },
+        };
+
+        VkDescriptorPoolCreateInfo pool_info = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                .poolSizeCount = 2,
+                .pPoolSizes = pool_sizes,
+                .maxSets = MAX_FRAMES_IN_FLIGHT,
+        };
+
+        VkResult res = vkCreateDescriptorPool(state->device, &pool_info, NULL,
+                                              &state->canvas.descriptorPool);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to create descriptor pool: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        return 1;
+}
+
+static int create_descriptor_sets(glyph_state *state) {
+        VkDescriptorSetLayout layouts[MAX_FRAMES_IN_FLIGHT];
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                layouts[i] = state->canvas.descriptorSetLayout;
+        }
+
+        VkDescriptorSetAllocateInfo alloc_info = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = state->canvas.descriptorPool,
+                .descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+                .pSetLayouts = layouts,
+        };
+
+        VkResult res = vkAllocateDescriptorSets(state->device, &alloc_info,
+                                                state->canvas.descriptorSets);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Failed to allocate descriptor sets: %s\n",
+                        string_VkResult(res));
+                return 0;
+        }
+
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                VkDescriptorImageInfo image_info = {
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .imageView = state->canvas.imageView[i],
+                        .sampler = state->canvas.imageSampler,
+                };
+
+                VkDescriptorBufferInfo buffer_info = {
+                        .buffer = state->canvas.uniformBuffers[i],
+                        .offset = 0,
+                        .range = sizeof(state->canvas.uniform),
+                };
+
+                VkWriteDescriptorSet descriptor_write[2] = {
+                        {
+                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                .dstSet = state->canvas.descriptorSets[i],
+                                .dstBinding = 0,
+                                .dstArrayElement = 0,
+                                .descriptorType
+                                = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                .descriptorCount = 1,
+                                .pImageInfo = &image_info,
+                        },
+                        {
+                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                .dstSet = state->canvas.descriptorSets[i],
+                                .dstBinding = 1,
+                                .dstArrayElement = 0,
+                                .descriptorType
+                                = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                .descriptorCount = 1,
+                                .pBufferInfo = &buffer_info,
+                        },
+                };
+
+                vkUpdateDescriptorSets(state->device, 2, descriptor_write, 0,
+                                       NULL);
+        }
+
+        return 1;
+}
+
+static int create_uniform_buffer(glyph_state *state) {
+        VkDeviceSize size = sizeof(state->canvas.uniform);
+
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                BufferCreateInfo params = {
+                        .size = size,
+                        .buffer = &state->canvas.uniformBuffers[i],
+                        .memory = &state->canvas.uniformBuffersMemory[i],
+                        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                 | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        .device = state->device,
+                        .physical_device = state->physical_device,
+                };
+                if (!createBuffer(&params)) {
+                        return 0;
+                }
+
+                vkMapMemory(state->device,
+                            state->canvas.uniformBuffersMemory[i], 0, size, 0,
+                            &state->canvas.uniformBuffersMapped[i]);
+        }
+
+        return 1;
+}
 static int createCanvasGraphicsPipeline(glyph_state *state) {
         // Render Pass needs to be create before this function.
 
-        VkVertexInputBindingDescription vertexBindingDesc
-            = get_vertex_binding_desc();
-
-        VkVertexInputAttributeDescription vertexAttrDesc[2] = {
-                get_vertex_attr_desc_pos(),
-                get_vertex_attr_desc_tex_coord(),
+        VkVertexInputBindingDescription vertexBindingDesc = {
+                .binding = 0,
+                .stride = sizeof(canvasVertex),
+                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
         };
-
+        VkVertexInputAttributeDescription vertexAttrDesc[2] = {
+                {
+                        .binding = 0,
+                        .location = 0,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(canvasVertex, pos),
+                },
+                {
+                        .binding = 0,
+                        .location = 1,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(canvasVertex, tex_coord),
+                },
+        };
         VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -240,6 +505,8 @@ static int createCanvas(glyph_state *state) {
         if (!createCanvasSampler(state)) {
                 return 0;
         }
+
+        updateCanvasUniformObject(canvas, state->swapchain_extent);
 
         return 1;
 }

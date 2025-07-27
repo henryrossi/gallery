@@ -1,7 +1,6 @@
 
 Tasks to be completed:
 
-Add keyboard shortcut to grab color under mouse on canvas to draw with.
 
 Add save files with color history for each image to save colors between program uses.
 

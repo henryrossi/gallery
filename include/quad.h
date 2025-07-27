@@ -23,6 +23,6 @@ typedef struct {
   Vec2 extent;
 } BoundingBox;
 
-static BoundingBox getQuadBoundingBox(Mat4 *model, Mat4 *proj);
+static BoundingBox getQuadBoundingBox(Mat4 *mvp);
 
 #endif // GLYPH_QUAD_H

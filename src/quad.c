@@ -7,29 +7,21 @@
 
 // clang-format off
 const Vec2 quadVertices[] = {
-        { -1.0f, -1.0f },
-        { 1.0f, -1.0f, },
-        { 1.0f, 1.0f },
-        { -1.0f, 1.0f },
+        { -0.5f, -0.5f },
+        { 0.5f, -0.5f, },
+        { 0.5f, 0.5f },
+        { -0.5f, 0.5f },
 };
 // clang-format on
 
-static BoundingBox getQuadBoundingBox(Mat4 *model, Mat4 *proj) {
+static BoundingBox getQuadBoundingBox(Mat4 *mvp) {
         Vec4 mpVertices[4] = { 0 };
         Vec2 vulkanCoords[4] = { 0 };
-
-        Mat4 modelT = *model;
-        transposeMat4(&modelT);
-        Mat4 projT = *proj;
-        transposeMat4(&projT);
-
-        Mat4 mp = { 0 };
-        multMat4xMat4(&projT, &modelT, &mp);
 
         for (int i = 0; i < 4; i++) {
                 Vec4 quadPos
                     = { quadVertices[i].x, quadVertices[i].y, 0.0, 1.0 };
-                multMat4xVec4(&mp, &quadPos, &mpVertices[i]);
+                multMat4xVec4(mvp, &quadPos, &mpVertices[i]);
                 vulkanCoords[i].x = (mpVertices[i].x / mpVertices[i].w);
                 vulkanCoords[i].y = (mpVertices[i].y / mpVertices[i].w);
         }

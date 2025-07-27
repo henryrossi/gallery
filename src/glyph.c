@@ -12,11 +12,13 @@
 #include "cli.c"
 #include "command.c"
 #include "controlPanel.c"
+#include "coordTransform.c"
 #include "debug.c"
 #include "device.c"
 #include "graphicsPipeline.c"
 #include "matrix.c"
 #include "quad.c"
+#include "quad.h"
 #include "surface.c"
 #include "swapchain.c"
 #include "sync.c"
@@ -35,6 +37,7 @@ static inline int withinBoundingBox(BoundingBox *box, float xpos, float ypos) {
 }
 
 int savePressed = 0;
+int colorPickedPressed = 0;
 static void processInput(glyph_state *state) {
         if (glfwGetKey(state->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
                 glfwSetWindowShouldClose(state->window, GLFW_TRUE);
@@ -65,20 +68,41 @@ static void processInput(glyph_state *state) {
         float vulkanX = (x / extentX) * 2 - 1.0;
         float vulkanY = (y / extentY) * 2 - 1.0;
 
+        BoundingBox canvasBox = getQuadBoundingBox(&canvas.uniform.mvp);
+        int pixelX
+            = ((vulkanX - canvasBox.pos.x) / canvasBox.extent.x) * canvas.width;
+        int pixelY = ((vulkanY - canvasBox.pos.y) / canvasBox.extent.y)
+                     * canvas.height;
+
         int mouseState = glfwGetMouseButton(state->window, GLFW_MOUSE_BUTTON_1);
+        if (glfwGetKey(state->window, GLFW_KEY_P) == GLFW_PRESS) {
+                colorPickedPressed = 1;
+        }
+        if (glfwGetKey(state->window, GLFW_KEY_P) == GLFW_RELEASE
+            && colorPickedPressed) {
+                Vec3 color = {
+                        .x
+                        = canvas
+                              .data[pixelY * (canvas.width * 4) + (pixelX * 4)]
+                          / 255.0,
+                        .y = canvas.data[pixelY * (canvas.width * 4)
+                                         + (pixelX * 4) + 1]
+                             / 255.0,
+                        .z = canvas.data[pixelY * (canvas.width * 4)
+                                         + (pixelX * 4) + 2]
+                             / 255.0,
+                };
+                setCurrentColor(&state->controlPanel, &color);
+                colorPickedPressed = 0;
+        }
+
         if (mouseState == GLFW_PRESS) {
-                if (x > canvas.windowX
-                    && x < (canvas.windowX + canvas.windowWidth)
-                    && y > canvas.windowY
-                    && y < (canvas.windowY + canvas.windowHeight)) {
+                if (withinBoundingBox(&canvasBox, vulkanX, vulkanY)) {
+                        Vec3 color
+                            = state->controlPanel
+                                  .quadUniforms[CONTROL_PANEL_CURRENT_COLOR]
+                                  .color;
 
-                        int pixelX = ((x - canvas.windowX) / canvas.windowWidth)
-                                     * canvas.width;
-                        int pixelY
-                            = ((y - canvas.windowY) / canvas.windowHeight)
-                              * canvas.height;
-
-                        Vec3 color = state->controlPanel.quadUniforms[0].color;
                         canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)]
                             = color.x * 255;
                         canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)
@@ -91,8 +115,7 @@ static void processInput(glyph_state *state) {
 
                 for (int i = 0; i < CONTROL_PANEL_QUAD_COUNT; i++) {
                         BoundingBox box = getQuadBoundingBox(
-                            &state->controlPanel.quadUniforms[i].model,
-                            &state->controlPanel.quadUniforms[i].proj);
+                            &state->controlPanel.quadUniforms[i].mvp);
                         if (withinBoundingBox(&box, vulkanX, vulkanY)) {
                                 if (((i > 0 && i <= CONTROL_PANEL_HISTORY_16)
                                      || (i == CONTROL_PANEL_CREATOR_R_BUTTON)
@@ -112,7 +135,11 @@ static void processInput(glyph_state *state) {
                         pickCurrentColorFromHistory(&state->controlPanel);
                 }
                 if (clicked == CONTROL_PANEL_CREATOR_PREVIEW) {
-                        pushCreatedColorToCurrent(&state->controlPanel);
+                        setCurrentColor(
+                            &state->controlPanel,
+                            &state->controlPanel
+                                 .quadUniforms[CONTROL_PANEL_CREATOR_PREVIEW]
+                                 .color);
                 }
                 state->controlPanel.clicked = 0;
         }
@@ -122,9 +149,9 @@ static void processInput(glyph_state *state) {
             || state->controlPanel.clicked == CONTROL_PANEL_CREATOR_B_BUTTON) {
                 updateColorCreatorPreview(&state->controlPanel, vulkanX,
                                           vulkanY);
-                updateCreatorButtonModelMatrix(&state->controlPanel,
-                                               state->swapchain_extent,
-                                               state->controlPanel.clicked);
+                updateCreatorButtonUniformObject(&state->controlPanel,
+                                                 state->swapchain_extent,
+                                                 state->controlPanel.clicked);
         }
 }
 
@@ -260,8 +287,6 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         };
 
         vkCmdBeginRenderPass(cmd_buffer, &passinfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          state->canvas.pipeline);
 
         VkViewport viewport = {
                 .x = 0.0f,
@@ -279,22 +304,14 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         };
         vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
-        VkBuffer vertex_buffers[]
-            = { state->canvas.vertexBuffer, state->controlPanel.vertexBuffer };
-        VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(cmd_buffer, 0, 1, vertex_buffers, offsets);
         vkCmdBindIndexBuffer(cmd_buffer, state->index_buffer, 0,
                              VK_INDEX_TYPE_UINT16);
-
-        vkCmdBindDescriptorSets(
-            cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-            state->canvas.pipelineLayout, 0, 1,
-            &state->canvas.descriptorSets[state->current_frame], 0, NULL);
-
         uint32_t indices_size = sizeof(indices) / sizeof(indices[0]);
-        vkCmdDrawIndexed(cmd_buffer, indices_size, 1, 0, 0, 0);
+        drawCanvas(&state->canvas, cmd_buffer, state->current_frame,
+                   &state->swapchain_extent, indices_size);
 
-        drawControlPanel(state, cmd_buffer, indices_size);
+        drawControlPanel(&state->controlPanel, cmd_buffer, state->current_frame,
+                         &state->swapchain_extent, indices_size);
 
         vkCmdEndRenderPass(cmd_buffer);
 

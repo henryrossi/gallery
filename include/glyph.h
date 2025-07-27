@@ -3,9 +3,10 @@
 
 #include "vulkan/vk_platform.h"
 #include "vulkan/vulkan_core.h"
-#include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <stdalign.h>
+#include <stdio.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -28,10 +29,8 @@ uint32_t validation_layer_count =
 #define MAX_FRAMES_IN_FLIGHT 2
 
 typedef struct {
-  float r;
-  float g;
-  float b;
-} Color;
+  Mat4 mvp;
+} CanvasUniform;
 
 typedef struct {
   VkImage image[MAX_FRAMES_IN_FLIGHT];
@@ -44,16 +43,10 @@ typedef struct {
   VkBuffer stagingImageBuffers[MAX_FRAMES_IN_FLIGHT];
   VkDeviceMemory stagingImagesMemory[MAX_FRAMES_IN_FLIGHT];
 
-
   uint32_t size;
   uint32_t width;
   uint32_t height;
   uint8_t *data;
-
-  double windowY;
-  double windowX;
-  double windowWidth;
-  double windowHeight;
 
   VkDescriptorSetLayout descriptorSetLayout;
   VkDescriptorPool descriptorPool;
@@ -62,17 +55,21 @@ typedef struct {
   VkPipeline pipeline;
   VkBuffer vertexBuffer;
   VkDeviceMemory vertexBufferMemory;
+
+  CanvasUniform uniform;
   VkBuffer uniformBuffers[MAX_FRAMES_IN_FLIGHT];
   VkDeviceMemory uniformBuffersMemory[MAX_FRAMES_IN_FLIGHT];
   void *uniformBuffersMapped[MAX_FRAMES_IN_FLIGHT];
+
+  Vec3 pos;
+  Vec3 scale;
 
   const char *filename;
   uint32_t fileCreated;
 } Canvas;
 
 typedef struct {
-  Mat4 model;
-  alignas(16) Mat4 proj;
+  Mat4 mvp;
   alignas(16) Vec3 color;
 } ControlPanelUniform;
 
@@ -123,6 +120,8 @@ typedef struct {
   VkDeviceSize alignedUniformSize;
   Vec3 colors[COLOR_HISTORY_LENGTH + 1];
   ControlPanelUniform quadUniforms[CONTROL_PANEL_QUAD_COUNT];
+  Vec3 scales[CONTROL_PANEL_QUAD_COUNT];
+  Vec3 positions[CONTROL_PANEL_QUAD_COUNT];
   int32_t clicked;
 } ControlPanel;
 
@@ -190,11 +189,6 @@ static VkCommandBuffer begin_single_time_commands(VkDevice device,
 static void end_single_time_commands(VkDevice device, VkQueue graphics_queue,
                                      VkCommandPool pool,
                                      VkCommandBuffer buffer);
-static VkVertexInputBindingDescription get_vertex_binding_desc(void);
-static VkVertexInputAttributeDescription get_vertex_attr_desc_pos(void);
-static VkVertexInputAttributeDescription get_vertex_attr_desc_tex_coord(void);
-static void update_uniform_buffer(glyph_state *state, uint32_t currentFrame);
 
-// static int rewriteCanvasContents(glyph_state *state);
 
 #endif // _GLYPH_H
