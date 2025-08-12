@@ -27,7 +27,7 @@ uint32_t frameCounter = 0;
 uint32_t prevFrame = 0;
 double prevTime = 0.0;
 
-// Returns 1 if pos is within the bounding box, 0 if not
+// Returns 1 if pos is within the bounding box, 0 if not.
 static inline int withinBoundingBox(BoundingBox *box, float xpos, float ypos) {
         if (xpos > box->pos.x && xpos < box->pos.x + box->extent.x
             && ypos > box->pos.y && ypos < box->pos.y + box->extent.y) {

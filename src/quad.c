@@ -1,6 +1,7 @@
 #include "quad.h"
 #include "buffer.h"
 #include "glyph.h"
+#include "matrix.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -18,10 +19,13 @@ static BoundingBox getQuadBoundingBox(Mat4 *mvp) {
         Vec4 mpVertices[4] = { 0 };
         Vec2 vulkanCoords[4] = { 0 };
 
+        Mat4 mvpT = { 0 };
         for (int i = 0; i < 4; i++) {
                 Vec4 quadPos
                     = { quadVertices[i].x, quadVertices[i].y, 0.0, 1.0 };
-                multMat4xVec4(mvp, &quadPos, &mpVertices[i]);
+                mvpT = *mvp;
+                transposeMat4(&mvpT);
+                multMat4xVec4(&mvpT, &quadPos, &mpVertices[i]);
                 vulkanCoords[i].x = (mpVertices[i].x / mpVertices[i].w);
                 vulkanCoords[i].y = (mpVertices[i].y / mpVertices[i].w);
         }

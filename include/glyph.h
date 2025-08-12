@@ -118,7 +118,7 @@ typedef struct {
   VkDeviceMemory uniformsMemory[MAX_FRAMES_IN_FLIGHT];
   void *uniformsMapped[MAX_FRAMES_IN_FLIGHT];
   VkDeviceSize alignedUniformSize;
-  Vec3 colors[COLOR_HISTORY_LENGTH + 1];
+  // Vec3 colors[COLOR_HISTORY_LENGTH + 1];
   ControlPanelUniform quadUniforms[CONTROL_PANEL_QUAD_COUNT];
   Vec3 scales[CONTROL_PANEL_QUAD_COUNT];
   Vec3 positions[CONTROL_PANEL_QUAD_COUNT];

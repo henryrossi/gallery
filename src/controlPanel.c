@@ -8,21 +8,13 @@
 #include <stdio.h>
 #include <string.h>
 
-// const float screenWidth = 2.0;
-const float panelScale = 0.25;
-// const float panelSize = panelScale * screenWidth;
+const static char *csFilename = "color.save";
 
-const float currentScale = panelScale;
-// const float currentSize = panelSize;
-
-const float historyScale = panelScale / 8;
+const static float panelScale = 0.25;
+const static float currentScale = panelScale;
+const static float historyScale = panelScale / 8;
 const static float previewScale = panelScale / 4;
 const static float sliderScale = panelScale * 0.9;
-// const float historySize = historyScale * screenWidth;
-
-// const float previewSize = panelSize / 4;
-
-// const float sliderWidth = panelSize * 0.9;
 
 static void setCurrentColor(ControlPanel *cp, Vec3 *color) {
         for (int i = CONTROL_PANEL_HISTORY_16; i > 0; i--) {
@@ -91,22 +83,35 @@ static void drawControlPanel(ControlPanel *cp, VkCommandBuffer cmdBuffer,
         }
 }
 
+static void formatControlPanelColors(ControlPanel *cp) {
+        FILE *fp = fopen(csFilename, "rb");
+        if (fp) {
+                Vec3 colors[COLOR_HISTORY_LENGTH + 1] = { 0 };
+                fread(colors, sizeof(colors), 1, fp);
+        }
+}
+
 static void
 updateCreatorButtonUniformObject(ControlPanel *cp, VkExtent2D screen,
                                  GlyphControlPanelUniformIndex color) {
-        //
-        // float barWidth = 4.0 / swapchainExtent.height;
-        // float buttonSize = barWidth * 4;
-        // float leftEdge = 1.0 - panelScale - (sliderWidth / screenWidth);
-        // float sliderX = 0.0;
-        // float sliderY = -(1 / aspect) + currentSize + (3 * historySize)
-        //                 + (previewSize * 1.5);
-        //
-        float panelOffset = (1.0 - panelScale) * (float)screen.width;
+        float panelOffset = (0.5 - panelScale) * 1.05 * (float)screen.width;
         float sliderWidth = sliderScale * (float)screen.width;
         Vec3 previewColor
             = cp->quadUniforms[CONTROL_PANEL_CREATOR_PREVIEW].color;
-        cp->positions[color].x = panelOffset + (previewColor.x * sliderWidth);
+        if (color == CONTROL_PANEL_CREATOR_R_BUTTON) {
+                cp->positions[color].x
+                    = panelOffset + (previewColor.x * sliderWidth);
+        } else if (color == CONTROL_PANEL_CREATOR_G_BUTTON) {
+                cp->positions[color].x
+                    = panelOffset + (previewColor.y * sliderWidth);
+        } else if (color == CONTROL_PANEL_CREATOR_B_BUTTON) {
+                cp->positions[color].x
+                    = panelOffset + (previewColor.z * sliderWidth);
+        } else {
+                assert(false
+                       && "Invalid call to updateCreatorButtonUniformObject");
+        }
+
         getPosCoordTransform(&cp->scales[color], &cp->positions[color], screen,
                              true, &cp->quadUniforms[color].mvp);
 }
@@ -192,181 +197,9 @@ static void updateControlPanelUniformObjects(ControlPanel *cp,
                                      true, &cp->quadUniforms[i].mvp);
                 i++;
         }
-}
 
-//
-// static void
-// updateCreatorButtonModelMatrix(ControlPanel *cp, VkExtent2D
-// swapchainExtent,
-//                                GlyphControlPanelUniformIndex
-//                                color) {
-//         float aspect
-//             = (float)swapchainExtent.width /
-//             (float)swapchainExtent.height;
-//
-//         float barWidth = 4.0 / swapchainExtent.height;
-//         float buttonSize = barWidth * 4;
-//         float leftEdge = 1.0 - panelScale - (sliderWidth /
-//         screenWidth); float sliderX = 0.0; float sliderY =
-//         -(1 / aspect) + currentSize + (3 * historySize)
-//                         + (previewSize * 1.5);
-//
-//         Vec3 previewColor
-//             =
-//             cp->quadUniforms[CONTROL_PANEL_CREATOR_PREVIEW].color;
-//         if (color == CONTROL_PANEL_CREATOR_R_BUTTON) {
-//                 sliderX = leftEdge + (previewColor.x *
-//                 sliderWidth);
-//         } else if (color == CONTROL_PANEL_CREATOR_G_BUTTON) {
-//                 sliderX = leftEdge + (previewColor.y *
-//                 sliderWidth); sliderY += 2 * historySize;
-//         } else if (color == CONTROL_PANEL_CREATOR_B_BUTTON) {
-//                 sliderX = leftEdge + (previewColor.z *
-//                 sliderWidth); sliderY += 4 * historySize;
-//         }
-//         Mat4 buttonModel = {
-//                 {
-//                         { buttonSize, 0.0, 0.0, 0.0 },
-//                         { 0.0, buttonSize, 0.0, 0.0 },
-//                         { 0.0, 0.0, 1.0, 0.0 },
-//                         { sliderX, sliderY, 0.0, 1.0 },
-//                 },
-//         };
-//
-//         Mat4 *proj = calcControlPanelProjectionMatrix(cp,
-//         swapchainExtent); Mat4 mvp = { 0 };
-//         multMat4xMat4(proj, &buttonModel, &mvp);
-//         cp->quadUniforms[color].mvp = mvp;
-// }
-//
-// static void formatControlPanel(glyph_state *state) {
-//         float aspect = (float)state->swapchain_extent.width
-//                        /
-//                        (float)state->swapchain_extent.height;
-//         Mat4 *pProj =
-//         calcControlPanelProjectionMatrix(&state->controlPanel,
-//                                                        state->swapchain_extent);
-//         Mat4 mvp = { 0 };
-//
-//         Mat4 currentModel = {
-//                 {
-//                         { currentScale, 0.0, 0.0, 0.0 },
-//                         { 0.0, currentScale, 0.0, 0.0 },
-//                         { 0.0, 0.0, 1.0, 0.0 },
-//                         { 1.0 - panelSize + currentScale,
-//                           -(1 / aspect) + currentScale,
-//                           0.0, 1.0 },
-//                 },
-//         };
-//
-//         multMat4xMat4(pProj, &currentModel, &mvp);
-//         state->controlPanel.quadUniforms[0].mvp = mvp;
-//
-//         for (int i = 0; i < COLOR_HISTORY_LENGTH; i++) {
-//                 int secondRow = 0;
-//                 if (i >= 8) {
-//                         secondRow = 1;
-//                 }
-//                 /* Remember that vulkan clip space is a range
-//                 of -1.0 to 1.0.
-//                  * Therefore the width of the viewport
-//                  is 2.0. The scale of our
-//                  * objects are in the range 0.0 to 1.0. So if
-//                  we want move our
-//                  * quad half of is width we calculate it as
-//                  "scale * screenWidth
-//                  * (2.0) / 2" which simplifies to scale.
-//                  */
-//                 Mat4 historyModel = {
-//                         {
-//                                 { historyScale, 0.0, 0.0, 0.0
-//                                 }, { 0.0, historyScale, 0.0,
-//                                 0.0 }, { 0.0, 0.0, 1.0, 0.0
-//                                 }, { 1.0 - panelSize +
-//                                 historyScale
-//                                       + ((i - (secondRow *
-//                                       8)) * historySize),
-//                                   -(1 / aspect) + currentSize
-//                                   + historyScale
-//                                       + (secondRow *
-//                                       historySize),
-//                                   0.0, 1.0 },
-//                         },
-//                 };
-//                 multMat4xMat4(pProj, &historyModel, &mvp);
-//                 state->controlPanel.quadUniforms[i + 1].mvp =
-//                 mvp;
-//         }
-//
-//         int idx = COLOR_HISTORY_LENGTH + 1;
-//
-//         float previewY = -(1 / aspect) + currentSize + (3 *
-//         historySize)
-//                          + (previewSize / 2);
-//         Mat4 previewModel = {
-//                 {
-//                         { previewSize / screenWidth, 0.0,
-//                         0.0, 0.0 }, { 0.0, previewSize /
-//                         screenWidth, 0.0, 0.0 }, { 0.0,
-//                         0.0, 1.0, 0.0 }, { 1.0 - panelSize +
-//                         previewSize, previewY, 0.0, 1.0
-//                         },
-//                 },
-//         };
-//         multMat4xMat4(pProj, &previewModel, &mvp);
-//         state->controlPanel.quadUniforms[idx].mvp = mvp;
-//         Vec3 currentColor =
-//         state->controlPanel.quadUniforms[0].color;
-//         state->controlPanel.quadUniforms[idx].color =
-//         currentColor; idx++;
-//
-//         float lineWidth = 4.0 /
-//         state->swapchain_extent.height; for (int i = 0; idx +
-//         i < CONTROL_PANEL_QUAD_COUNT; i += 2) {
-//                 float sliderY = previewY + previewSize + (i *
-//                 historySize); Mat4 lineModel = {
-//                         {
-//                                 { sliderWidth / screenWidth,
-//                                 0.0, 0.0, 0.0 }, { 0.0,
-//                                 lineWidth, 0.0, 0.0 }, { 0.0,
-//                                 0.0, 1.0, 0.0 }, { 1.0 -
-//                                 panelScale, sliderY, 0.0, 1.0
-//                                 },
-//                         },
-//                 };
-//                 multMat4xMat4(pProj, &lineModel, &mvp);
-//                 state->controlPanel.quadUniforms[idx + i].mvp
-//                 = mvp; Vec3 lineColor = { 1.0, 1.0, 1.0 };
-//                 state->controlPanel.quadUniforms[idx +
-//                 i].color = lineColor;
-//
-//                 float buttonSize = lineWidth * 4;
-//                 float leftEdge = 1.0 - panelScale -
-//                 (sliderWidth / screenWidth); float sliderX =
-//                 0.0; if (i == 0) {
-//                         sliderX = leftEdge + (currentColor.x
-//                         * sliderWidth);
-//                 } else if (i == 2) {
-//                         sliderX = leftEdge + (currentColor.y
-//                         * sliderWidth);
-//                 } else {
-//                         sliderX = leftEdge + (currentColor.z
-//                         * sliderWidth);
-//                 }
-//                 Mat4 buttonModel = {
-//                         {
-//                                 { buttonSize, 0.0, 0.0, 0.0
-//                                 }, { 0.0, buttonSize, 0.0,
-//                                 0.0 }, { 0.0, 0.0, 1.0, 0.0
-//                                 }, { sliderX, sliderY,
-//                                 0.0, 1.0 },
-//                         },
-//                 };
-//                 multMat4xMat4(pProj, &buttonModel, &mvp);
-//                 state->controlPanel.quadUniforms[idx + i +
-//                 1].mvp = mvp;
-//         }
-// }
+        formatControlPanelColors(cp);
+}
 
 static int createControlPanelDescriptorSets(ControlPanel *self,
                                             VkDevice device) {
