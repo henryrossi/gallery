@@ -19,11 +19,14 @@ static void getPosCoordTransform(Vec3 *scale, Vec3 *translation,
 
         if (orthographic) {
                 float left = 0.0;
-                float right = screenWidth;
-                float bottom = screenHeight / aspect;
+                float right;
+                float bottom;
                 float top = 0.0;
                 float near = 0.0;
                 float far = 1.0;
+
+                right = screenWidth;
+                bottom = screenHeight / aspect;
 
                 proj.m[0][0] = 2.0 / (right - left);
                 proj.m[1][1] = -2.0 / (top - bottom);

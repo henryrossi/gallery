@@ -1,6 +1,9 @@
 
 Tasks to be completed:
 
+Fix window resize and windows of many aspect ratio behavior
+
+When click happens outside of canvas, dragging onto canvas shouldn't draw.
 
 Add save files with color history for each image to save colors between program uses.
 

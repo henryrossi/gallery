@@ -88,7 +88,24 @@ static void formatControlPanelColors(ControlPanel *cp) {
         if (fp) {
                 Vec3 colors[COLOR_HISTORY_LENGTH + 1] = { 0 };
                 fread(colors, sizeof(colors), 1, fp);
+        } else {
+                Vec3 colors[COLOR_HISTORY_LENGTH + 1] = {
+                        { 1.0, 0.5, 0.0 }, { 0.0, 0.0, 0.0 }, { 1.0, 1.0, 1.0 },
+                        { 0.5, 0.5, 0.5 }, { 0.5, 1.0, 0.0 }, { 0.5, 0.0, 1.0 },
+                        { 0.5, 0.5, 1.0 }, { 0.5, 1.0, 0.5 }, { 0.0, 1.0, 0.5 },
+                        { 0.0, 0.5, 1.0 }, { 1.0, 0.2, 0.0 }, { 0.5, 0.0, 1.0 },
+                        { 0.0, 1.0, 1.0 }, { 1.0, 0.0, 1.0 }, { 1.0, 1.0, 0.0 },
+                        { 0.0, 0.0, 0.5 }, { 0.5, 0.2, 0.8 },
+                };
+                for (int i = 0; i < COLOR_HISTORY_LENGTH; i++) {
+                        cp->quadUniforms[i].color = colors[i];
+                }
         }
+
+        Vec3 white = { 1.0, 1.0, 1.0 };
+        cp->quadUniforms[CONTROL_PANEL_CREATOR_R_BAR].color = white;
+        cp->quadUniforms[CONTROL_PANEL_CREATOR_G_BAR].color = white;
+        cp->quadUniforms[CONTROL_PANEL_CREATOR_B_BAR].color = white;
 }
 
 static void

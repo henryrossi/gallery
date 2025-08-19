@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 static void multMat4xMat4(Mat4 *a, Mat4 *b, Mat4 *product) {
+
         for (int n = 0; n < 4; n++) {
                 for (int p = 0; p < 4; p++) {
                         product->m[n][p] = 0.0;

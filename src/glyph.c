@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 #include "GLFW/glfw3.h"
+#include "actionHistory.c"
 #include "buffer.c"
 #include "canvas.c"
 #include "cli.c"
@@ -36,8 +37,12 @@ static inline int withinBoundingBox(BoundingBox *box, float xpos, float ypos) {
         return 0;
 }
 
-int savePressed = 0;
-int colorPickedPressed = 0;
+bool savePressed = false;
+bool colorPickedPressed = false;
+bool undoPressed = false;
+bool redoPressed = false;
+bool drawing = false;
+
 static void processInput(glyph_state *state) {
         if (glfwGetKey(state->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
                 glfwSetWindowShouldClose(state->window, GLFW_TRUE);
@@ -60,7 +65,7 @@ static void processInput(glyph_state *state) {
                 savePressed = 0;
         }
 
-        Canvas canvas = state->canvas;
+        Canvas *canvas = &state->canvas;
         double x, y;
         glfwGetCursorPos(state->window, &x, &y);
         int extentX, extentY;
@@ -68,28 +73,44 @@ static void processInput(glyph_state *state) {
         float vulkanX = (x / extentX) * 2 - 1.0;
         float vulkanY = (y / extentY) * 2 - 1.0;
 
-        BoundingBox canvasBox = getQuadBoundingBox(&canvas.uniform.mvp);
-        int pixelX
-            = ((vulkanX - canvasBox.pos.x) / canvasBox.extent.x) * canvas.width;
+        BoundingBox canvasBox = getQuadBoundingBox(&canvas->uniform.mvp);
+        int pixelX = ((vulkanX - canvasBox.pos.x) / canvasBox.extent.x)
+                     * canvas->width;
         int pixelY = ((vulkanY - canvasBox.pos.y) / canvasBox.extent.y)
-                     * canvas.height;
+                     * canvas->height;
 
         int mouseState = glfwGetMouseButton(state->window, GLFW_MOUSE_BUTTON_1);
+        if (glfwGetKey(state->window, GLFW_KEY_U) == GLFW_PRESS) {
+                undoPressed = true;
+        }
+        if (glfwGetKey(state->window, GLFW_KEY_R) == GLFW_PRESS) {
+                redoPressed = true;
+        }
+        if (glfwGetKey(state->window, GLFW_KEY_U) == GLFW_RELEASE
+            && undoPressed) {
+                undoAction(canvas);
+                undoPressed = false;
+        }
+        if (glfwGetKey(state->window, GLFW_KEY_R) == GLFW_RELEASE
+            && redoPressed) {
+                redoAction(canvas);
+                redoPressed = false;
+        }
+
         if (glfwGetKey(state->window, GLFW_KEY_P) == GLFW_PRESS) {
                 colorPickedPressed = 1;
         }
         if (glfwGetKey(state->window, GLFW_KEY_P) == GLFW_RELEASE
             && colorPickedPressed) {
                 Vec3 color = {
-                        .x
-                        = canvas
-                              .data[pixelY * (canvas.width * 4) + (pixelX * 4)]
-                          / 255.0,
-                        .y = canvas.data[pixelY * (canvas.width * 4)
-                                         + (pixelX * 4) + 1]
+                        .x = canvas->data[pixelY * (canvas->width * 4)
+                                          + (pixelX * 4)]
                              / 255.0,
-                        .z = canvas.data[pixelY * (canvas.width * 4)
-                                         + (pixelX * 4) + 2]
+                        .y = canvas->data[pixelY * (canvas->width * 4)
+                                          + (pixelX * 4) + 1]
+                             / 255.0,
+                        .z = canvas->data[pixelY * (canvas->width * 4)
+                                          + (pixelX * 4) + 2]
                              / 255.0,
                 };
                 setCurrentColor(&state->controlPanel, &color);
@@ -98,19 +119,37 @@ static void processInput(glyph_state *state) {
 
         if (mouseState == GLFW_PRESS) {
                 if (withinBoundingBox(&canvasBox, vulkanX, vulkanY)) {
+                        if (!drawing) {
+                                drawing = true;
+                        }
                         Vec3 color
                             = state->controlPanel
                                   .quadUniforms[CONTROL_PANEL_CURRENT_COLOR]
                                   .color;
 
-                        canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)]
-                            = color.x * 255;
-                        canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)
-                                    + 1]
-                            = color.y * 255;
-                        canvas.data[pixelY * (canvas.width * 4) + (pixelX * 4)
-                                    + 2]
-                            = color.z * 255;
+                        uint8_t r = color.x * 255;
+                        uint8_t g = color.y * 255;
+                        uint8_t b = color.z * 255;
+
+                        uint32_t pos
+                            = pixelY * (canvas->width * 4) + (pixelX * 4);
+
+                        if (r != canvas->data[pos] || g != canvas->data[pos + 1]
+                            || b != canvas->data[pos + 2]) {
+                                DrawingActionChange exe = { pos, r, g, b, 255 };
+                                DrawingActionChange rev = {
+                                        pos,
+                                        canvas->data[pos],
+                                        canvas->data[pos + 1],
+                                        canvas->data[pos + 2],
+                                        canvas->data[pos + 3],
+                                };
+                                recordDrawingAction(&exe, &rev);
+
+                                canvas->data[pos] = r;
+                                canvas->data[pos + 1] = g;
+                                canvas->data[pos + 2] = b;
+                        }
                 }
 
                 for (int i = 0; i < CONTROL_PANEL_QUAD_COUNT; i++) {
@@ -126,6 +165,13 @@ static void processInput(glyph_state *state) {
                                         state->controlPanel.clicked = i;
                                 }
                         }
+                }
+        }
+
+        if (drawing && mouseState == GLFW_RELEASE) {
+                drawing = false;
+                if (!finalizeDrawingAction()) {
+                        abort();
                 }
         }
 
@@ -352,6 +398,12 @@ static int draw_frame(glyph_state *state) {
             || state->framebuffer_resized) {
                 state->framebuffer_resized = 0;
                 recreate_swapchain(state);
+
+                updateControlPanelUniformObjects(&state->controlPanel,
+                                                 state->swapchain_extent);
+                updateCanvasUniformObject(&state->canvas,
+                                          state->swapchain_extent);
+
                 return 1;
         } else if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to acquire swap chain image: %s\n",
@@ -493,6 +545,7 @@ int main(int argc, char **argv) {
                 return 1;
         }
 
+        initActionHistory(&state.canvas);
         while (!glfwWindowShouldClose(state.window)) {
                 processInput(&state);
                 draw_frame(&state);
@@ -527,6 +580,7 @@ int main(int argc, char **argv) {
                              NULL);
         }
 
+        cleanupActionHistory();
         destroyCanvas(&state);
         destroyControlPanel(&state);
         destroyQuadVertexBuffer(&state);
