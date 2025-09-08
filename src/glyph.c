@@ -37,6 +37,10 @@ static inline int withinBoundingBox(BoundingBox *box, float xpos, float ypos) {
         return 0;
 }
 
+// Check out RAD Debugger for UI Library ideas
+// They have ui  signal that holds information about whether or not a "UIBox"
+// has been pressed, dragged, previously pressed and released, double clicked,
+// and so on
 bool savePressed = false;
 bool colorPickedPressed = false;
 bool undoPressed = false;
