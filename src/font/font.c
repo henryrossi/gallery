@@ -59,27 +59,13 @@ typedef struct {
 } Cmap4;
 
 typedef enum {
-        ON_CURVE = (1 << 0),
-        X_SHORT_VECTOR = (1 << 1),
-        Y_SHORT_VECTOR = (1 << 2),
-        REPEAT = (1 << 3),
-        X_SAME_OR_POSITIVE = (1 << 4),
-        Y_SAME_OR_POSITIVE = (1 << 5),
+        GLYPH_ON_CURVE = (1 << 0),
+        GLYPH_X_SHORT_VECTOR = (1 << 1),
+        GLYPH_Y_SHORT_VECTOR = (1 << 2),
+        GLYPH_FLAG_REPEAT = (1 << 3),
+        GLYPH_X_SAME_OR_POSITIVE = (1 << 4),
+        GLYPH_Y_SAME_OR_POSITIVE = (1 << 5),
 } GlyphOutlineFlags;
-
-typedef struct {
-        u16 numberOfContours;
-        u16 xMin;
-        u16 yMin;
-        u16 xMax;
-        u16 yMax;
-        u16 *endPtsOfContours; // len: numberOfContours
-        u16 instructionLength; //
-        u8 *instructions;      // len: instructionLength
-        u8 *flags;             // len: variable
-        u8 *xCoordinates;      // len: variable (entries could be 1 or 2 bytes
-        u8 *yCoordinates;      //      depending on corresponding flag
-} GlyphData;
 
 typedef struct {
         Fixed version;
@@ -120,8 +106,8 @@ typedef struct {
 } Maxp;
 
 typedef struct {
-        u16 *xPoints;
-        u16 *yPoints;
+        s16 *xPoints;
+        s16 *yPoints;
         u8 *flags;
         u16 numberOfPoints;
 } GlyphContours;
@@ -139,31 +125,27 @@ typedef struct {
         FontDirectory dir;
         TableDirectory *tables;
         Cmap4 cmap;
-        GlyphData *glyphData;
         Head head;
         Maxp maxp;
         void *glyphLocationOffsets;
+        Glyph *glyphData;
 } TTFFont;
 
 typedef struct {
         u8 *data;
         u8 *pos;
         u64 size;
-} FontParser;
-
-typedef struct {
-
 } TTFParser;
 
-static u8 ttf_read_U8(FontParser *p) { return *(p->pos++); }
+static u8 ttf_read_U8(TTFParser *p) { return *(p->pos++); }
 
-static u16 ttf_read_U16(FontParser *p) {
+static u16 ttf_read_U16(TTFParser *p) {
         u16 v1 = *(p->pos++);
         u16 v2 = *(p->pos++);
         return (v1 << 8 | v2);
 }
 
-static u32 ttf_read_U32(FontParser *p) {
+static u32 ttf_read_U32(TTFParser *p) {
         u32 v1 = *(p->pos++);
         u32 v2 = *(p->pos++);
         u32 v3 = *(p->pos++);
@@ -171,7 +153,7 @@ static u32 ttf_read_U32(FontParser *p) {
         return (v1 << 24 | v2 << 16 | v3 << 8 | v4);
 }
 
-static void ttf_read_name(FontParser *p, char *name) {
+static void ttf_read_name(TTFParser *p, char *name) {
         name[0] = *(p->pos++);
         name[1] = *(p->pos++);
         name[2] = *(p->pos++);
@@ -179,12 +161,12 @@ static void ttf_read_name(FontParser *p, char *name) {
         name[4] = 0;
 }
 
-static void ttf_move_parser_pos(FontParser *p, u32 offset) {
+static void ttf_move_parser_pos(TTFParser *p, u32 offset) {
         assert(offset < p->size && "Error - moving parser pos out of bounds");
         p->pos = p->data + offset;
 }
 
-static void ttf_parser_skip(FontParser *p, u32 offset) {
+static void ttf_parser_skip(TTFParser *p, u32 offset) {
         assert((p->pos - p->data) + offset < p->size
                && "Error - skipping parser pos out of bounds");
         p->pos += offset;
@@ -196,10 +178,11 @@ static u32 ttf_find_table_by_tag(TTFFont *f, const char *tag) {
                         return i;
                 }
         }
+        fprintf(stderr, "Unable to find font table by given tag: %s\n", tag);
         return UINT32_MAX;
 }
 
-static u16 ttf_find_glyhp_index(TTFFont *f, char c) {
+static u16 ttf_find_glyph_index(TTFFont *f, char c) {
         u16 index = 0xFFFF;
         for (u32 i = 0; f->cmap.endCode[i] != 0xFFFF; i++) {
                 if (c <= f->cmap.endCode[i]) {
@@ -220,7 +203,7 @@ static u16 ttf_find_glyhp_index(TTFFont *f, char c) {
         return index;
 }
 
-static int ttf_read_file(const char *filename, FontParser *b) {
+static int ttf_read_file(const char *filename, TTFParser *b) {
         struct stat s;
         stat(filename, &s);
 
@@ -243,7 +226,7 @@ static int ttf_read_file(const char *filename, FontParser *b) {
         return 1;
 }
 
-void ttf_parse_cmap(TTFFont *font, FontParser *p) {
+void ttf_parse_cmap(TTFFont *font, TTFParser *p) {
         u32 cmap = ttf_find_table_by_tag(font, "cmap");
         ttf_move_parser_pos(p, font->tables[cmap].offset);
         ttf_read_U16(p);
@@ -291,7 +274,7 @@ void ttf_parse_cmap(TTFFont *font, FontParser *p) {
         }
 }
 
-void ttf_parse_head(TTFFont *font, FontParser *p) {
+void ttf_parse_head(TTFFont *font, TTFParser *p) {
         u32 head = ttf_find_table_by_tag(font, "head");
         ttf_move_parser_pos(p, font->tables[head].offset);
         font->head.version = ttf_read_U32(p);
@@ -314,7 +297,7 @@ void ttf_parse_head(TTFFont *font, FontParser *p) {
         font->head.glyphDataFormat = ttf_read_U16(p);
 }
 
-void ttf_parse_maxp(TTFFont *font, FontParser *p) {
+void ttf_parse_maxp(TTFFont *font, TTFParser *p) {
         u32 maxp = ttf_find_table_by_tag(font, "maxp");
         ttf_move_parser_pos(p, font->tables[maxp].offset);
         font->maxp.version = ttf_read_U32(p);
@@ -334,7 +317,7 @@ void ttf_parse_maxp(TTFFont *font, FontParser *p) {
         font->maxp.maxComponentDepth = ttf_read_U16(p);
 }
 
-void ttf_parse_loca(TTFFont *font, FontParser *p) {
+void ttf_parse_loca(TTFFont *font, TTFParser *p) {
         u32 loca = ttf_find_table_by_tag(font, "loca");
         ttf_move_parser_pos(p, font->tables[loca].offset);
         u32 format = font->head.indexToLocFormat;
@@ -355,7 +338,6 @@ void ttf_parse_loca(TTFFont *font, FontParser *p) {
 
 u32 ttf_find_glyph_offset(TTFFont *font, u32 glyphIndex) {
         u32 format = font->head.indexToLocFormat;
-        printf("format: %d\n", format);
         if (format) {
                 u32 *offsets = (u32 *)font->glyphLocationOffsets;
                 return offsets[glyphIndex];
@@ -365,8 +347,146 @@ u32 ttf_find_glyph_offset(TTFFont *font, u32 glyphIndex) {
         }
 }
 
+static void ttf_process_glyph_data(TTFFont *font, TTFParser *p, u32 glyphIndex,
+                                   Glyph *data) {
+        u32 numGlyphs = font->maxp.numGlyphs;
+        u32 offset = ttf_find_glyph_offset(font, glyphIndex);
+        // careful of out of bounds
+        u32 glyphLength = ttf_find_glyph_offset(font, glyphIndex + 1) - offset;
+
+        u32 glyp = ttf_find_table_by_tag(font, "glyf");
+        ttf_move_parser_pos(p, font->tables[glyp].offset);
+        ttf_parser_skip(p, offset);
+
+        data->numberOfContours = ttf_read_U16(p);
+        data->xMin = ttf_read_U16(p);
+        data->yMin = ttf_read_U16(p);
+        data->xMax = ttf_read_U16(p);
+        data->yMax = ttf_read_U16(p);
+        data->contours = malloc(sizeof(GlyphContours) * data->numberOfContours);
+
+        u16 endOfPrevContour = 0;
+        for (u32 i = 0; i < data->numberOfContours; i++) {
+                u16 endOfContour = ttf_read_U16(p);
+                data->contours[i].numberOfPoints
+                    = endOfContour - endOfPrevContour;
+                endOfPrevContour = endOfContour;
+
+                data->contours[i].flags
+                    = malloc(sizeof(u8) * data->contours[i].numberOfPoints);
+                data->contours[i].xPoints
+                    = malloc(sizeof(u16) * data->contours[i].numberOfPoints);
+                data->contours[i].yPoints
+                    = malloc(sizeof(u16) * data->contours[i].numberOfPoints);
+        }
+
+        u16 instructionLength = ttf_read_U16(p);
+        ttf_parser_skip(p, instructionLength);
+
+        for (u32 c = 0; c < data->numberOfContours; c++) {
+                u32 flagRepeating = 0;
+                for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
+                        if (flagRepeating > 0) {
+                                data->contours[c].flags[i]
+                                    = data->contours[c].flags[i - 1];
+                                flagRepeating--;
+                        } else {
+                                u8 flag = ttf_read_U8(p);
+                                data->contours[c].flags[i] = flag;
+                                if (flag & (1 << 3))
+                                        flagRepeating = ttf_read_U8(p);
+                        }
+                }
+        }
+
+        for (u32 c = 0; c < data->numberOfContours; c++) {
+                u16 prevX = 0;
+                for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
+                        u8 xShort
+                            = data->contours[c].flags[i] & GLYPH_X_SHORT_VECTOR;
+                        u8 xSameOrxShortSign = data->contours[c].flags[i]
+                                               & GLYPH_X_SAME_OR_POSITIVE;
+
+                        s16 x = 0;
+                        switch (xShort | xSameOrxShortSign) {
+                        case 0:
+                                x = ttf_read_U16(p);
+                                data->contours[c].xPoints[i] = prevX + x;
+                                prevX += x;
+                                break;
+                        case GLYPH_X_SHORT_VECTOR:
+                                x = ttf_read_U8(p);
+                                data->contours[c].xPoints[i] = prevX - x;
+                                prevX -= x;
+                                break;
+                        case GLYPH_X_SAME_OR_POSITIVE:
+                                data->contours[c].xPoints[i] = prevX;
+                                break;
+                        case GLYPH_X_SHORT_VECTOR | GLYPH_X_SAME_OR_POSITIVE:
+                                x = ttf_read_U8(p);
+                                data->contours[c].xPoints[i] = prevX + x;
+                                prevX += x;
+                                break;
+                        }
+                }
+        }
+
+        for (u32 c = 0; c < data->numberOfContours; c++) {
+                u16 prevY = 0;
+                for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
+                        u8 yShort
+                            = data->contours[c].flags[i] & GLYPH_Y_SHORT_VECTOR;
+                        u8 ySameOryShortSign = data->contours[c].flags[i]
+                                               & GLYPH_Y_SAME_OR_POSITIVE;
+
+                        s16 y = 0;
+                        switch (yShort | ySameOryShortSign) {
+                        case 0:
+                                y = ttf_read_U16(p);
+                                data->contours[c].yPoints[i] = prevY + y;
+                                prevY += y;
+                                break;
+                        case GLYPH_Y_SHORT_VECTOR:
+                                y = ttf_read_U8(p);
+                                data->contours[c].yPoints[i] = prevY - y;
+                                prevY -= y;
+                                break;
+                        case GLYPH_Y_SAME_OR_POSITIVE:
+                                data->contours[c].yPoints[i] = prevY;
+                                break;
+                        case GLYPH_Y_SHORT_VECTOR | GLYPH_Y_SAME_OR_POSITIVE:
+                                y = ttf_read_U8(p);
+                                data->contours[c].yPoints[i] = prevY + y;
+                                prevY += y;
+                                break;
+                        }
+                }
+        }
+
+        for (u32 c = 0; c < data->numberOfContours; c++) {
+                printf("x, y\n");
+                for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
+                        printf("%d, %d\n", data->contours[c].xPoints[i],
+                               data->contours[c].yPoints[i]);
+                }
+        }
+
+        printf("Glyph length is %d and bytes read for gylph is %ld\n",
+               glyphLength,
+               (p->pos - p->data) - font->tables[glyp].offset - offset);
+}
+
+static void ttf_parse_glyph_data(TTFFont *f, TTFParser *p) {
+        u16 numGlyphs = f->maxp.numGlyphs;
+        f->glyphData = malloc(sizeof(Glyph) * numGlyphs);
+        // TODO: redo..
+        for (u32 i = 0; i < numGlyphs; i++) {
+                ttf_process_glyph_data(f, p, i, &f->glyphData[i]);
+        }
+}
+
 int main(int argc, char *argv[]) {
-        FontParser p = { 0 };
+        TTFParser p = { 0 };
 
         const char *fontFilename = "Lato-Regular.ttf";
         int res = ttf_read_file(fontFilename, &p);
@@ -394,31 +514,32 @@ int main(int argc, char *argv[]) {
         ttf_parse_maxp(&font, &p);
         ttf_parse_loca(&font, &p);
 
-        u16 bGlyphIndex = ttf_find_glyhp_index(&font, 'b');
+        // u16 bGlyphIndex = ttf_find_glyph_index(&font, 'b');
 
-        u32 glyphOffset = ttf_find_glyph_offset(&font, bGlyphIndex);
-        printf("glyph offset %d\n", glyphOffset);
+        // u32 glyphOffset = ttf_find_glyph_offset(&font, bGlyphIndex);
+        // printf("glyph offset %d\n", glyphOffset);
+        //
+        // u32 glyf = ttf_find_table_by_tag(&font, "glyf");
+        // ttf_move_parser_pos(&p, font.tables[glyf].offset);
+        // ttf_parser_skip(&p, glyphOffset);
+        // printf("number of contours in glyph b: %d\n", ttf_read_U16(&p));
+        // ttf_parser_skip(&p, 8);
+        // u16 glyphEndPoint = ttf_read_U16(&p);
+        // printf("end points of contour 1: %d\n", glyphEndPoint);
+        // u16 glyphEndPoint2 = ttf_read_U16(&p);
+        // printf("end points of contour 2: %d\n", glyphEndPoint2);
+        // u16 instructionLength = ttf_read_U16(&p);
+        // ttf_parser_skip(&p, instructionLength);
+        // u32 numFlags = 1;
+        // for (;; numFlags++) {
+        //         u8 flag = ttf_read_U8(&p);
+        //         printf("x is short: %d, y is short: %d\n",
+        //                (flag & (1 << 1)) ? 1 : 0, (flag & (1 << 2)) ? 1 : 0);
+        //         if (flag & (1 << 3)) {
+        //                 break;
+        //         }
+        // }
 
-        u32 glyf = ttf_find_table_by_tag(&font, "glyf");
-        ttf_move_parser_pos(&p, font.tables[glyf].offset);
-        ttf_parser_skip(&p, glyphOffset);
-        printf("number of contours in glyph b: %d\n", ttf_read_U16(&p));
-        ttf_parser_skip(&p, 8);
-        u16 glyphEndPoint = ttf_read_U16(&p);
-        printf("end points of contour 1: %d\n", glyphEndPoint);
-        u16 glyphEndPoint2 = ttf_read_U16(&p);
-        printf("end points of contour 2: %d\n", glyphEndPoint2);
-        u16 instructionLength = ttf_read_U16(&p);
-        ttf_parser_skip(&p, instructionLength);
-        u32 numFlags = 1;
-        for (;; numFlags++) {
-                u8 flag = ttf_read_U8(&p);
-                printf("x is short: %d, y is short: %d\n",
-                       (flag & (1 << 1)) ? 1 : 0, (flag & (1 << 2)) ? 1 : 0);
-                if (flag & (1 << 3)) {
-                        break;
-                }
-        }
-
+        ttf_parse_glyph_data(&font, &p);
         return 0;
 }
