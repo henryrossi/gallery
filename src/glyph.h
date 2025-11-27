@@ -4,8 +4,8 @@
 #include "vulkan/vk_platform.h"
 #include "vulkan/vulkan_core.h"
 #include <assert.h>
-#include <stdbool.h>
 #include <stdalign.h>
+#include <stdbool.h>
 #include <stdio.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -125,6 +125,12 @@ typedef struct {
   int32_t clicked;
 } ControlPanel;
 
+typedef enum {
+  GLYPH_FRAMEBUFFER_RESIZED = 2,
+  GLYPH_SUCCESS = 1,
+  GLYPH_FAILURE = 0,
+} GlyphResult;
+
 typedef struct {
   uint32_t current_frame;
 
@@ -133,45 +139,40 @@ typedef struct {
   VkPhysicalDevice physical_device;
   VkQueue graphics_queue;
   VkQueue presentation_queue;
+
   GLFWwindow *window;
   VkSurfaceKHR surface;
+
   VkSwapchainKHR swapchain;
-  uint32_t swapchain_images_count;
-  VkImage *swapchain_images;
   VkFormat swapchain_format;
   VkExtent2D swapchain_extent;
+  uint32_t swapchain_images_count;
+  VkImage *swapchain_images;
   uint32_t swapchain_image_views_count;
   VkImageView *swapchain_image_views;
   uint32_t swapchain_framebuffer_count;
   VkFramebuffer *swapchain_framebuffers;
+  uint32_t current_image_index;
+
   VkRenderPass render_pass;
   VkCommandPool command_pool;
   VkCommandBuffer command_buffer[MAX_FRAMES_IN_FLIGHT];
+
   VkSemaphore image_available_semaphore[MAX_FRAMES_IN_FLIGHT];
   VkSemaphore render_finished_semaphore[MAX_FRAMES_IN_FLIGHT];
   VkFence inflight_fence[MAX_FRAMES_IN_FLIGHT];
+  uint32_t framebuffer_resized;
+} GlyphEngine;
+
+typedef struct {
+  GlyphEngine engine;
 
   VkBuffer index_buffer;
   VkDeviceMemory index_buffer_memory;
 
   Canvas canvas;
   ControlPanel controlPanel;
-
-  uint32_t framebuffer_resized;
 } glyph_state;
-
-typedef struct {
-  uint32_t index;
-  uint32_t valid;
-} queue_family_index_t;
-
-typedef struct {
-  queue_family_index_t graphics;
-  queue_family_index_t presentation;
-} queue_family_indicies_t;
-
-static queue_family_indicies_t find_queue_families(glyph_state *state,
-                                                   VkPhysicalDevice device);
 
 typedef struct {
   VkSurfaceCapabilitiesKHR capabilities;
@@ -182,13 +183,12 @@ typedef struct {
 } swapchain_support_details_t;
 
 static swapchain_support_details_t
-query_swapchain_support(glyph_state *state, VkPhysicalDevice device);
+query_swapchain_support(GlyphEngine *engine, VkPhysicalDevice device);
 
 static VkCommandBuffer begin_single_time_commands(VkDevice device,
                                                   VkCommandPool pool);
 static void end_single_time_commands(VkDevice device, VkQueue graphics_queue,
                                      VkCommandPool pool,
                                      VkCommandBuffer buffer);
-
 
 #endif // _GLYPH_H

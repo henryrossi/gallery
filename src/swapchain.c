@@ -1,13 +1,14 @@
+#include "engine.h"
 #include "glyph.h"
 #include "sync.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
-swapchain_support_details_t query_swapchain_support(glyph_state *state,
+swapchain_support_details_t query_swapchain_support(GlyphEngine *engine,
                                                     VkPhysicalDevice device) {
         swapchain_support_details_t details = { 0 };
-        VkSurfaceKHR surface = state->surface;
+        VkSurfaceKHR surface = engine->surface;
 
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface,
                                                   &details.capabilities);
@@ -30,13 +31,13 @@ swapchain_support_details_t query_swapchain_support(glyph_state *state,
         return details;
 }
 
-VkExtent2D choose_swap_extent(glyph_state *state,
+VkExtent2D choose_swap_extent(GlyphEngine *engine,
                               VkSurfaceCapabilitiesKHR cap) {
         if (cap.currentExtent.width != UINT32_MAX) {
                 return cap.currentExtent;
         }
         int width, height;
-        glfwGetFramebufferSize(state->window, &width, &height);
+        glfwGetFramebufferSize(engine->window, &width, &height);
 
         VkExtent2D actual = { width, height };
 
@@ -76,13 +77,13 @@ choose_sc_surface_format(swapchain_support_details_t details) {
 }
 
 // Creates swapchain. Returns 1 on success, 0 on failure.
-static int create_swapchain(glyph_state *state) {
+static int create_swapchain(GlyphEngine *engine) {
         swapchain_support_details_t support
-            = query_swapchain_support(state, state->physical_device);
+            = query_swapchain_support(engine, engine->physical_device);
 
         VkSurfaceFormatKHR surface_format = choose_sc_surface_format(support);
         VkPresentModeKHR present_mode = choose_sc_present_mode(support);
-        VkExtent2D extent = choose_swap_extent(state, support.capabilities);
+        VkExtent2D extent = choose_swap_extent(engine, support.capabilities);
 
         uint32_t image_count = support.capabilities.minImageCount + 1;
         if (support.capabilities.maxImageCount > 0
@@ -92,7 +93,7 @@ static int create_swapchain(glyph_state *state) {
 
         VkSwapchainCreateInfoKHR createinfo = {
                 .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-                .surface = state->surface,
+                .surface = engine->surface,
                 .minImageCount = image_count,
                 .imageFormat = surface_format.format,
                 .imageColorSpace = surface_format.colorSpace,
@@ -102,7 +103,7 @@ static int create_swapchain(glyph_state *state) {
         };
 
         queue_family_indicies_t indicies
-            = find_queue_families(state, state->physical_device);
+            = find_queue_families(engine, engine->physical_device);
         uint32_t queue_family_indicies[]
             = { indicies.graphics.index, indicies.presentation.index };
 
@@ -123,39 +124,39 @@ static int create_swapchain(glyph_state *state) {
         free(support.formats);
         free(support.present_modes);
 
-        VkResult res = vkCreateSwapchainKHR(state->device, &createinfo, NULL,
-                                            &state->swapchain);
+        VkResult res = vkCreateSwapchainKHR(engine->device, &createinfo, NULL,
+                                            &engine->swapchain);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create swapchain: %s\n",
                         string_VkResult(res));
                 return 0;
         }
 
-        vkGetSwapchainImagesKHR(state->device, state->swapchain,
-                                &state->swapchain_images_count, NULL);
-        state->swapchain_images
-            = malloc(sizeof(VkImage) * state->swapchain_images_count);
-        vkGetSwapchainImagesKHR(state->device, state->swapchain,
-                                &state->swapchain_images_count,
-                                state->swapchain_images);
-        state->swapchain_format = surface_format.format;
-        state->swapchain_extent = extent;
+        vkGetSwapchainImagesKHR(engine->device, engine->swapchain,
+                                &engine->swapchain_images_count, NULL);
+        engine->swapchain_images
+            = malloc(sizeof(VkImage) * engine->swapchain_images_count);
+        vkGetSwapchainImagesKHR(engine->device, engine->swapchain,
+                                &engine->swapchain_images_count,
+                                engine->swapchain_images);
+        engine->swapchain_format = surface_format.format;
+        engine->swapchain_extent = extent;
 
         return 1;
 }
 
 // Creates image views. Returns 1 on success, 0 on failure.
-static int create_image_views(glyph_state *state) {
-        state->swapchain_image_views_count = state->swapchain_images_count;
-        state->swapchain_image_views
-            = malloc(sizeof(VkImageView) * state->swapchain_image_views_count);
+static int create_swapchain_image_views(GlyphEngine *engine) {
+        engine->swapchain_image_views_count = engine->swapchain_images_count;
+        engine->swapchain_image_views
+            = malloc(sizeof(VkImageView) * engine->swapchain_image_views_count);
 
-        for (uint32_t i = 0; i < state->swapchain_image_views_count; i++) {
+        for (uint32_t i = 0; i < engine->swapchain_image_views_count; i++) {
                 VkImageViewCreateInfo createinfo = {
                         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                        .image = state->swapchain_images[i],
+                        .image = engine->swapchain_images[i],
                         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                        .format = state->swapchain_format,
+                        .format = engine->swapchain_format,
                         .components.r = VK_COMPONENT_SWIZZLE_IDENTITY,
                         .components.g = VK_COMPONENT_SWIZZLE_IDENTITY,
                         .components.b = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -169,8 +170,8 @@ static int create_image_views(glyph_state *state) {
                 };
 
                 VkResult res
-                    = vkCreateImageView(state->device, &createinfo, NULL,
-                                        &state->swapchain_image_views[i]);
+                    = vkCreateImageView(engine->device, &createinfo, NULL,
+                                        &engine->swapchain_image_views[i]);
                 if (res != VK_SUCCESS) {
                         fprintf(stderr, "Failed to create image view: %s\n",
                                 string_VkResult(res));
@@ -181,29 +182,30 @@ static int create_image_views(glyph_state *state) {
         return 1;
 }
 // Create framebuffers. Returns 1 on success, 0 on failure.
-static int create_framebuffers(glyph_state *state) {
-        state->swapchain_framebuffer_count = state->swapchain_image_views_count;
-        state->swapchain_framebuffers = malloc(
-            sizeof(VkFramebuffer) * state->swapchain_framebuffer_count);
+static int create_swapchain_framebuffers(GlyphEngine *engine) {
+        engine->swapchain_framebuffer_count
+            = engine->swapchain_image_views_count;
+        engine->swapchain_framebuffers = malloc(
+            sizeof(VkFramebuffer) * engine->swapchain_framebuffer_count);
 
-        for (uint32_t i = 0; i < state->swapchain_framebuffer_count; i++) {
+        for (uint32_t i = 0; i < engine->swapchain_framebuffer_count; i++) {
                 VkImageView attachments[] = {
-                        state->swapchain_image_views[i],
+                        engine->swapchain_image_views[i],
                 };
 
                 VkFramebufferCreateInfo createinfo = {
                         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-                        .renderPass = state->render_pass,
+                        .renderPass = engine->render_pass,
                         .attachmentCount = 1,
                         .pAttachments = attachments,
-                        .width = state->swapchain_extent.width,
-                        .height = state->swapchain_extent.height,
+                        .width = engine->swapchain_extent.width,
+                        .height = engine->swapchain_extent.height,
                         .layers = 1,
                 };
 
                 VkResult res
-                    = vkCreateFramebuffer(state->device, &createinfo, NULL,
-                                          state->swapchain_framebuffers + i);
+                    = vkCreateFramebuffer(engine->device, &createinfo, NULL,
+                                          engine->swapchain_framebuffers + i);
                 if (res != VK_SUCCESS) {
                         fprintf(stderr, "Failed to create framebuffer: %s\n",
                                 string_VkResult(res));
@@ -214,44 +216,44 @@ static int create_framebuffers(glyph_state *state) {
         return 1;
 }
 
-static void cleanup_swapchain(glyph_state *state) {
-        for (uint32_t i = 0; i < state->swapchain_framebuffer_count; i++) {
-                vkDestroyFramebuffer(state->device,
-                                     state->swapchain_framebuffers[i], NULL);
+static void cleanup_swapchain(GlyphEngine *engine) {
+        for (uint32_t i = 0; i < engine->swapchain_framebuffer_count; i++) {
+                vkDestroyFramebuffer(engine->device,
+                                     engine->swapchain_framebuffers[i], NULL);
         }
-        for (uint32_t i = 0; i < state->swapchain_image_views_count; i++) {
-                vkDestroyImageView(state->device,
-                                   state->swapchain_image_views[i], NULL);
+        for (uint32_t i = 0; i < engine->swapchain_image_views_count; i++) {
+                vkDestroyImageView(engine->device,
+                                   engine->swapchain_image_views[i], NULL);
         }
-        vkDestroySwapchainKHR(state->device, state->swapchain, NULL);
+        vkDestroySwapchainKHR(engine->device, engine->swapchain, NULL);
 }
 
 // Recreates swap chain. Returns 1 on success, 0 on failure.
-static int recreate_swapchain(glyph_state *state) {
+static int recreate_swapchain(GlyphEngine *engine) {
         int width = 0, height = 0;
-        glfwGetFramebufferSize(state->window, &width, &height);
+        glfwGetFramebufferSize(engine->window, &width, &height);
         while (width == 0 || height == 0) {
-                glfwGetFramebufferSize(state->window, &width, &height);
+                glfwGetFramebufferSize(engine->window, &width, &height);
                 glfwWaitEvents();
         }
 
         cleanUnsafeSemaphore(
-            state->graphics_queue,
-            &state->image_available_semaphore[state->current_frame]);
+            engine->graphics_queue,
+            &engine->image_available_semaphore[engine->current_frame]);
 
-        vkDeviceWaitIdle(state->device);
+        vkDeviceWaitIdle(engine->device);
 
-        cleanup_swapchain(state);
+        cleanup_swapchain(engine);
 
-        int res = create_swapchain(state);
+        int res = create_swapchain(engine);
         if (!res)
                 return 0;
 
-        res = create_image_views(state);
+        res = create_swapchain_image_views(engine);
         if (!res)
                 return 0;
 
-        res = create_framebuffers(state);
+        res = create_swapchain_framebuffers(engine);
         if (!res)
                 return 0;
 

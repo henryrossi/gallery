@@ -3,7 +3,7 @@
 
 #include "glyph.h"
 
-static int create_sync_objects(glyph_state *state);
+static int create_sync_objects(GlyphEngine *engine);
 
 static void cleanUnsafeSemaphore(VkQueue queue, VkSemaphore *semaphore);
 

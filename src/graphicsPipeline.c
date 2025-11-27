@@ -6,9 +6,9 @@
 #include "vulkan/vulkan_core.h"
 
 // Create render pass. Returns 1 on success, 0 on failure.
-static int create_render_pass(glyph_state *state) {
+static int create_render_pass(GlyphEngine *engine) {
         VkAttachmentDescription color_attachment = {
-                .format = state->swapchain_format,
+                .format = engine->swapchain_format,
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -46,8 +46,8 @@ static int create_render_pass(glyph_state *state) {
                 .pDependencies = &dependency,
         };
 
-        VkResult res = vkCreateRenderPass(state->device, &createinfo, NULL,
-                                          &state->render_pass);
+        VkResult res = vkCreateRenderPass(engine->device, &createinfo, NULL,
+                                          &engine->render_pass);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create render pass: %s\n",
                         string_VkResult(res));
@@ -121,6 +121,7 @@ createGraphicsPipeline(GraphicsPipelineCreateInfo *createInfo) {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                 .topology = createInfo->primativeTopology,
+                .primitiveRestartEnable = VK_TRUE,
         };
 
         VkPipelineViewportStateCreateInfo viewportState = {

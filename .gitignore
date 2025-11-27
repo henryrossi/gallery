@@ -1,6 +1,10 @@
 glyph
+grove
 
 VulkanSDK
+
+.DS_Store
+.clangd
 
 *.dylib
 *.a

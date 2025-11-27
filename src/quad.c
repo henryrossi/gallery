@@ -148,7 +148,7 @@ getQuadPipelineVertexInputInfo(VkPipelineVertexInputStateCreateInfo *info) {
         info->pVertexAttributeDescriptions = &vertexAttrDesc;
 }
 
-static void destroyQuadVertexBuffer(glyph_state *state) {
-        vkDestroyBuffer(state->device, quadVertexBuffer, NULL);
-        vkFreeMemory(state->device, quadVertexMemory, NULL);
+static void destroyQuadVertexBuffer(GlyphEngine *engine) {
+        vkDestroyBuffer(engine->device, quadVertexBuffer, NULL);
+        vkFreeMemory(engine->device, quadVertexMemory, NULL);
 }

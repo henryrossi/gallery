@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 // Create semaphores and fences. Returns 1 on success, 0 on failure.
-static int create_sync_objects(glyph_state *state) {
+static int create_sync_objects(GlyphEngine *engine) {
         VkSemaphoreCreateInfo semaphore_info = {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         };
@@ -15,8 +15,8 @@ static int create_sync_objects(glyph_state *state) {
 
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
                 VkResult res
-                    = vkCreateSemaphore(state->device, &semaphore_info, NULL,
-                                        state->image_available_semaphore + i);
+                    = vkCreateSemaphore(engine->device, &semaphore_info, NULL,
+                                        engine->image_available_semaphore + i);
                 if (res != VK_SUCCESS) {
                         fprintf(
                             stderr,
@@ -24,8 +24,8 @@ static int create_sync_objects(glyph_state *state) {
                             string_VkResult(res));
                         return 0;
                 }
-                res = vkCreateSemaphore(state->device, &semaphore_info, NULL,
-                                        state->render_finished_semaphore + i);
+                res = vkCreateSemaphore(engine->device, &semaphore_info, NULL,
+                                        engine->render_finished_semaphore + i);
                 if (res != VK_SUCCESS) {
                         fprintf(
                             stderr,
@@ -33,8 +33,8 @@ static int create_sync_objects(glyph_state *state) {
                             string_VkResult(res));
                         return 0;
                 }
-                res = vkCreateFence(state->device, &fence_info, NULL,
-                                    state->inflight_fence + i);
+                res = vkCreateFence(engine->device, &fence_info, NULL,
+                                    engine->inflight_fence + i);
                 if (res != VK_SUCCESS) {
                         fprintf(stderr,
                                 "Failed to create in flight fence: %s\n",

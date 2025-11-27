@@ -374,7 +374,7 @@ static int createControlPanelGraphicsPipelines(ControlPanel *cp,
 static int createControlPanel(glyph_state *state) {
 
         VkPhysicalDeviceProperties props = { 0 };
-        vkGetPhysicalDeviceProperties(state->physical_device, &props);
+        vkGetPhysicalDeviceProperties(state->engine.physical_device, &props);
         VkDeviceSize alignment = props.limits.minUniformBufferOffsetAlignment;
         state->controlPanel.alignedUniformSize
             = ((sizeof(ControlPanelUniform) + alignment - 1) / alignment)
@@ -382,8 +382,8 @@ static int createControlPanel(glyph_state *state) {
 
         UniformBufferCreateInfo uniformInfo = {
                 .uniformSize = sizeof(state->controlPanel.quadUniforms),
-                .device = state->device,
-                .phyDevice = state->physical_device,
+                .device = state->engine.device,
+                .phyDevice = state->engine.physical_device,
         };
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
                 uniformInfo.pBuffers[i]
@@ -396,34 +396,35 @@ static int createControlPanel(glyph_state *state) {
                 return 0;
         }
 
-        if (!createControlPanelGraphicsPipelines(
-                &state->controlPanel, state->device, state->render_pass)) {
+        if (!createControlPanelGraphicsPipelines(&state->controlPanel,
+                                                 state->engine.device,
+                                                 state->engine.render_pass)) {
                 return 0;
         }
 
         if (!createControlPanelDescriptorSets(&state->controlPanel,
-                                              state->device)) {
+                                              state->engine.device)) {
                 return 0;
         }
 
         QuadVertexBufferRetrieveInfo vertexRetrieveInfo = {
                 .vertexBuffer = &state->controlPanel.vertexBuffer,
                 .vertexMemory = &state->controlPanel.vertexMemory,
-                .device = state->device,
-                .phyDevice = state->physical_device,
-                .cmdPool = state->command_pool,
-                .graphicsQueue = state->graphics_queue,
+                .device = state->engine.device,
+                .phyDevice = state->engine.physical_device,
+                .cmdPool = state->engine.command_pool,
+                .graphicsQueue = state->engine.graphics_queue,
         };
         retrieveQuadVertexBuffer(&vertexRetrieveInfo);
         updateControlPanelUniformObjects(&state->controlPanel,
-                                         state->swapchain_extent);
+                                         state->engine.swapchain_extent);
         // formatControlPanel(state);
 
         return 1;
 }
 
 static void destroyControlPanel(glyph_state *state) {
-        VkDevice device = state->device;
+        VkDevice device = state->engine.device;
 
         vkDestroyDescriptorSetLayout(
             device, state->controlPanel.descriptorSetLayout, NULL);

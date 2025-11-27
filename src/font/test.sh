@@ -11,4 +11,11 @@ export VK_ICD_FILENAMES
 VK_LAYER_PATH="$VULKAN_SDK/share/vulkan/explicit_layer.d"
 export VK_LAYER_PATH
 
-./glyph $1 $2 $3 $4
+../../VulkanSDK/1.4.309.0/macOS/bin/glslc ./quad.vert -o ./vert.spv
+../../VulkanSDK/1.4.309.0/macOS/bin/glslc ./quad.frag -o ./frag.spv
+
+flags=$(cat compile_flags.txt)
+
+gcc -o test test.c $flags -g -Wall -Werror -Wno-unused-function -Wno-unused-variable
+
+./test

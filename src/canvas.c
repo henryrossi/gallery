@@ -52,14 +52,14 @@ static void drawCanvas(Canvas *c, VkCommandBuffer cmdBuffer, uint32_t frame,
 
 // Create vertex buffers. Returns 1 on success, 0 on failure.
 static int create_vertex_buffer(glyph_state *state) {
-        VkDevice device = state->device;
+        VkDevice device = state->engine.device;
         VkDeviceSize size = sizeof(vertices);
 
         VkBuffer staging_buffer;
         VkDeviceMemory staging_buffer_memory;
         BufferCreateInfo staging = {
                 .device = device,
-                .physical_device = state->physical_device,
+                .physical_device = state->engine.physical_device,
                 .size = size,
                 .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                 .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -78,7 +78,7 @@ static int create_vertex_buffer(glyph_state *state) {
 
         BufferCreateInfo vertex = {
                 .device = device,
-                .physical_device = state->physical_device,
+                .physical_device = state->engine.physical_device,
                 .size = size,
                 .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT
                          | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -92,8 +92,8 @@ static int create_vertex_buffer(glyph_state *state) {
 
         CopyBufferInfo params = {
                 .device = device,
-                .graphics_queue = state->graphics_queue,
-                .cmdpool = state->command_pool,
+                .graphics_queue = state->engine.graphics_queue,
+                .cmdpool = state->engine.command_pool,
                 .src = staging_buffer,
                 .dst = state->canvas.vertexBuffer,
                 .size = size,
@@ -134,9 +134,9 @@ static int create_descriptor_set_layout(glyph_state *state) {
                 .pBindings = layout_bindings,
         };
 
-        VkResult res
-            = vkCreateDescriptorSetLayout(state->device, &layout_info, NULL,
-                                          &state->canvas.descriptorSetLayout);
+        VkResult res = vkCreateDescriptorSetLayout(
+            state->engine.device, &layout_info, NULL,
+            &state->canvas.descriptorSetLayout);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create descriptor set layout: %s\n",
                         string_VkResult(res));
@@ -164,8 +164,9 @@ static int create_descriptor_pool(glyph_state *state) {
                 .maxSets = MAX_FRAMES_IN_FLIGHT,
         };
 
-        VkResult res = vkCreateDescriptorPool(state->device, &pool_info, NULL,
-                                              &state->canvas.descriptorPool);
+        VkResult res
+            = vkCreateDescriptorPool(state->engine.device, &pool_info, NULL,
+                                     &state->canvas.descriptorPool);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create descriptor pool: %s\n",
                         string_VkResult(res));
@@ -188,8 +189,8 @@ static int create_descriptor_sets(glyph_state *state) {
                 .pSetLayouts = layouts,
         };
 
-        VkResult res = vkAllocateDescriptorSets(state->device, &alloc_info,
-                                                state->canvas.descriptorSets);
+        VkResult res = vkAllocateDescriptorSets(
+            state->engine.device, &alloc_info, state->canvas.descriptorSets);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to allocate descriptor sets: %s\n",
                         string_VkResult(res));
@@ -232,8 +233,8 @@ static int create_descriptor_sets(glyph_state *state) {
                         },
                 };
 
-                vkUpdateDescriptorSets(state->device, 2, descriptor_write, 0,
-                                       NULL);
+                vkUpdateDescriptorSets(state->engine.device, 2,
+                                       descriptor_write, 0, NULL);
         }
 
         return 1;
@@ -250,14 +251,14 @@ static int create_uniform_buffer(glyph_state *state) {
                         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                         .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
                                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                        .device = state->device,
-                        .physical_device = state->physical_device,
+                        .device = state->engine.device,
+                        .physical_device = state->engine.physical_device,
                 };
                 if (!createBuffer(&params)) {
                         return 0;
                 }
 
-                vkMapMemory(state->device,
+                vkMapMemory(state->engine.device,
                             state->canvas.uniformBuffersMemory[i], 0, size, 0,
                             &state->canvas.uniformBuffersMapped[i]);
         }
@@ -316,8 +317,8 @@ static int createCanvasGraphicsPipeline(glyph_state *state) {
         };
 
         VkResult res
-            = vkCreatePipelineLayout(state->device, &pipelineLayoutInfo, NULL,
-                                     &state->canvas.pipelineLayout);
+            = vkCreatePipelineLayout(state->engine.device, &pipelineLayoutInfo,
+                                     NULL, &state->canvas.pipelineLayout);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create pipeline layout: %s\n",
                         string_VkResult(res));
@@ -325,7 +326,7 @@ static int createCanvasGraphicsPipeline(glyph_state *state) {
         }
 
         GraphicsPipelineCreateInfo createInfo = {
-                .device = state->device,
+                .device = state->engine.device,
                 .vertFile = "src/shaders/vert.spv",
                 .fragFile = "src/shaders/frag.spv",
                 .vertexInputInfo = &vertexInputInfo,
@@ -337,7 +338,7 @@ static int createCanvasGraphicsPipeline(glyph_state *state) {
                 .blendAttachmentStates = &colorBlendAttachment,
                 .depthStencilState = NULL,
                 .pipelineLayout = state->canvas.pipelineLayout,
-                .renderPass = state->render_pass,
+                .renderPass = state->engine.render_pass,
         };
         state->canvas.pipeline = createGraphicsPipeline(&createInfo);
         if (state->canvas.pipeline == VK_NULL_HANDLE) {
@@ -367,8 +368,8 @@ static int createCanvasSampler(glyph_state *state) {
                 .maxLod = 0.0f,
         };
 
-        VkResult res = vkCreateSampler(state->device, &sampler_info, NULL,
-                                       &state->canvas.imageSampler);
+        VkResult res = vkCreateSampler(state->engine.device, &sampler_info,
+                                       NULL, &state->canvas.imageSampler);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create texture sampler: %s\n",
                         string_VkResult(res));
@@ -379,7 +380,8 @@ static int createCanvasSampler(glyph_state *state) {
 
 static int createCanvasImageViews(glyph_state *state) {
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-                if (!createImageView(state->device, state->canvas.image[i],
+                if (!createImageView(state->engine.device,
+                                     state->canvas.image[i],
                                      VK_FORMAT_R8G8B8A8_UNORM,
                                      &state->canvas.imageView[i])) {
                         return 0;
@@ -398,9 +400,9 @@ static void writeCanvasDataToImage(glyph_state *state, uint32_t currentFrame) {
                 .format = VK_FORMAT_R8G8B8A8_SRGB,
                 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .device = state->device,
-                .cmdPool = state->command_pool,
-                .graphicsQueue = state->graphics_queue,
+                .device = state->engine.device,
+                .cmdPool = state->engine.command_pool,
+                .graphicsQueue = state->engine.graphics_queue,
         };
         transitionImageLayout(&transInfo);
 
@@ -409,9 +411,9 @@ static void writeCanvasDataToImage(glyph_state *state, uint32_t currentFrame) {
                 .image = canvas.image[currentFrame],
                 .width = canvas.width,
                 .height = canvas.height,
-                .device = state->device,
-                .cmdPool = state->command_pool,
-                .graphicsQueue = state->graphics_queue,
+                .device = state->engine.device,
+                .cmdPool = state->engine.command_pool,
+                .graphicsQueue = state->engine.graphics_queue,
         };
         copyBufferToImage(&copyInfo);
 
@@ -466,15 +468,16 @@ static int createCanvas(glyph_state *state) {
                         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                         .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
                                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                        .device = state->device,
-                        .physical_device = state->physical_device,
+                        .device = state->engine.device,
+                        .physical_device = state->engine.physical_device,
                 };
                 if (!createBuffer(&bufferInfo)) {
                         return 0;
                 }
 
-                vkMapMemory(state->device, canvas->stagingImagesMemory[i], 0,
-                            canvas->size, 0, &canvas->mappedStagingImages[i]);
+                vkMapMemory(state->engine.device,
+                            canvas->stagingImagesMemory[i], 0, canvas->size, 0,
+                            &canvas->mappedStagingImages[i]);
 
                 ImageCreateInfo imageInfo = {
                         .width = canvas->width,
@@ -486,8 +489,8 @@ static int createCanvas(glyph_state *state) {
                         .props = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                         .image = &canvas->image[i],
                         .imageMemory = &canvas->imageMemory[i],
-                        .device = state->device,
-                        .physicalDevice = state->physical_device,
+                        .device = state->engine.device,
+                        .physicalDevice = state->engine.physical_device,
                 };
                 if (!createImage(&imageInfo)) {
                         return 0;
@@ -506,14 +509,14 @@ static int createCanvas(glyph_state *state) {
                 return 0;
         }
 
-        updateCanvasUniformObject(canvas, state->swapchain_extent);
+        updateCanvasUniformObject(canvas, state->engine.swapchain_extent);
 
         return 1;
 }
 
 static void destroyCanvas(glyph_state *state) {
 
-        VkDevice device = state->device;
+        VkDevice device = state->engine.device;
         Canvas canvas = state->canvas;
 
         vkDestroySampler(device, canvas.imageSampler, NULL);

@@ -1,3 +1,4 @@
+#include "engine.h"
 #include "glyph.h"
 
 #include <stdio.h>
@@ -46,20 +47,20 @@ static int check_device_extension_support(VkPhysicalDevice device) {
 
 // Determines if a physical device is suitable for our needs.
 // Returns 1 if suitable, 0 if unsuitable.
-static int is_device_suitable(glyph_state *state, VkPhysicalDevice device) {
+static int is_device_suitable(GlyphEngine *engine, VkPhysicalDevice device) {
         VkPhysicalDeviceFeatures feats;
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceFeatures(device, &feats);
         vkGetPhysicalDeviceProperties(device, &props);
 
-        queue_family_indicies_t indicies = find_queue_families(state, device);
+        queue_family_indicies_t indicies = find_queue_families(engine, device);
 
         int extensions_supported = check_device_extension_support(device);
 
         int swapchain_adequate = 0;
         if (extensions_supported) {
                 swapchain_support_details_t sc_support
-                    = query_swapchain_support(state, device);
+                    = query_swapchain_support(engine, device);
                 swapchain_adequate = sc_support.formats_count
                                      && sc_support.present_modes_count;
                 free(sc_support.formats);
@@ -71,9 +72,9 @@ static int is_device_suitable(glyph_state *state, VkPhysicalDevice device) {
 }
 
 // Pick physical device to use. Returns 1 on succces, 0 on failure.
-static int pick_physical_device(glyph_state *state) {
+static int pick_physical_device(GlyphEngine *engine) {
         uint32_t device_count = 0;
-        vkEnumeratePhysicalDevices(state->instance, &device_count, NULL);
+        vkEnumeratePhysicalDevices(engine->instance, &device_count, NULL);
 
         if (device_count == 0) {
                 fprintf(stderr, "No physical devices found\n");
@@ -82,17 +83,17 @@ static int pick_physical_device(glyph_state *state) {
 
         VkPhysicalDevice *devices
             = malloc(sizeof(VkPhysicalDevice) * device_count);
-        vkEnumeratePhysicalDevices(state->instance, &device_count, devices);
+        vkEnumeratePhysicalDevices(engine->instance, &device_count, devices);
 
         for (uint32_t i = 0; i < device_count; i++) {
                 VkPhysicalDevice device = devices[i];
-                if (is_device_suitable(state, device)) {
-                        state->physical_device = device;
+                if (is_device_suitable(engine, device)) {
+                        engine->physical_device = device;
                         break;
                 }
         }
 
-        if (state->physical_device == VK_NULL_HANDLE) {
+        if (engine->physical_device == VK_NULL_HANDLE) {
                 fprintf(stderr, "Failed to find a suitable physical device\n");
                 return 0;
         }
@@ -101,9 +102,9 @@ static int pick_physical_device(glyph_state *state) {
 }
 
 // Creates logical device. Returns 1 on success, 0 on failure.
-static int create_logical_device(glyph_state *state) {
+static int create_logical_device(GlyphEngine *engine) {
         queue_family_indicies_t indicies
-            = find_queue_families(state, state->physical_device);
+            = find_queue_families(engine, engine->physical_device);
         float queue_priority = 1.0f;
 
         if (!indicies.graphics.valid || !indicies.graphics.valid) {
@@ -136,7 +137,8 @@ static int create_logical_device(glyph_state *state) {
                 q_present_createinfo->pQueuePriorities = &queue_priority;
         }
 
-        VkPhysicalDeviceFeatures features = { 0 };
+        // Change!
+        VkPhysicalDeviceFeatures features = { .fillModeNonSolid = VK_TRUE };
 
         VkDeviceCreateInfo createinfo = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -153,18 +155,18 @@ static int create_logical_device(glyph_state *state) {
                 createinfo.ppEnabledLayerNames = validation_layers;
         }
 
-        VkResult res = vkCreateDevice(state->physical_device, &createinfo, NULL,
-                                      &state->device);
+        VkResult res = vkCreateDevice(engine->physical_device, &createinfo,
+                                      NULL, &engine->device);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create device, %s\n",
                         string_VkResult(res));
                 return 0;
         }
 
-        vkGetDeviceQueue(state->device, indicies.graphics.index, 0,
-                         &state->graphics_queue);
-        vkGetDeviceQueue(state->device, indicies.presentation.index, 0,
-                         &state->presentation_queue);
+        vkGetDeviceQueue(engine->device, indicies.graphics.index, 0,
+                         &engine->graphics_queue);
+        vkGetDeviceQueue(engine->device, indicies.presentation.index, 0,
+                         &engine->presentation_queue);
 
         return 1;
 }

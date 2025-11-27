@@ -113,7 +113,7 @@ typedef struct {
 } GlyphContours;
 
 typedef struct {
-        u16 numberOfContours;
+        s16 numberOfContours;
         FWord xMin;
         FWord yMin;
         FWord xMax;
@@ -337,6 +337,7 @@ void ttf_parse_loca(TTFFont *font, TTFParser *p) {
 }
 
 u32 ttf_find_glyph_offset(TTFFont *font, u32 glyphIndex) {
+        u32 numGlyphs = font->maxp.numGlyphs;
         u32 format = font->head.indexToLocFormat;
         if (format) {
                 u32 *offsets = (u32 *)font->glyphLocationOffsets;
@@ -353,19 +354,25 @@ static void ttf_process_glyph_data(TTFFont *font, TTFParser *p, u32 glyphIndex,
         u32 offset = ttf_find_glyph_offset(font, glyphIndex);
         // careful of out of bounds
         u32 glyphLength = ttf_find_glyph_offset(font, glyphIndex + 1) - offset;
+        if (glyphLength == 0) {
+                return;
+        }
 
         u32 glyp = ttf_find_table_by_tag(font, "glyf");
         ttf_move_parser_pos(p, font->tables[glyp].offset);
         ttf_parser_skip(p, offset);
 
         data->numberOfContours = ttf_read_U16(p);
+        if (data->numberOfContours == -1) {
+                return;
+        }
         data->xMin = ttf_read_U16(p);
         data->yMin = ttf_read_U16(p);
         data->xMax = ttf_read_U16(p);
         data->yMax = ttf_read_U16(p);
         data->contours = malloc(sizeof(GlyphContours) * data->numberOfContours);
 
-        u16 endOfPrevContour = 0;
+        s32 endOfPrevContour = -1;
         for (u32 i = 0; i < data->numberOfContours; i++) {
                 u16 endOfContour = ttf_read_U16(p);
                 data->contours[i].numberOfPoints
@@ -383,8 +390,9 @@ static void ttf_process_glyph_data(TTFFont *font, TTFParser *p, u32 glyphIndex,
         u16 instructionLength = ttf_read_U16(p);
         ttf_parser_skip(p, instructionLength);
 
+        u32 flagRepeating = 0;
         for (u32 c = 0; c < data->numberOfContours; c++) {
-                u32 flagRepeating = 0;
+                flagRepeating = 0;
                 for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
                         if (flagRepeating > 0) {
                                 data->contours[c].flags[i]
@@ -398,9 +406,11 @@ static void ttf_process_glyph_data(TTFFont *font, TTFParser *p, u32 glyphIndex,
                         }
                 }
         }
+        assert(flagRepeating == 0
+               && "Parsing Error - Not done reading repeating flags");
 
+        s16 prevX = 0;
         for (u32 c = 0; c < data->numberOfContours; c++) {
-                u16 prevX = 0;
                 for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
                         u8 xShort
                             = data->contours[c].flags[i] & GLYPH_X_SHORT_VECTOR;
@@ -431,8 +441,8 @@ static void ttf_process_glyph_data(TTFFont *font, TTFParser *p, u32 glyphIndex,
                 }
         }
 
+        s16 prevY = 0;
         for (u32 c = 0; c < data->numberOfContours; c++) {
-                u16 prevY = 0;
                 for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
                         u8 yShort
                             = data->contours[c].flags[i] & GLYPH_Y_SHORT_VECTOR;
@@ -462,18 +472,6 @@ static void ttf_process_glyph_data(TTFFont *font, TTFParser *p, u32 glyphIndex,
                         }
                 }
         }
-
-        for (u32 c = 0; c < data->numberOfContours; c++) {
-                printf("x, y\n");
-                for (u32 i = 0; i < data->contours[c].numberOfPoints; i++) {
-                        printf("%d, %d\n", data->contours[c].xPoints[i],
-                               data->contours[c].yPoints[i]);
-                }
-        }
-
-        printf("Glyph length is %d and bytes read for gylph is %ld\n",
-               glyphLength,
-               (p->pos - p->data) - font->tables[glyp].offset - offset);
 }
 
 static void ttf_parse_glyph_data(TTFFont *f, TTFParser *p) {
@@ -485,61 +483,59 @@ static void ttf_parse_glyph_data(TTFFont *f, TTFParser *p) {
         }
 }
 
-int main(int argc, char *argv[]) {
-        TTFParser p = { 0 };
+int parse_font(TTFFont *font, TTFParser *p) {
 
         const char *fontFilename = "Lato-Regular.ttf";
-        int res = ttf_read_file(fontFilename, &p);
+        int res = ttf_read_file(fontFilename, p);
         if (res == 0) {
                 return 1;
         }
 
-        TTFFont font = { 0 };
-        ttf_read_name(&p, font.dir.scalar);
-        font.dir.numTables = ttf_read_U16(&p);
-        font.dir.searchRange = ttf_read_U16(&p);
-        font.dir.entrySelector = ttf_read_U16(&p);
-        font.dir.rangeShift = ttf_read_U16(&p);
+        ttf_read_name(p, font->dir.scalar);
+        font->dir.numTables = ttf_read_U16(p);
+        font->dir.searchRange = ttf_read_U16(p);
+        font->dir.entrySelector = ttf_read_U16(p);
+        font->dir.rangeShift = ttf_read_U16(p);
 
-        font.tables = malloc(sizeof(TableDirectory) * font.dir.numTables);
-        for (u32 i = 0; i < font.dir.numTables; i++) {
-                ttf_read_name(&p, font.tables[i].tag);
-                font.tables[i].checkSum = ttf_read_U32(&p);
-                font.tables[i].offset = ttf_read_U32(&p);
-                font.tables[i].length = ttf_read_U32(&p);
+        font->tables = malloc(sizeof(TableDirectory) * font->dir.numTables);
+        for (u32 i = 0; i < font->dir.numTables; i++) {
+                ttf_read_name(p, font->tables[i].tag);
+                font->tables[i].checkSum = ttf_read_U32(p);
+                font->tables[i].offset = ttf_read_U32(p);
+                font->tables[i].length = ttf_read_U32(p);
         }
 
-        ttf_parse_cmap(&font, &p);
-        ttf_parse_head(&font, &p);
-        ttf_parse_maxp(&font, &p);
-        ttf_parse_loca(&font, &p);
+        ttf_parse_cmap(font, p);
+        ttf_parse_head(font, p);
+        ttf_parse_maxp(font, p);
+        ttf_parse_loca(font, p);
 
-        // u16 bGlyphIndex = ttf_find_glyph_index(&font, 'b');
+        // u16 bGlyphIndex = ttf_find_glyph_index(font, 'b');
 
-        // u32 glyphOffset = ttf_find_glyph_offset(&font, bGlyphIndex);
+        // u32 glyphOffset = ttf_find_glyph_offset(font, bGlyphIndex);
         // printf("glyph offset %d\n", glyphOffset);
         //
-        // u32 glyf = ttf_find_table_by_tag(&font, "glyf");
-        // ttf_move_parser_pos(&p, font.tables[glyf].offset);
-        // ttf_parser_skip(&p, glyphOffset);
-        // printf("number of contours in glyph b: %d\n", ttf_read_U16(&p));
-        // ttf_parser_skip(&p, 8);
-        // u16 glyphEndPoint = ttf_read_U16(&p);
+        // u32 glyf = ttf_find_table_by_tag(font, "glyf");
+        // ttf_move_parser_pos(p, font.tables[glyf].offset);
+        // ttf_parser_skip(p, glyphOffset);
+        // printf("number of contours in glyph b: %d\n", ttf_read_U16(p));
+        // ttf_parser_skip(p, 8);
+        // u16 glyphEndPoint = ttf_read_U16(p);
         // printf("end points of contour 1: %d\n", glyphEndPoint);
-        // u16 glyphEndPoint2 = ttf_read_U16(&p);
+        // u16 glyphEndPoint2 = ttf_read_U16(p);
         // printf("end points of contour 2: %d\n", glyphEndPoint2);
-        // u16 instructionLength = ttf_read_U16(&p);
-        // ttf_parser_skip(&p, instructionLength);
+        // u16 instructionLength = ttf_read_U16(p);
+        // ttf_parser_skip(p, instructionLength);
         // u32 numFlags = 1;
         // for (;; numFlags++) {
-        //         u8 flag = ttf_read_U8(&p);
+        //         u8 flag = ttf_read_U8(p);
         //         printf("x is short: %d, y is short: %d\n",
-        //                (flag & (1 << 1)) ? 1 : 0, (flag & (1 << 2)) ? 1 : 0);
-        //         if (flag & (1 << 3)) {
+        //                (flag  (1 << 1)) ? 1 : 0, (flag  (1 << 2)) ? 1 : 0);
+        //         if (flag  (1 << 3)) {
         //                 break;
         //         }
         // }
 
-        ttf_parse_glyph_data(&font, &p);
+        ttf_parse_glyph_data(font, p);
         return 0;
 }

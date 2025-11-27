@@ -1,7 +1,3 @@
-#include "matrix.h"
-
-#include <stdio.h>
-
 static void multMat4xMat4(Mat4 *a, Mat4 *b, Mat4 *product) {
 
         for (int n = 0; n < 4; n++) {

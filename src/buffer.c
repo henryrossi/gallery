@@ -1,4 +1,5 @@
 #include "buffer.h"
+#include "glyph.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,7 +94,8 @@ static void copyBuffer(CopyBufferInfo *copyInfo) {
 }
 
 // Creates index buffer. Returns 1 on success, 0 on failure.
-static int create_index_buffer(glyph_state *state) {
+static int create_index_buffer(GlyphEngine *engine, VkBuffer *indexBuffer,
+                               VkDeviceMemory *indexBufferMemory) {
         VkDeviceSize size = sizeof(indices);
 
         VkBuffer staging_buffer;
@@ -106,27 +108,27 @@ static int create_index_buffer(glyph_state *state) {
                 .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                 .props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
                          | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                .device = state->device,
-                .physical_device = state->physical_device,
+                .device = engine->device,
+                .physical_device = engine->physical_device,
         };
         if (!createBuffer(&staging_params)) {
                 return 0;
         }
 
         void *data;
-        vkMapMemory(state->device, staging_memory, 0, size, 0, &data);
+        vkMapMemory(engine->device, staging_memory, 0, size, 0, &data);
         memcpy(data, indices, size);
-        vkUnmapMemory(state->device, staging_memory);
+        vkUnmapMemory(engine->device, staging_memory);
 
         BufferCreateInfo index_params = {
                 .size = size,
-                .buffer = &state->index_buffer,
-                .memory = &state->index_buffer_memory,
+                .buffer = indexBuffer,
+                .memory = indexBufferMemory,
                 .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT
                          | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                 .props = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                .device = state->device,
-                .physical_device = state->physical_device,
+                .device = engine->device,
+                .physical_device = engine->physical_device,
         };
         if (!createBuffer(&index_params)) {
                 return 0;
@@ -135,15 +137,15 @@ static int create_index_buffer(glyph_state *state) {
         CopyBufferInfo copy_params = {
                 .size = size,
                 .src = staging_buffer,
-                .dst = state->index_buffer,
-                .device = state->device,
-                .cmdpool = state->command_pool,
-                .graphics_queue = state->graphics_queue,
+                .dst = *indexBuffer,
+                .device = engine->device,
+                .cmdpool = engine->command_pool,
+                .graphics_queue = engine->graphics_queue,
         };
         copyBuffer(&copy_params);
 
-        vkDestroyBuffer(state->device, staging_buffer, NULL);
-        vkFreeMemory(state->device, staging_memory, NULL);
+        vkDestroyBuffer(engine->device, staging_buffer, NULL);
+        vkFreeMemory(engine->device, staging_memory, NULL);
 
         return 1;
 }

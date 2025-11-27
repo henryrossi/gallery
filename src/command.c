@@ -1,3 +1,4 @@
+#include "engine.h"
 #include "glyph.h"
 
 #include <stdio.h>
@@ -41,9 +42,9 @@ static void end_single_time_commands(VkDevice device, VkQueue graphics_queue,
 }
 
 // Creates a command pool. Returns 1 on success, 0 on failure.
-static int create_command_pool(glyph_state *state) {
+static int create_command_pool(GlyphEngine *engine) {
         queue_family_indicies_t indicies
-            = find_queue_families(state, state->physical_device);
+            = find_queue_families(engine, engine->physical_device);
 
         VkCommandPoolCreateInfo createinfo = {
                 .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -51,8 +52,8 @@ static int create_command_pool(glyph_state *state) {
                 .queueFamilyIndex = indicies.graphics.index,
         };
 
-        VkResult res = vkCreateCommandPool(state->device, &createinfo, NULL,
-                                           &state->command_pool);
+        VkResult res = vkCreateCommandPool(engine->device, &createinfo, NULL,
+                                           &engine->command_pool);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create command pool: %s\n",
                         string_VkResult(res));
@@ -63,16 +64,16 @@ static int create_command_pool(glyph_state *state) {
 }
 
 // Create command buffer. Return 1 on success, 0 on failure.
-static int create_command_buffer(glyph_state *state) {
+static int create_command_buffer(GlyphEngine *engine) {
         VkCommandBufferAllocateInfo allocinfo = {
                 .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                .commandPool = state->command_pool,
+                .commandPool = engine->command_pool,
                 .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                 .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
         };
 
-        VkResult res = vkAllocateCommandBuffers(state->device, &allocinfo,
-                                                state->command_buffer);
+        VkResult res = vkAllocateCommandBuffers(engine->device, &allocinfo,
+                                                engine->command_buffer);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to allocate command buffers: %s\n",
                         string_VkResult(res));

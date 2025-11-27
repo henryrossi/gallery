@@ -14,8 +14,8 @@
 #include "command.c"
 #include "controlPanel.c"
 #include "coordTransform.c"
-#include "debug.c"
 #include "device.c"
+#include "engine.c"
 #include "graphicsPipeline.c"
 #include "matrix.c"
 #include "quad.c"
@@ -48,14 +48,14 @@ bool redoPressed = false;
 bool drawing = false;
 
 static void processInput(glyph_state *state) {
-        if (glfwGetKey(state->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-                glfwSetWindowShouldClose(state->window, GLFW_TRUE);
+        if (glfwGetKey(state->engine.window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+                glfwSetWindowShouldClose(state->engine.window, GLFW_TRUE);
         }
 
-        if (glfwGetKey(state->window, GLFW_KEY_S) == GLFW_PRESS) {
+        if (glfwGetKey(state->engine.window, GLFW_KEY_S) == GLFW_PRESS) {
                 savePressed = 1;
         }
-        if (glfwGetKey(state->window, GLFW_KEY_S) == GLFW_RELEASE
+        if (glfwGetKey(state->engine.window, GLFW_KEY_S) == GLFW_RELEASE
             && savePressed) {
                 int res = saveCanvasToPNG(&state->canvas);
                 if (res) {
@@ -71,9 +71,9 @@ static void processInput(glyph_state *state) {
 
         Canvas *canvas = &state->canvas;
         double x, y;
-        glfwGetCursorPos(state->window, &x, &y);
+        glfwGetCursorPos(state->engine.window, &x, &y);
         int extentX, extentY;
-        glfwGetWindowSize(state->window, &extentX, &extentY);
+        glfwGetWindowSize(state->engine.window, &extentX, &extentY);
         float vulkanX = (x / extentX) * 2 - 1.0;
         float vulkanY = (y / extentY) * 2 - 1.0;
 
@@ -83,28 +83,29 @@ static void processInput(glyph_state *state) {
         int pixelY = ((vulkanY - canvasBox.pos.y) / canvasBox.extent.y)
                      * canvas->height;
 
-        int mouseState = glfwGetMouseButton(state->window, GLFW_MOUSE_BUTTON_1);
-        if (glfwGetKey(state->window, GLFW_KEY_U) == GLFW_PRESS) {
+        int mouseState
+            = glfwGetMouseButton(state->engine.window, GLFW_MOUSE_BUTTON_1);
+        if (glfwGetKey(state->engine.window, GLFW_KEY_U) == GLFW_PRESS) {
                 undoPressed = true;
         }
-        if (glfwGetKey(state->window, GLFW_KEY_R) == GLFW_PRESS) {
+        if (glfwGetKey(state->engine.window, GLFW_KEY_R) == GLFW_PRESS) {
                 redoPressed = true;
         }
-        if (glfwGetKey(state->window, GLFW_KEY_U) == GLFW_RELEASE
+        if (glfwGetKey(state->engine.window, GLFW_KEY_U) == GLFW_RELEASE
             && undoPressed) {
                 undoAction(canvas);
                 undoPressed = false;
         }
-        if (glfwGetKey(state->window, GLFW_KEY_R) == GLFW_RELEASE
+        if (glfwGetKey(state->engine.window, GLFW_KEY_R) == GLFW_RELEASE
             && redoPressed) {
                 redoAction(canvas);
                 redoPressed = false;
         }
 
-        if (glfwGetKey(state->window, GLFW_KEY_P) == GLFW_PRESS) {
+        if (glfwGetKey(state->engine.window, GLFW_KEY_P) == GLFW_PRESS) {
                 colorPickedPressed = 1;
         }
-        if (glfwGetKey(state->window, GLFW_KEY_P) == GLFW_RELEASE
+        if (glfwGetKey(state->engine.window, GLFW_KEY_P) == GLFW_RELEASE
             && colorPickedPressed) {
                 Vec3 color = {
                         .x = canvas->data[pixelY * (canvas->width * 4)
@@ -200,112 +201,9 @@ static void processInput(glyph_state *state) {
                 updateColorCreatorPreview(&state->controlPanel, vulkanX,
                                           vulkanY);
                 updateCreatorButtonUniformObject(&state->controlPanel,
-                                                 state->swapchain_extent,
+                                                 state->engine.swapchain_extent,
                                                  state->controlPanel.clicked);
         }
-}
-
-static queue_family_indicies_t find_queue_families(glyph_state *state,
-                                                   VkPhysicalDevice device) {
-        queue_family_indicies_t indicies = { 0 };
-
-        uint32_t queue_family_count = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count,
-                                                 NULL);
-        VkQueueFamilyProperties *queue_families
-            = malloc(sizeof(VkQueueFamilyProperties) * queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count,
-                                                 queue_families);
-
-        for (uint32_t i = 0; i < queue_family_count; i++) {
-                if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                        indicies.graphics.index = i;
-                        indicies.graphics.valid = 1;
-                }
-                uint32_t supports_presentation = 0;
-                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, state->surface,
-                                                     &supports_presentation);
-                if (supports_presentation) {
-                        indicies.presentation.index = i;
-                        indicies.presentation.valid = 1;
-                }
-        }
-
-        free(queue_families);
-
-        return indicies;
-}
-
-typedef struct {
-        const char **names;
-        uint32_t count;
-} extensions_t;
-
-static extensions_t get_required_extensions(void) {
-        extensions_t exts = { 0 };
-
-        uint32_t glfw_ext_count = 0;
-        const char **glfw_exts
-            = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
-
-        exts.count = enable_validation_layers ? glfw_ext_count + 3
-                                              : glfw_ext_count + 2;
-        exts.names = malloc(sizeof(const char *) * exts.count);
-
-        for (int i = 0; i < glfw_ext_count; i++) {
-                exts.names[i] = glfw_exts[i];
-        }
-
-        if (enable_validation_layers) {
-                exts.names[exts.count - 3] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-        }
-        exts.names[exts.count - 2]
-            = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
-        exts.names[exts.count - 1] = "VK_KHR_get_physical_device_properties2";
-
-        return exts;
-}
-
-// Creates a Vulkan instance. Returns 1 on success, 0 on error.
-static int create_instance(glyph_state *state) {
-        VkApplicationInfo appinfo = {
-                .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-                .pApplicationName = "glyph",
-                .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-                .pEngineName = "No Engine",
-                .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-                .apiVersion = VK_API_VERSION_1_0,
-        };
-
-        extensions_t exts = get_required_extensions();
-        VkInstanceCreateInfo createinfo = {
-                .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-                .pApplicationInfo = &appinfo,
-                .enabledExtensionCount = exts.count,
-                .ppEnabledExtensionNames = exts.names,
-                .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
-        };
-
-        VkDebugUtilsMessengerCreateInfoEXT debug_createinfo = { 0 };
-        if (enable_validation_layers) {
-                if (!check_validation_layer_support()) {
-                        return 0;
-                }
-                createinfo.enabledLayerCount = validation_layer_count;
-                createinfo.ppEnabledLayerNames = validation_layers;
-                populate_debug_messenger_createinfo(&debug_createinfo);
-                createinfo.pNext = &debug_createinfo;
-        } else {
-                createinfo.enabledLayerCount = 0;
-        }
-
-        VkResult res = vkCreateInstance(&createinfo, NULL, &state->instance);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Failed to create instance. %s\n",
-                        string_VkResult(res));
-                return 0;
-        }
-        return 1;
 }
 
 // Write commands into the command buffer. Returns 1 on success, 0 on failure
@@ -328,10 +226,11 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         VkClearValue clear_value = { { { 0.3f, 0.3f, 0.3f, 1.0f } } };
         VkRenderPassBeginInfo passinfo = {
                 .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-                .renderPass = state->render_pass,
-                .framebuffer = state->swapchain_framebuffers[image_index],
+                .renderPass = state->engine.render_pass,
+                .framebuffer
+                = state->engine.swapchain_framebuffers[image_index],
                 .renderArea.offset = { 0, 0 },
-                .renderArea.extent = state->swapchain_extent,
+                .renderArea.extent = state->engine.swapchain_extent,
                 .clearValueCount = 1,
                 .pClearValues = &clear_value,
         };
@@ -341,8 +240,8 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
         VkViewport viewport = {
                 .x = 0.0f,
                 .y = 0.0f,
-                .width = (float)state->swapchain_extent.width,
-                .height = (float)state->swapchain_extent.height,
+                .width = (float)state->engine.swapchain_extent.width,
+                .height = (float)state->engine.swapchain_extent.height,
                 .minDepth = 0.0f,
                 .maxDepth = 1.0f,
         };
@@ -350,18 +249,19 @@ static int record_command_buffer(glyph_state *state, VkCommandBuffer cmd_buffer,
 
         VkRect2D scissor = {
                 .offset = { 0, 0 },
-                .extent = state->swapchain_extent,
+                .extent = state->engine.swapchain_extent,
         };
         vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
         vkCmdBindIndexBuffer(cmd_buffer, state->index_buffer, 0,
                              VK_INDEX_TYPE_UINT16);
         uint32_t indices_size = sizeof(indices) / sizeof(indices[0]);
-        drawCanvas(&state->canvas, cmd_buffer, state->current_frame,
-                   &state->swapchain_extent, indices_size);
+        drawCanvas(&state->canvas, cmd_buffer, state->engine.current_frame,
+                   &state->engine.swapchain_extent, indices_size);
 
-        drawControlPanel(&state->controlPanel, cmd_buffer, state->current_frame,
-                         &state->swapchain_extent, indices_size);
+        drawControlPanel(&state->controlPanel, cmd_buffer,
+                         state->engine.current_frame,
+                         &state->engine.swapchain_extent, indices_size);
 
         vkCmdEndRenderPass(cmd_buffer);
 
@@ -388,25 +288,25 @@ static int draw_frame(glyph_state *state) {
                 prevTime = time;
         }
 
-        uint32_t current_frame = state->current_frame;
-        VkDevice device = state->device;
-        vkWaitForFences(device, 1, state->inflight_fence + current_frame,
+        uint32_t current_frame = state->engine.current_frame;
+        VkDevice device = state->engine.device;
+        vkWaitForFences(device, 1, state->engine.inflight_fence + current_frame,
                         VK_TRUE, UINT64_MAX);
 
         uint32_t image_index;
         VkResult res = vkAcquireNextImageKHR(
-            device, state->swapchain, UINT64_MAX,
-            state->image_available_semaphore[current_frame], VK_NULL_HANDLE,
-            &image_index);
+            device, state->engine.swapchain, UINT64_MAX,
+            state->engine.image_available_semaphore[current_frame],
+            VK_NULL_HANDLE, &image_index);
         if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR
-            || state->framebuffer_resized) {
-                state->framebuffer_resized = 0;
-                recreate_swapchain(state);
+            || state->engine.framebuffer_resized) {
+                state->engine.framebuffer_resized = 0;
+                recreate_swapchain(&state->engine);
 
-                updateControlPanelUniformObjects(&state->controlPanel,
-                                                 state->swapchain_extent);
+                updateControlPanelUniformObjects(
+                    &state->controlPanel, state->engine.swapchain_extent);
                 updateCanvasUniformObject(&state->canvas,
-                                          state->swapchain_extent);
+                                          state->engine.swapchain_extent);
 
                 return 1;
         } else if (res != VK_SUCCESS) {
@@ -417,11 +317,11 @@ static int draw_frame(glyph_state *state) {
 
         writeCanvasDataToImage(state, current_frame);
 
-        vkResetFences(device, 1, state->inflight_fence + current_frame);
+        vkResetFences(device, 1, state->engine.inflight_fence + current_frame);
 
-        vkResetCommandBuffer(state->command_buffer[current_frame], 0);
-        record_command_buffer(state, state->command_buffer[current_frame],
-                              image_index);
+        vkResetCommandBuffer(state->engine.command_buffer[current_frame], 0);
+        record_command_buffer(
+            state, state->engine.command_buffer[current_frame], image_index);
 
         VkPipelineStageFlags wait_stages[] = {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -430,38 +330,39 @@ static int draw_frame(glyph_state *state) {
                 .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                 .waitSemaphoreCount = 1,
                 .pWaitSemaphores
-                = state->image_available_semaphore + current_frame,
+                = state->engine.image_available_semaphore + current_frame,
                 .pWaitDstStageMask = wait_stages,
                 .commandBufferCount = 1,
-                .pCommandBuffers = state->command_buffer + current_frame,
+                .pCommandBuffers = state->engine.command_buffer + current_frame,
                 .signalSemaphoreCount = 1,
                 .pSignalSemaphores
-                = state->render_finished_semaphore + current_frame,
+                = state->engine.render_finished_semaphore + current_frame,
         };
 
-        res = vkQueueSubmit(state->graphics_queue, 1, &submit_info,
-                            state->inflight_fence[current_frame]);
+        res = vkQueueSubmit(state->engine.graphics_queue, 1, &submit_info,
+                            state->engine.inflight_fence[current_frame]);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to sumbit draw command buffer: %s\n",
                         string_VkResult(res));
                 return 0;
         }
 
-        VkSwapchainKHR swapchains[] = { state->swapchain };
+        VkSwapchainKHR swapchains[] = { state->engine.swapchain };
         VkPresentInfoKHR present_info = {
                 .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
                 .waitSemaphoreCount = 1,
                 .pWaitSemaphores
-                = state->render_finished_semaphore + current_frame,
+                = state->engine.render_finished_semaphore + current_frame,
                 .swapchainCount = 1,
                 .pSwapchains = swapchains,
                 .pImageIndices = &image_index,
                 .pResults = NULL,
         };
 
-        res = vkQueuePresentKHR(state->presentation_queue, &present_info);
+        res = vkQueuePresentKHR(state->engine.presentation_queue,
+                                &present_info);
         if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
-                recreate_swapchain(state);
+                recreate_swapchain(&state->engine);
         } else if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to present swap chain image: %s",
                         string_VkResult(res));
@@ -481,35 +382,35 @@ int main(int argc, char **argv) {
                 return 1;
         }
 
-        if (!init_window(&state)) {
+        if (!init_window(&state.engine, "Cross Stitch :)", 1000, 1000)) {
                 return 1;
         }
-        if (!create_instance(&state)) {
+        if (!create_instance(&state.engine)) {
                 return 1;
         }
         if (enable_validation_layers
-            && !setup_debug_messenger(state.instance)) {
+            && !setup_debug_messenger(state.engine.instance)) {
                 return 1;
         }
-        if (!create_surface(&state)) {
+        if (!create_surface(&state.engine)) {
                 return 1;
         }
-        if (!pick_physical_device(&state)) {
+        if (!pick_physical_device(&state.engine)) {
                 return 1;
         }
-        if (!create_logical_device(&state)) {
+        if (!create_logical_device(&state.engine)) {
                 return 1;
         }
-        if (!create_swapchain(&state)) {
+        if (!create_swapchain(&state.engine)) {
                 return 1;
         }
-        if (!create_image_views(&state)) {
+        if (!create_swapchain_image_views(&state.engine)) {
                 return 1;
         }
-        if (!create_render_pass(&state)) {
+        if (!create_render_pass(&state.engine)) {
                 return 1;
         }
-        if (!create_command_pool(&state)) {
+        if (!create_command_pool(&state.engine)) {
                 return 1;
         }
         if (!createCanvas(&state)) {
@@ -530,48 +431,49 @@ int main(int argc, char **argv) {
         if (!createCanvasGraphicsPipeline(&state)) {
                 return 1;
         }
-        if (!create_framebuffers(&state)) {
+        if (!create_swapchain_framebuffers(&state.engine)) {
                 return 1;
         }
         if (!create_vertex_buffer(&state)) {
                 return 1;
         }
-        if (!create_index_buffer(&state)) {
+        if (!create_index_buffer(&state.engine, &state.index_buffer,
+                                 &state.index_buffer_memory)) {
                 return 1;
         }
         if (!createControlPanel(&state)) {
                 return 1;
         }
-        if (!create_command_buffer(&state)) {
+        if (!create_command_buffer(&state.engine)) {
                 return 1;
         }
-        if (!create_sync_objects(&state)) {
+        if (!create_sync_objects(&state.engine)) {
                 return 1;
         }
 
         initActionHistory(&state.canvas);
-        while (!glfwWindowShouldClose(state.window)) {
+        while (!glfwWindowShouldClose(state.engine.window)) {
                 processInput(&state);
                 draw_frame(&state);
 
                 glfwPollEvents();
         }
-        VkDevice device = state.device;
+        VkDevice device = state.engine.device;
         vkDeviceWaitIdle(device);
 
         if (enable_validation_layers) {
-                destroy_debug_utils_messenger_ext(state.instance,
+                destroy_debug_utils_messenger_ext(state.engine.instance,
                                                   debug_messenger, NULL);
         }
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-                vkDestroySemaphore(device, state.image_available_semaphore[i],
-                                   NULL);
-                vkDestroySemaphore(device, state.render_finished_semaphore[i],
-                                   NULL);
-                vkDestroyFence(device, state.inflight_fence[i], NULL);
+                vkDestroySemaphore(
+                    device, state.engine.image_available_semaphore[i], NULL);
+                vkDestroySemaphore(
+                    device, state.engine.render_finished_semaphore[i], NULL);
+                vkDestroyFence(device, state.engine.inflight_fence[i], NULL);
         }
-        vkDestroyCommandPool(device, state.command_pool, NULL);
-        cleanup_swapchain(&state);
+        vkDestroyCommandPool(device, state.engine.command_pool, NULL);
+        cleanup_swapchain(&state.engine);
 
         vkDestroyBuffer(device, state.canvas.vertexBuffer, NULL);
         vkFreeMemory(device, state.canvas.vertexBufferMemory, NULL);
@@ -587,19 +489,19 @@ int main(int argc, char **argv) {
         cleanupActionHistory();
         destroyCanvas(&state);
         destroyControlPanel(&state);
-        destroyQuadVertexBuffer(&state);
+        destroyQuadVertexBuffer(&state.engine);
 
         vkDestroyDescriptorPool(device, state.canvas.descriptorPool, NULL);
         vkDestroyDescriptorSetLayout(device, state.canvas.descriptorSetLayout,
                                      NULL);
         vkDestroyPipeline(device, state.canvas.pipeline, NULL);
         vkDestroyPipelineLayout(device, state.canvas.pipelineLayout, NULL);
-        vkDestroyRenderPass(device, state.render_pass, NULL);
+        vkDestroyRenderPass(device, state.engine.render_pass, NULL);
 
         vkDestroyDevice(device, NULL);
-        vkDestroySurfaceKHR(state.instance, state.surface, NULL);
-        vkDestroyInstance(state.instance, NULL);
-        glfwDestroyWindow(state.window);
+        vkDestroySurfaceKHR(state.engine.instance, state.engine.surface, NULL);
+        vkDestroyInstance(state.engine.instance, NULL);
+        glfwDestroyWindow(state.engine.window);
 
         glfwTerminate();
         return 0;
