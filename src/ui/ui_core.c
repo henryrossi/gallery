@@ -55,7 +55,7 @@ static UIElement *ui_element_list_pop_last(UIElementList *list) {
         return res;
 }
 
-static String8 ui_find_hash_from_string(String8 str) {
+static String8 ui_find_hash_within_string(String8 str) {
         String8 res = str;
         u64 hashSignifierPos = string8_find_substr(str, string8_lit("##"));
         if (hashSignifierPos < str.length) {
@@ -64,7 +64,7 @@ static String8 ui_find_hash_from_string(String8 str) {
         return res;
 }
 
-static String8 ui_find_text_from_string(String8 str) {
+static String8 ui_find_text_within_string(String8 str) {
         String8 res = str;
         u64 hashSignifierPos = string8_find_substr(str, string8_lit("##"));
         if (hashSignifierPos < str.length) {
@@ -98,8 +98,8 @@ static void setup_ui_state() {
         uiState.root = root;
 }
 
-static void ui_push_parent(UIElement *element) {
-        uiState.stack[uiState.stackTop] = element;
+static void ui_push_parent(UIElement *e) {
+        uiState.stack[uiState.stackTop] = e;
         uiState.stackTop++;
 }
 
@@ -110,10 +110,12 @@ static UIElement *ui_get_top_parent(void) {
         return uiState.stack[uiState.stackTop - 1];
 }
 
-static void ui_pop_parent(void) {
+static UIElement *ui_pop_parent(void) {
+        UIElement *res = NULL;
         if (uiState.stackTop > 0) {
-                uiState.stackTop--;
+                res = uiState.stack[--uiState.stackTop];
         }
+        return res;
 }
 
 static UIElement *ui_cache_lookup(u64 key) {

@@ -23,18 +23,17 @@ static void print_string8(String8 string) {
 }
 
 static String8 string8_skip(String8 str, u64 pos) {
-        String8 res = {
-                .data = str.data + pos,
-                .length = str.length - pos,
-        };
-        return res;
+        if (pos < str.length) {
+                str.data += pos;
+                str.length -= pos,
+        }
+        return str;
 }
 
 static String8 string8_prune(String8 str, u64 pos) {
-        String8 res = {
-                .data = str.data,
-                .length = pos,
-        };
+        if (pos < str.length) {
+                str.length = pos;
+        }
         return res;
 }
 
@@ -45,7 +44,7 @@ static String8 string8_concat(Arena *arena, String8 str1, String8 str2) {
         return res;
 }
 
-static bool string8_compare_leading(String8 str1, String8 str2) {
+static b32 string8_compare_leading(String8 str1, String8 str2) {
         u64 len = (str1.length > str2.length) ? str2.length : str1.length;
         if (len < 1) {
                 return false;
@@ -56,7 +55,6 @@ static bool string8_compare_leading(String8 str1, String8 str2) {
                         return false;
                 }
         }
-
         return true;
 }
 

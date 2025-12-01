@@ -21,6 +21,18 @@ typedef struct {
         f32 strictness;
 } SemanticSize;
 
+typedef enum { 
+        UI_ELEMENTFLAG_Clickable = (1<<0),
+        UI_ELEMENTFLAG_ViewScroll = (1<<1),
+        UI_ELEMENTFLAG_DrawText = (1<<2),
+        UI_ELEMENTFLAG_DrawBorder = (1<<3),
+        UI_ELEMENTFLAG_DrawBackground = (1<<4),
+        UI_ELEMENTFLAG_DrawDropShadow = (1<<5),
+        UI_ELEMENTFLAG_Clip = (1<<6),
+        UI_ELEMENTFLAG_HotAnimation = (1<<7),
+        UI_ELEMENTFLAG_ActiveAnimation = (1<<8),
+} UI_ELEMENTFLAGS;
+
 typedef struct UIElement UIElement;
 struct UIElement {
         UIElement *parent;
@@ -41,6 +53,7 @@ struct UIElement {
 
         Axis2D layoutDirection;        
 
+        UI_ELEMENTFLAGS flags;
         String8 text;
         Vec4 backgroundColor;
         Vec4 textColor;
@@ -108,5 +121,21 @@ typedef struct {
         u64 bucketCount;
         UIElement **buckets;
 } UIState;
+
+
+static u64 ui_key_from_string(String8 string);
+static b32 ui_key_match(u64 a, u64 b);
+
+static UIElement *ui_make_element(UI_ELEMENTFLAGS flags, String8 str);
+static UIElement *ui_make_elementf(UI_ELEMENTFLAGS flags, char *fmt, ...);
+
+static void ui_element_add_display_string(UIElement *e, String8 str);
+static void ui_element_add_child_layout_axis(UIElement *e, AXIS2D axis);
+
+static void ui_push_parent(UIElement *e);
+static UIElement *ui_get_top_parent(void);
+static UIElement *ui_pop_parent(void);
+
+static UISignal ui_signal_from_element(UIElement *e);
 
 #endif // UI_CORE_H
