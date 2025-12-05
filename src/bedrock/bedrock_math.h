@@ -2,31 +2,35 @@
 #define BEDROCK_MATRIX_H
 
 typedef struct {
-	float x;
-	float y;
+	f32 x;
+	f32 y;
 } Vec2;
 
 typedef struct {
-	float x;
-	float y;
-	float z;
+	f32 x;
+	f32 y;
+	f32 z;
 } Vec3;
 
 typedef struct {
-	float x;
-	float y;
-	float z;
-	float w;
+	f32 x;
+	f32 y;
+	f32 z;
+	f32 w;
 } Vec4;
 
 typedef struct {
-	float m[4][4];
+	f32 m[4][4];
 } Mat4;
 
 typedef struct {
 	Vec2 pos;
 	Vec2 extent;
 } Rect2D;
+
+static Vec2 vec2(f32 x, f32 y);
+static Vec3 vec3(f32 x, f32 y, f32 z);
+static Vec4 vec4(f32 x, f32 y, f32 z, f32 w);
 
 static void multMat4xMat4(Mat4 *a, Mat4 *b, Mat4 *product);
 static void multMat4xVec4(Mat4 *a, Vec4 *b, Vec4 *product);

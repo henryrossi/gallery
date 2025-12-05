@@ -1,3 +1,19 @@
+
+static Vec2 vec2(f32 x, f32 y) {
+        Vec2 res = { x, y };
+        return res;
+}
+
+static Vec3 vec3(f32 x, f32 y, f32 z) {
+        Vec3 res = { x, y, z };
+        return res;
+}
+
+static Vec4 vec4(f32 x, f32 y, f32 z, f32 w) {
+        Vec4 res = { x, y, z, w };
+        return res;
+}
+
 static void multMat4xMat4(Mat4 *a, Mat4 *b, Mat4 *product) {
 
         for (int n = 0; n < 4; n++) {

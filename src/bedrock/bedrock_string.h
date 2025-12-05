@@ -18,7 +18,7 @@ static String8 string8_prune(String8 str, u64 pos);
 
 static String8 string8_concat(Arena *arena, String8 str1, String8 str2);
 
-static u64 string8_find_substring(String8 str, String8 substr);
+static u64 string8_find_substr(String8 str, String8 substr);
 
 static u64 string8_hashkey_from_seed(u64 seed, String8 str);
 static u64 string8_hashkey(String8 str);

@@ -23,10 +23,11 @@ static void print_string8(String8 string) {
 }
 
 static String8 string8_skip(String8 str, u64 pos) {
-        if (pos < str.length) {
-                str.data += pos;
-                str.length -= pos,
+        if (pos > str.length) {
+                pos = str.length;
         }
+        str.data += pos;
+        str.length -= pos;
         return str;
 }
 
@@ -34,7 +35,7 @@ static String8 string8_prune(String8 str, u64 pos) {
         if (pos < str.length) {
                 str.length = pos;
         }
-        return res;
+        return str;
 }
 
 static String8 string8_concat(Arena *arena, String8 str1, String8 str2) {
@@ -47,15 +48,15 @@ static String8 string8_concat(Arena *arena, String8 str1, String8 str2) {
 static b32 string8_compare_leading(String8 str1, String8 str2) {
         u64 len = (str1.length > str2.length) ? str2.length : str1.length;
         if (len < 1) {
-                return false;
+                return 0;
         }
 
         for (u64 i = 0; i < len; i++) {
                 if (str1.data[i] != str2.data[i]) {
-                        return false;
+                        return 0;
                 }
         }
-        return true;
+        return 1;
 }
 
 static u64 string8_find_substr(String8 str, String8 substr) {

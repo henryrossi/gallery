@@ -1,11 +1,55 @@
-#ifndef XXH_IMPLEMENTATION
-#define XXH_IMPLEMENTATION
-#include "thirdparty/xxHash/xxh3.h"
-#endif
+
+__thread UIState ui_state;
+
+#define SLLStackPop_N(head, next) ((head) = (head)->next)
+#define SLLStackPush_N(head, node, next)                                       \
+        ((node)->next = (head), (head) = (node))
+
+#define SLLStackPop(head) SSLStackPop_N(head, next)
+#define SLLStackPush(head, node) SSLStackPush_N(head, node, next)
+
+#define UIStackPopImpl(state, nameUpper, nameLower)                            \
+        UI##nameUpper##Node *node = state.nameLower##Stack.top;                \
+        if (node != &state.nameLower##StackBottom) {                           \
+                SLLStackPop(state.nameLower##Stack.top);                       \
+                SLLStackPush(state.nameLower##Stack.free, node);               \
+        }                                                                      \
+        return node->v;
+
+#define UIStackTopImpl(state, nameUpper, nameLower)                            \
+        return state.nameLower##Stack.top->v;
+
+#define UIStackPushImpl(state, nameUpper, nameLower, value)                    \
+        UI##nameUpper##Node *node = state.nameLower##Stack.free;               \
+        if (node != NULL) {                                                    \
+                SLLStackPop(state.nameLower##Stack.free);                      \
+        } else {                                                               \
+                node = arena_alloc(ui_build_arena(),                           \
+                                   sizeof(UI##nameUpper##Node));               \
+        }                                                                      \
+        node->v = value;                                                       \
+        SLLStackPush(state.nameLower##Stack.top, node);
+
+static void ui_push_text_color(Vec4 v) {
+        UIStackPushImpl(ui_state, TextColor, textColor, v)
+}
+
+static Vec4 ui_top_text_color(void) {
+        UIStackTopImpl(ui_state, TextColor, textColor)
+}
+
+static Vec4 ui_pop_text_color(void) {
+        UIStackPopImpl(ui_state, TextColor, textColor)
+}
 
 // hr: temp function
 static Vec2 get_screen_size(void) {
         Vec2 res = { .x = 1000.0f, .y = 800.0f };
+        return res;
+}
+
+static Arena *ui_build_arena(void) {
+        Arena *res = &ui_state.arena;
         return res;
 }
 
@@ -73,54 +117,74 @@ static String8 ui_find_text_within_string(String8 str) {
         return res;
 }
 
-static UIState uiState;
+static SemanticSize semanticSize(UI_SIZEKIND kind, f32 value, f32 strictness) {
+        SemanticSize res = {
+                .kind = kind,
+                .value = value,
+                .strictness = strictness,
+        };
+        return res;
+}
 
 static void setup_ui_state() {
-        uiState.arena = make_arena(0xF0000);
+        ui_state.arena = make_arena(0xF0000);
         u64 elementSize = sizeof(UIElement *);
 
-        uiState.stackCount = 20;
-        uiState.stack
-            = arena_alloc(&uiState.arena, elementSize * uiState.stackCount);
+        ui_state.stackCount = 20;
+        ui_state.stack
+            = arena_alloc(&ui_state.arena, elementSize * ui_state.stackCount);
 
-        uiState.bucketCount = 0xF00;
-        uiState.buckets
-            = arena_alloc(&uiState.arena, elementSize * uiState.bucketCount);
+        ui_state.bucketCount = 0xF00;
+        ui_state.buckets
+            = arena_alloc(&ui_state.arena, elementSize * ui_state.bucketCount);
 
-        UIElement *root = arena_alloc(&uiState.arena, sizeof(UIElement));
+        UIElement *root = arena_alloc(&ui_state.arena, sizeof(UIElement));
         root->parent = NULL;
         root->next = NULL;
         root->prev = NULL;
         root->firstChild = NULL;
         root->lastChild = NULL;
-        root->layoutDirection = AXIS2D_Y;
+        root->layoutDirection = UI_AXIS2D_Y;
 
-        uiState.root = root;
+        ui_state.root = root;
+
+        ui_state.textColorStackBottom.v = vec4(1, 1, 1, 1);
+        ui_state.backgroundColorStackBottom.v = vec4(1, 1, 1, 1);
+        ui_state.widthStackBottom.v
+            = semanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
+        ui_state.heightStackBottom.v
+            = semanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
+
+        ui_state.textColorStack.top = &ui_state.textColorStackBottom;
+        ui_state.backgroundColorStack.top
+            = &ui_state.backgroundColorStackBottom;
+        ui_state.widthStack.top = &ui_state.widthStackBottom;
+        ui_state.heightStack.top = &ui_state.heightStackBottom;
 }
 
 static void ui_push_parent(UIElement *e) {
-        uiState.stack[uiState.stackTop] = e;
-        uiState.stackTop++;
+        ui_state.stack[ui_state.stackTop] = e;
+        ui_state.stackTop++;
 }
 
 static UIElement *ui_get_top_parent(void) {
-        if (uiState.stackTop == 0) {
-                return uiState.root;
+        if (ui_state.stackTop == 0) {
+                return ui_state.root;
         }
-        return uiState.stack[uiState.stackTop - 1];
+        return ui_state.stack[ui_state.stackTop - 1];
 }
 
 static UIElement *ui_pop_parent(void) {
         UIElement *res = NULL;
-        if (uiState.stackTop > 0) {
-                res = uiState.stack[--uiState.stackTop];
+        if (ui_state.stackTop > 0) {
+                res = ui_state.stack[--ui_state.stackTop];
         }
         return res;
 }
 
 static UIElement *ui_cache_lookup(u64 key) {
-        u64 index = key % uiState.bucketCount;
-        UIElement *res = uiState.buckets[index];
+        u64 index = key % ui_state.bucketCount;
+        UIElement *res = ui_state.buckets[index];
         while (res && res->key != key) {
                 res = res->hashNext;
         }
@@ -128,10 +192,10 @@ static UIElement *ui_cache_lookup(u64 key) {
 }
 
 static void ui_cache_add(UIElement *element) {
-        u64 index = element->key % uiState.bucketCount;
-        UIElement *existing = uiState.buckets[index];
+        u64 index = element->key % ui_state.bucketCount;
+        UIElement *existing = ui_state.buckets[index];
         if (existing == NULL) {
-                uiState.buckets[index] = element;
+                ui_state.buckets[index] = element;
         } else {
                 while (existing->hashNext) {
                         existing = existing->hashNext;
@@ -142,12 +206,12 @@ static void ui_cache_add(UIElement *element) {
 }
 
 static void ui_cache_prune(u64 frame) {
-        for (u64 i = 0; i < uiState.bucketCount; i++) {
-                UIElement *e = uiState.buckets[i];
+        for (u64 i = 0; i < ui_state.bucketCount; i++) {
+                UIElement *e = ui_state.buckets[i];
                 while (e) {
                         if (e->lastFrameTouched < frame) {
                                 if (e->hashPrev == NULL) {
-                                        uiState.buckets[i] = e->hashNext;
+                                        ui_state.buckets[i] = e->hashNext;
                                 } else {
                                         e->hashPrev->hashNext = e->hashNext;
                                 }
@@ -164,11 +228,16 @@ static void ui_cache_prune(u64 frame) {
         }
 }
 
-static UIElement *ui_build_element_from_key(u64 key) {
+static b32 ui_key_match(u64 a, u64 b) {
+        b32 res = a == b;
+        return res;
+}
+
+static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         UIElement *res = ui_cache_lookup(key);
 
         if (res == NULL) {
-                res = arena_alloc(&uiState.arena, sizeof(UIElement));
+                res = arena_alloc(&ui_state.arena, sizeof(UIElement));
                 res->key = key;
         }
 
@@ -188,18 +257,27 @@ static UIElement *ui_build_element_from_key(u64 key) {
         }
         parent->lastChild = res;
 
+        res->flags = flags;
         return res;
 }
 
-static UIElement *ui_build_element_from_string(String8 str) {
-        String8 hashStr = ui_find_hash_from_string(str);
+static UIElement *ui_build_element_from_string(UI_ELEMENTFLAGS flags,
+                                               String8 str) {
+        String8 hashStr = ui_find_hash_within_string(str);
         u64 key = string8_hashkey(hashStr);
-        UIElement *res = ui_build_element_from_key(key);
-        res->text = ui_find_text_from_string(str);
+        UIElement *res = ui_build_element_from_key(flags, key);
+        res->text = ui_find_text_within_string(str);
         return res;
 }
 
-static void ui_autolayout_calc_preorder(UIElement *e, Axis2D axis) {
+static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
+                                                char *fmt, ...) {
+        return NULL;
+}
+
+/* UI autolayout algorithm functions */
+
+static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
         SemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
         f32 parentSize = 0.0f;
@@ -212,34 +290,34 @@ static void ui_autolayout_calc_preorder(UIElement *e, Axis2D axis) {
                 // hr: TODO
                 break;
         case UI_SIZEKIND_PercentOfParent:
-                parentSize = (axis == AXIS2D_X) ? e->parent->computedSize.x
-                                                : e->parent->computedSize.y;
+                parentSize = (axis == UI_AXIS2D_X) ? e->parent->computedSize.x
+                                                   : e->parent->computedSize.y;
                 computedSize = parentSize * size.value / 100.0f;
                 break;
         default:
                 return;
         }
 
-        if (axis == AXIS2D_X) {
+        if (axis == UI_AXIS2D_X) {
                 e->computedSize.x = computedSize;
         } else {
                 e->computedSize.y = computedSize;
         }
 }
 
-static void ui_autolayout_calc_postorder(UIElement *e, Axis2D axis) {
+static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
         SemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
 
         if (size.kind == UI_SIZEKIND_SumOfChildren) {
                 for (UIElement *child = e->firstChild; child;
                      child = child->next) {
-                        computedSize += (axis == AXIS2D_X)
+                        computedSize += (axis == UI_AXIS2D_X)
                                             ? child->computedSize.x
                                             : child->computedSize.y;
                 }
 
-                if (axis == AXIS2D_X) {
+                if (axis == UI_AXIS2D_X) {
                         e->computedSize.x = computedSize;
                 } else {
                         e->computedSize.y = computedSize;
@@ -256,18 +334,18 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
                 ui_autolayout_rec_postorder(child);
         }
 
-        ui_autolayout_calc_postorder(e, AXIS2D_X);
-        ui_autolayout_calc_postorder(e, AXIS2D_Y);
+        ui_autolayout_calc_postorder(e, UI_AXIS2D_X);
+        ui_autolayout_calc_postorder(e, UI_AXIS2D_Y);
 }
 
 static void ui_element_autolayout(void) {
         Arena scratch = make_arena(OS_PAGESIZE);
         Vec2 screenExtent = get_screen_size();
-        UIElement *root = uiState.root;
-        root->size[AXIS2D_X].kind = UI_SIZEKIND_Pixels;
-        root->size[AXIS2D_X].value = screenExtent.x;
-        root->size[AXIS2D_Y].kind = UI_SIZEKIND_Pixels;
-        root->size[AXIS2D_Y].value = screenExtent.y;
+        UIElement *root = ui_state.root;
+        root->size[UI_AXIS2D_X].kind = UI_SIZEKIND_Pixels;
+        root->size[UI_AXIS2D_X].value = screenExtent.x;
+        root->size[UI_AXIS2D_Y].kind = UI_SIZEKIND_Pixels;
+        root->size[UI_AXIS2D_Y].value = screenExtent.y;
 
         UIElementList queue = { 0 };
         ui_element_list_append(&scratch, &queue, root);
@@ -275,8 +353,8 @@ static void ui_element_autolayout(void) {
                 UIElement *e = ui_element_list_pop_first(&queue);
                 UIElement *child = e->firstChild;
 
-                ui_autolayout_calc_preorder(e, AXIS2D_X);
-                ui_autolayout_calc_preorder(e, AXIS2D_Y);
+                ui_autolayout_calc_preorder(e, UI_AXIS2D_X);
+                ui_autolayout_calc_preorder(e, UI_AXIS2D_Y);
 
                 while (child) {
                         ui_element_list_append(&scratch, &queue, child);
@@ -306,7 +384,7 @@ static void ui_element_autolayout(void) {
                                 continue;
                         }
                         UIElement *prev = child->prev;
-                        if (root->layoutDirection == AXIS2D_X) {
+                        if (root->layoutDirection == UI_AXIS2D_X) {
                                 child->relPosition.x = prev->relPosition.x
                                                        + prev->computedSize.x;
                         } else {
@@ -315,4 +393,17 @@ static void ui_element_autolayout(void) {
                         }
                 }
         }
+}
+
+static void ui_element_add_display_string(UIElement *e, String8 str) {
+        e->text = str;
+}
+
+static void ui_element_add_child_layout_axis(UIElement *e, UI_AXIS2D axis) {
+        e->layoutDirection = axis;
+}
+
+static UISignal ui_signal_from_element(UIElement *e) {
+        UISignal sig = { .element = e };
+        return sig;
 }
