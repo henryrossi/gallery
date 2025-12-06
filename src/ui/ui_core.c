@@ -1,3 +1,4 @@
+#include "ui/generated/ui.c"
 
 __thread UIState ui_state;
 
@@ -5,8 +6,8 @@ __thread UIState ui_state;
 #define SLLStackPush_N(head, node, next)                                       \
         ((node)->next = (head), (head) = (node))
 
-#define SLLStackPop(head) SSLStackPop_N(head, next)
-#define SLLStackPush(head, node) SSLStackPush_N(head, node, next)
+#define SLLStackPop(head) SLLStackPop_N(head, next)
+#define SLLStackPush(head, node) SLLStackPush_N(head, node, next)
 
 #define UIStackPopImpl(state, nameUpper, nameLower)                            \
         UI##nameUpper##Node *node = state.nameLower##Stack.top;                \
@@ -30,23 +31,16 @@ __thread UIState ui_state;
         node->v = value;                                                       \
         SLLStackPush(state.nameLower##Stack.top, node);
 
-static void ui_push_text_color(Vec4 v) {
-        UIStackPushImpl(ui_state, TextColor, textColor, v)
-}
+// clang-format off
 
-static Vec4 ui_top_text_color(void) {
-        UIStackTopImpl(ui_state, TextColor, textColor)
-}
-
-static Vec4 ui_pop_text_color(void) {
-        UIStackPopImpl(ui_state, TextColor, textColor)
-}
+UIStackFuncImpl()
 
 // hr: temp function
 static Vec2 get_screen_size(void) {
         Vec2 res = { .x = 1000.0f, .y = 800.0f };
         return res;
 }
+// clang-format on
 
 static Arena *ui_build_arena(void) {
         Arena *res = &ui_state.arena;
@@ -130,10 +124,6 @@ static void setup_ui_state() {
         ui_state.arena = make_arena(0xF0000);
         u64 elementSize = sizeof(UIElement *);
 
-        ui_state.stackCount = 20;
-        ui_state.stack
-            = arena_alloc(&ui_state.arena, elementSize * ui_state.stackCount);
-
         ui_state.bucketCount = 0xF00;
         ui_state.buckets
             = arena_alloc(&ui_state.arena, elementSize * ui_state.bucketCount);
@@ -148,6 +138,7 @@ static void setup_ui_state() {
 
         ui_state.root = root;
 
+        ui_state.parentStackBottom.v = root;
         ui_state.textColorStackBottom.v = vec4(1, 1, 1, 1);
         ui_state.backgroundColorStackBottom.v = vec4(1, 1, 1, 1);
         ui_state.widthStackBottom.v
@@ -155,31 +146,12 @@ static void setup_ui_state() {
         ui_state.heightStackBottom.v
             = semanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
 
+        ui_state.parentStack.top = &ui_state.parentStackBottom;
         ui_state.textColorStack.top = &ui_state.textColorStackBottom;
         ui_state.backgroundColorStack.top
             = &ui_state.backgroundColorStackBottom;
         ui_state.widthStack.top = &ui_state.widthStackBottom;
         ui_state.heightStack.top = &ui_state.heightStackBottom;
-}
-
-static void ui_push_parent(UIElement *e) {
-        ui_state.stack[ui_state.stackTop] = e;
-        ui_state.stackTop++;
-}
-
-static UIElement *ui_get_top_parent(void) {
-        if (ui_state.stackTop == 0) {
-                return ui_state.root;
-        }
-        return ui_state.stack[ui_state.stackTop - 1];
-}
-
-static UIElement *ui_pop_parent(void) {
-        UIElement *res = NULL;
-        if (ui_state.stackTop > 0) {
-                res = ui_state.stack[--ui_state.stackTop];
-        }
-        return res;
 }
 
 static UIElement *ui_cache_lookup(u64 key) {
@@ -241,7 +213,7 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
                 res->key = key;
         }
 
-        UIElement *parent = ui_get_top_parent();
+        UIElement *parent = ui_top_parent();
 
         res->parent = parent;
         res->next = NULL;

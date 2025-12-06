@@ -1,6 +1,8 @@
 #ifndef UI_CORE_H
 #define UI_CORE_H
 
+#include "generated/ui.h"
+
 typedef enum {
         UI_AXIS2D_X,
         UI_AXIS2D_Y,
@@ -108,36 +110,10 @@ typedef struct {
         UIInputFlags flags;
 } UISignal;
 
-typedef struct UITextColorNode UITextColorNode;
-struct UITextColorNode {
-        UITextColorNode *next;
-        Vec4 v;
-};
-
-typedef struct UIBackgroundColorNode UIBackgroundColorNode;
-struct UIBackgroundColorNode {
-        UIBackgroundColorNode *next;
-        Vec4 v;
-};
-
-typedef struct UIWidthNode UIWidthNode;
-struct UIWidthNode {
-        UIWidthNode *next;
-        SemanticSize v;
-};
-
-typedef struct UIHeightNode UIHeightNode;
-struct UIHeightNode {
-        UIHeightNode *next;
-        SemanticSize v;
-};
+UIStackNodesDecl
 
 typedef struct {
         Arena arena;
-
-        u32 stackTop;
-        u32 stackCount;
-        UIElement **stack;
 
         UIElement *root;
         u32 numElements;
@@ -145,27 +121,7 @@ typedef struct {
         u64 bucketCount;
         UIElement **buckets;
 
-        UITextColorNode textColorStackBottom;
-        UIBackgroundColorNode backgroundColorStackBottom;
-        UIWidthNode widthStackBottom;
-        UIHeightNode heightStackBottom;
-
-        struct {
-                UITextColorNode *top;
-                UITextColorNode *free;
-        } textColorStack;
-        struct {
-                UIBackgroundColorNode *top;
-                UIBackgroundColorNode *free;
-        } backgroundColorStack;
-        struct {
-                UIWidthNode *top;
-                UIWidthNode *free;
-        } widthStack;
-        struct {
-                UIHeightNode *top;
-                UIHeightNode *free;
-        } heightStack;
+        UIStacksDecl
 } UIState;
 
 static Arena *ui_build_arena(void);
@@ -183,35 +139,36 @@ static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
 static void ui_element_add_display_string(UIElement *e, String8 str);
 static void ui_element_add_child_layout_axis(UIElement *e, UI_AXIS2D axis);
 
-static void ui_push_parent(UIElement *e);
-static UIElement *ui_get_top_parent(void);
-static UIElement *ui_pop_parent(void);
-
 static UISignal ui_signal_from_element(UIElement *e);
 
 #define ui_stack_scope(begin, end)                                             \
         for (int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
 
-static void ui_push_text_color(Vec4 color);
+static void ui_push_parent(UIElement *v);
+static UIElement *ui_top_parent(void);
+static UIElement *ui_pop_parent(void);
+
+static void ui_push_text_color(Vec4 v);
 static Vec4 ui_get_top_text_color(void);
 static Vec4 ui_pop_text_color(void);
-#define ui_text_color(v)                                                       \
-        ui_stack_scope(ui_push_text_color(v), ui_pop_text_color())
 
-static void ui_push_background_color(Vec4 color);
+static void ui_push_background_color(Vec4 v);
 static Vec4 ui_get_top_background_color(void);
 static Vec4 ui_pop_background_color(void);
-#define ui_background_color(v)                                                 \
-        ui_stack_scope(ui_push_background_color(v), ui_pop_background_color())
 
-static void ui_push_width(SemanticSize size);
+static void ui_push_width(SemanticSize v);
 static SemanticSize ui_get_top_width(void);
 static SemanticSize ui_pop_width(void);
-#define ui_width(s) ui_stack_scope(ui_push_width(s), ui_pop_width())
 
-static void ui_push_height(SemanticSize size);
+static void ui_push_height(SemanticSize v);
 static SemanticSize ui_get_top_height(void);
 static SemanticSize ui_pop_height(void);
-#define ui_height(s) ui_stack_scope(ui_push_height(s), ui_pop_height())
+
+#define ui_text_color(v)                                                       \
+        ui_stack_scope(ui_push_text_color(v), ui_pop_text_color())
+#define ui_background_color(v)                                                 \
+        ui_stack_scope(ui_push_background_color(v), ui_pop_background_color())
+#define ui_width(v) ui_stack_scope(ui_push_width(v), ui_pop_width())
+#define ui_height(v) ui_stack_scope(ui_push_height(v), ui_pop_height())
 
 #endif // UI_CORE_H
