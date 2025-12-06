@@ -114,6 +114,7 @@ UIStackNodesDecl
 
 typedef struct {
         Arena arena;
+        Arena strArena;
 
         UIElement *root;
         u32 numElements;
@@ -135,6 +136,8 @@ static UIElement *ui_build_element_from_string(UI_ELEMENTFLAGS flags,
                                                String8 str);
 static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
                                                 char *fmt, ...);
+static UIElement *ui_build_element_from_stringfv(UI_ELEMENTFLAGS flags,
+                                                 char *fmt, va_list args);
 
 static void ui_element_add_display_string(UIElement *e, String8 str);
 static void ui_element_add_child_layout_axis(UIElement *e, UI_AXIS2D axis);

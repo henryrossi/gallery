@@ -9,6 +9,24 @@ static String8 string8_allocate(Arena *arena, u64 length) {
         return str;
 }
 
+static String8 string8fv(Arena *arena, char *fmt, va_list args) {
+        va_list args2;
+        va_copy(args2, args);
+        u32 bytesNeeded = stbsp_vsnprintf(0, 0, fmt, args) + 1;
+        String8 str = string8_allocate(arena, bytesNeeded);
+        str.length = stbsp_vsnprintf((char *)str.data, bytesNeeded, fmt, args);
+        va_end(args2);
+        return str;
+}
+
+static String8 string8f(Arena *arena, char *fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        String8 res = string8fv(arena, fmt, args);
+        va_end(args);
+        return res;
+}
+
 static u8 string8_at(String8 string, u64 index) {
         if (index < string.length) {
                 return string.data[index];

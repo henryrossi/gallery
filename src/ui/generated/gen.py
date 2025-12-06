@@ -12,7 +12,7 @@ ui_attrs = [
     UiAttr("textColor", "text_color", "Vec4"),
     UiAttr("backgroundColor", "background_color", "Vec4"),
     UiAttr("width", "width", "SemanticSize"),
-    UiAttr("height", "heigth", "SemanticSize"),
+    UiAttr("height", "height", "SemanticSize"),
 ]
 
 with open("ui.h", "w+") as f:

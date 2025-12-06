@@ -11,7 +11,7 @@ static Vec4 ui_pop_background_color(void) { UIStackPopImpl(ui_state, BackgroundC
 static void ui_push_width(SemanticSize v) { UIStackPushImpl(ui_state, Width, width, v)}\
 static SemanticSize ui_top_width(void) { UIStackTopImpl(ui_state, Width, width)}\
 static SemanticSize ui_pop_width(void) { UIStackPopImpl(ui_state, Width, width)}\
-static void ui_push_heigth(SemanticSize v) { UIStackPushImpl(ui_state, Height, height, v)}\
-static SemanticSize ui_top_heigth(void) { UIStackTopImpl(ui_state, Height, height)}\
-static SemanticSize ui_pop_heigth(void) { UIStackPopImpl(ui_state, Height, height)}\
+static void ui_push_height(SemanticSize v) { UIStackPushImpl(ui_state, Height, height, v)}\
+static SemanticSize ui_top_height(void) { UIStackTopImpl(ui_state, Height, height)}\
+static SemanticSize ui_pop_height(void) { UIStackPopImpl(ui_state, Height, height)}\
 

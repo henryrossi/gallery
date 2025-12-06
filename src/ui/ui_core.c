@@ -122,6 +122,8 @@ static SemanticSize semanticSize(UI_SIZEKIND kind, f32 value, f32 strictness) {
 
 static void setup_ui_state() {
         ui_state.arena = make_arena(0xF0000);
+        ui_state.strArena = make_arena(0xF0000);
+
         u64 elementSize = sizeof(UIElement *);
 
         ui_state.bucketCount = 0xF00;
@@ -230,6 +232,8 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         parent->lastChild = res;
 
         res->flags = flags;
+        res->size[UI_AXIS2D_X] = ui_top_width();
+        res->size[UI_AXIS2D_Y] = ui_top_height();
         return res;
 }
 
@@ -244,7 +248,19 @@ static UIElement *ui_build_element_from_string(UI_ELEMENTFLAGS flags,
 
 static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
                                                 char *fmt, ...) {
-        return NULL;
+        va_list args;
+        va_start(args, fmt);
+        String8 str = string8fv(&ui_state.strArena, fmt, args);
+        UIElement *res = ui_build_element_from_string(flags, str);
+        va_end(args);
+        return res;
+}
+
+static UIElement *ui_build_element_from_stringfv(UI_ELEMENTFLAGS flags,
+                                                 char *fmt, va_list args) {
+        String8 str = string8fv(&ui_state.strArena, fmt, args);
+        UIElement *res = ui_build_element_from_string(flags, str);
+        return res;
 }
 
 /* UI autolayout algorithm functions */
