@@ -11,4 +11,4 @@ export VK_ICD_FILENAMES
 VK_LAYER_PATH="$VULKAN_SDK/share/vulkan/explicit_layer.d"
 export VK_LAYER_PATH
 
-./glyph $1 $2 $3 $4
+./$1 $2 $3 $4 $5
