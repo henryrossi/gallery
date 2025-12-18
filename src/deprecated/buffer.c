@@ -26,6 +26,16 @@ int64_t findMemoryType(VkPhysicalDevice phyDevice, uint32_t typeFilter,
         return -1;
 }
 
+typedef struct {
+        VkDevice device;
+        VkPhysicalDevice physical_device;
+        VkDeviceSize size;
+        VkBufferUsageFlags usage;
+        VkMemoryPropertyFlags props;
+        VkBuffer *buffer;
+        VkDeviceMemory *memory;
+} BufferCreateInfo;
+
 // Create a buffer. Returns 1 on success, 0 on failure.
 static int createBuffer(BufferCreateInfo *createInfo) {
         VkBuffer *pBuffer = createInfo->buffer;
@@ -76,6 +86,14 @@ static int createBuffer(BufferCreateInfo *createInfo) {
 
         return 1;
 }
+typedef struct {
+        VkDevice device;
+        VkQueue graphics_queue;
+        VkCommandPool cmdpool;
+        VkBuffer src;
+        VkBuffer dst;
+        VkDeviceSize size;
+} CopyBufferInfo;
 
 static void copyBuffer(CopyBufferInfo *copyInfo) {
         VkCommandBuffer cmdBuffer

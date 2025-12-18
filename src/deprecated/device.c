@@ -137,9 +137,6 @@ static int create_logical_device(GlyphEngine *engine) {
                 q_present_createinfo->pQueuePriorities = &queue_priority;
         }
 
-        // Change!
-        VkPhysicalDeviceFeatures features = { .fillModeNonSolid = VK_TRUE };
-
         VkDeviceCreateInfo createinfo = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
                 .pQueueCreateInfos = q_createinfo,
