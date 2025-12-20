@@ -895,6 +895,15 @@ static void r_render_init(void) {
                 r_check_vkresult(res, "Failed to create in flight fence");
         }
 
+        RUniformBuffer ub = { 0 };
+        r_create_buffer(ub.buffer, ub.memory, sizeof(ub),
+                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                            | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        void *ubMapped;
+        vkMapMemory(r_state.device, r_state.memory, 0, sizeof(ub), 0, ubMapped);
+
         // Loop
         while (!glfwWindowShouldClose(r_state.window)) {
 
@@ -969,7 +978,7 @@ static void r_render_init(void) {
                 //                         drawInfo->pipelineLayout, 0, 1,
                 //                         drawInfo->pDescriptorSet, 0, NULL);
 
-                vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
+                vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
 
                 vkCmdEndRenderPass(cmdBuffer);
 

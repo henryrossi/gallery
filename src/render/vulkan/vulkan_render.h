@@ -54,6 +54,11 @@ typedef struct {
 } RState;
 
 typedef struct {
+        VkBuffer buffer;
+        VkDeviceMemory memory;
+} RShaderUniform;
+
+typedef struct {
         const char *vertFile;
         const char *fragFile;
         VkPipelineVertexInputStateCreateInfo *vertexInputInfo;
