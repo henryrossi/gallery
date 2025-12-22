@@ -46,6 +46,9 @@ typedef struct {
         VkCommandBuffer setupCmdBuffer;
         VkBuffer vertexBuffer;
         VkDeviceMemory vertexMemory;
+        VkBuffer instanceBuffer;
+        VkDeviceMemory instanceMemory;
+        VkDescriptorSetLayout descriptorSetLayout;
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;
         VkSemaphore *imageAvailableSemaphore;
@@ -54,8 +57,16 @@ typedef struct {
 } RState;
 
 typedef struct {
+        Vec2 pos0;
+        Vec2 pos1;
+        Vec4 colors[4];
+} RRectInstanceData;
+
+typedef struct {
         VkBuffer buffer;
         VkDeviceMemory memory;
+        VkDescriptorPool descriptorPool;
+        VkDescriptorSet descriptorSet;
 } RShaderUniform;
 
 typedef struct {

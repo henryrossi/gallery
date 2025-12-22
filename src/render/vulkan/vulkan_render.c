@@ -1,3 +1,5 @@
+#include <math.h>
+
 /* Vulkan validation layer and debug extension */
 #ifdef NDEBUG
 static u32 enable_validation_layers = 0;
@@ -473,7 +475,7 @@ r_create_graphics_pipeline(RGraphicsPipelineCreateInfo *createInfo) {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                 .topology = createInfo->primativeTopology,
-                .primitiveRestartEnable = VK_FALSE,
+                .primitiveRestartEnable = VK_TRUE,
         };
 
         VkPipelineViewportStateCreateInfo viewportState = {
@@ -776,65 +778,178 @@ static void r_render_init(void) {
                                        &commandBufferAllocationInfo,
                                        &r_state.setupCmdBuffer);
         r_check_vkresult(res, "Failed to allocate setup command buffer");
-        //
-        // VkBuffer stagingBuffer;
-        // VkDeviceMemory stagingMemory;
-        // VkDeviceSize verticesSize = sizeof(r_vertices);
-        //
-        // r_create_buffer(&stagingBuffer, &stagingMemory, verticesSize,
-        //                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        //                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-        //                     | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        //
-        // void *vertexStagingData;
-        // vkMapMemory(r_state.device, stagingMemory, 0, verticesSize, 0,
-        //             &vertexStagingData);
-        // memcpy(vertexStagingData, r_vertices, verticesSize);
-        // vkUnmapMemory(r_state.device, stagingMemory);
-        //
-        // r_create_buffer(&r_state.vertexBuffer, &r_state.vertexMemory,
-        //                 verticesSize,
-        //                 VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        //                     | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        //                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        //
-        // r_copy_buffer(r_state.setupCmdBuffer, stagingBuffer,
-        //               r_state.vertexBuffer, verticesSize);
-        //
-        // vkDestroyBuffer(r_state.device, stagingBuffer, 0);
-        // vkFreeMemory(r_state.device, stagingMemory, 0);
-        //
+
+        VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        };
+        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = 1,
+                .pBindings = &descriptorSetLayoutBinding,
+        };
+        res = vkCreateDescriptorSetLayout(r_state.device,
+                                          &descriptorSetLayoutCreateInfo, 0,
+                                          &r_state.descriptorSetLayout);
+        r_check_vkresult(res, "Failed to create descriptor set layout");
+
+        VkPushConstantRange pushConstantRange = {
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .offset = 0,
+                .size = sizeof(Vec2),
+        };
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .setLayoutCount = 0,
-                .pSetLayouts = 0, // hr: Not setting any bindings!!
-                .pushConstantRangeCount = 0,
-                .pPushConstantRanges = 0,
+                .setLayoutCount = 1,
+                .pSetLayouts = &r_state.descriptorSetLayout,
+                .pushConstantRangeCount = 1,
+                .pPushConstantRanges = &pushConstantRange,
         };
         res = vkCreatePipelineLayout(r_state.device, &pipelineLayoutCreateInfo,
                                      0, &r_state.pipelineLayout);
         r_check_vkresult(res, "Failed to create pipeline layout");
 
-        // VkVertexInputBindingDescription vertexBindingDescription = {
-        //         .binding = 0,
-        //         .stride = sizeof(Vec3),
-        //         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        // instance buffer is vertex buffer with input rate of instance
+        // u32 maxVertices = 1020;
+        // VkDeviceSize verticesSize = sizeof(Vec4) * maxVertices;
+        // Vec4 *vertices = arena_alloc(&r_state.arena, verticesSize);
+        // Vec4 colors[4] = {
+        //         vec4(0.2, 0.6, 0.8, 1.0),
+        //         vec4(0.2, 0.4, 0.5, 1.0),
+        //         vec4(0.2, 0.6, 0.8, 1.0),
+        //         vec4(0.2, 0.4, 0.5, 1.0),
         // };
+        // memcpy(vertices, colors, sizeof(colors));
         //
-        // VkVertexInputAttributeDescription vertexAttributeDescription = {
-        //         .location = 0,
-        //         .binding = 0,
-        //         .format = VK_FORMAT_R32G32B32_SFLOAT,
-        //         .offset = 0,
-        // };
+        // // VkBuffer stagingBuffer;
+        // // VkDeviceMemory stagingMemory;
+        // // r_create_buffer(&stagingBuffer, &stagingMemory, verticesSize,
+        // //                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        // //                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+        // //                     | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        // //
+        // // void *vertexStagingData;
+        // // vkMapMemory(r_state.device, stagingMemory, 0, verticesSize, 0,
+        // //             &vertexStagingData);
+        // // memcpy(vertexStagingData, vertices, verticesSize);
+        // // vkUnmapMemory(r_state.device, stagingMemory);
         //
+        // r_create_buffer(&r_state.vertexBuffer, &r_state.vertexMemory,
+        //                 verticesSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        //                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+        //                     | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        //
+        // // VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        // //     | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        // // VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        //
+        // // r_copy_buffer(r_state.setupCmdBuffer, stagingBuffer,
+        // //               r_state.vertexBuffer, verticesSize);
+        // //
+        // // vkDestroyBuffer(r_state.device, stagingBuffer, 0);
+        // // vkFreeMemory(r_state.device, stagingMemory, 0);
+        //
+        // void *vertexData;
+        // vkMapMemory(r_state.device, r_state.vertexMemory, 0, verticesSize, 0,
+        //             &vertexData);
+        // memcpy(vertexData, vertices, verticesSize);
+
+        u32 maxRects = 256;
+        VkDeviceSize instanceSize = sizeof(RRectInstanceData) * maxRects;
+        RRectInstanceData *rects = arena_alloc(&r_state.arena, instanceSize);
+        RRectInstanceData rects_tmp[2] = {
+                {
+                        vec2(100, 300),
+                        vec2(500, 700),
+                        {
+                                vec4(0.2, 0.6, 0.8, 1.0),
+                                vec4(0.2, 0.4, 0.5, 1.0),
+                                vec4(0.2, 0.6, 0.8, 1.0),
+                                vec4(0.2, 0.4, 0.5, 1.0),
+                        },
+                },
+                {
+                        vec2(1000, 300),
+                        vec2(1500, 700),
+                        {
+                                vec4(0.2, 0.6, 0.8, 1.0),
+                                vec4(0.2, 0.4, 0.5, 1.0),
+                                vec4(0.2, 0.6, 0.8, 1.0),
+                                vec4(0.2, 0.4, 0.5, 1.0),
+                        },
+                },
+
+        };
+        memcpy(rects, rects_tmp, sizeof(rects_tmp));
+
+        r_create_buffer(&r_state.instanceBuffer, &r_state.instanceMemory,
+                        instanceSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                            | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        void *instanceData;
+        vkMapMemory(r_state.device, r_state.instanceMemory, 0, instanceSize, 0,
+                    &instanceData);
+        memcpy(instanceData, rects, instanceSize);
+
+        VkVertexInputBindingDescription vertexBindingDescription = {
+                .binding = 0,
+                .stride = sizeof(RRectInstanceData),
+                .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
+        };
+
+        VkVertexInputAttributeDescription vertexAttributeDescriptions[6] = {
+                {
+                        .location = 0,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, pos0),
+                },
+                {
+                        .location = 1,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, pos1),
+                },
+                {
+                        .location = 2,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, colors),
+                },
+                {
+                        .location = 3,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                        .offset
+                        = offsetof(RRectInstanceData, colors) + sizeof(Vec4),
+                },
+                {
+                        .location = 4,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, colors)
+                                  + sizeof(Vec4) * 2,
+                },
+                {
+                        .location = 5,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, colors)
+                                  + sizeof(Vec4) * 3,
+                },
+
+        };
+
         VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
                 .sType
                 = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                // .vertexBindingDescriptionCount = 1,
-                // .pVertexBindingDescriptions = &vertexBindingDescription,
-                // .vertexAttributeDescriptionCount = 1,
-                // .pVertexAttributeDescriptions = &vertexAttributeDescription,
+                .vertexBindingDescriptionCount = 1,
+                .pVertexBindingDescriptions = &vertexBindingDescription,
+                .vertexAttributeDescriptionCount = 6,
+                .pVertexAttributeDescriptions = vertexAttributeDescriptions,
         };
 
         VkPipelineColorBlendAttachmentState colorBlendAttachment = {
@@ -862,7 +977,7 @@ static void r_render_init(void) {
                 .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                 .cullMode = VK_CULL_MODE_BACK_BIT,
                 .polygonMode = VK_POLYGON_MODE_FILL,
-                .primativeTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                .primativeTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
         };
         r_state.pipeline = r_create_graphics_pipeline(&pipelineInfo);
 
@@ -895,17 +1010,92 @@ static void r_render_init(void) {
                 r_check_vkresult(res, "Failed to create in flight fence");
         }
 
-        RUniformBuffer ub = { 0 };
-        r_create_buffer(ub.buffer, ub.memory, sizeof(ub),
-                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                            | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        void *ubMapped;
-        vkMapMemory(r_state.device, r_state.memory, 0, sizeof(ub), 0, ubMapped);
+        // RRectVertexUniform rectUniform = {
+        //         .pos0 = vec2(100, 200),
+        //         .pos1 = vec2(1000, 700),
+        //
+        // };
+        // RShaderUniform ub = { 0 };
+        // r_create_buffer(&ub.buffer, &ub.memory, sizeof(rectUniform),
+        //                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        //                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+        //                     | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        //
+        // void *ubMapped = 0;
+        // vkMapMemory(r_state.device, ub.memory, 0, sizeof(rectUniform), 0,
+        //             &ubMapped);
+        // memcpy(ubMapped, &rectUniform, sizeof(rectUniform));
+        //
+        // VkDescriptorPoolSize descriptorPoolSize = {
+        //         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        //         .descriptorCount = 1,
+        // };
+        // VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+        //         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        //         .maxSets = 1,
+        //         .poolSizeCount = 1,
+        //         .pPoolSizes = &descriptorPoolSize,
+        // };
+        // res = vkCreateDescriptorPool(r_state.device,
+        // &descriptorPoolCreateInfo,
+        //                              0, &ub.descriptorPool);
+        // r_check_vkresult(res, "Failed to create descriptor pool");
+        //
+        // VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
+        //         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        //         .descriptorPool = ub.descriptorPool,
+        //         .descriptorSetCount = 1,
+        //         .pSetLayouts = &r_state.descriptorSetLayout,
+        // };
+        // res = vkAllocateDescriptorSets(
+        //     r_state.device, &descriptorSetAllocateInfo, &ub.descriptorSet);
+        // r_check_vkresult(res, "Failed to allocate descriptor set");
+        //
+        // VkDescriptorBufferInfo descriptorBufferInfo = {
+        //         .buffer = ub.buffer,
+        //         .offset = 0,
+        //         .range = VK_WHOLE_SIZE,
+        // };
+        // VkWriteDescriptorSet descriptorWrite = {
+        //         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        //         .dstSet = ub.descriptorSet,
+        //         .dstBinding = 0,
+        //         .descriptorCount = 1,
+        //         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        //         .pBufferInfo = &descriptorBufferInfo,
+        // };
+        // vkUpdateDescriptorSets(r_state.device, 1, &descriptorWrite, 0, 0);
 
         // Loop
         while (!glfwWindowShouldClose(r_state.window)) {
+                f32 time = glfwGetTime();
+                time = fmod(time, 10.0) / 10.0;
+
+                RRectInstanceData dynColors[8] = {
+                        {
+                                vec2(100, 200),
+                                vec2(1000, 700),
+                                {
+                                        vec4(time, time, time, 1.0),
+                                        vec4(time, time * 2, time * 3, 1.0),
+                                        vec4(time, time, time, 1.0),
+                                        vec4(time, time * 2, time * 3, 1.0),
+                                },
+                        },
+                        {
+                                vec2(1000, 700),
+                                vec2(1500, 900),
+                                {
+                                        vec4(time, time, time, 1.0),
+                                        vec4(time, time / 2, time / 3, 1.0),
+                                        vec4(time, time, time, 1.0),
+                                        vec4(time, time / 2, time / 3, 1.0),
+                                },
+                        },
+
+                };
+                memcpy(rects, dynColors, sizeof(dynColors));
+                memcpy(instanceData, rects, instanceSize);
 
                 u32 currentFrame = r_state.currentFrame;
                 VkDevice device = r_state.device;
@@ -936,7 +1126,7 @@ static void r_render_init(void) {
                 r_check_vkresult(res,
                                  "Failed to being command buffer recording");
 
-                VkClearValue clear_value = { { { 0.3f, 0.3f, 0.3f, 1.0f } } };
+                VkClearValue clearValue = { { { 0.3f, 0.3f, 0.3f, 1.0f } } };
                 VkRenderPassBeginInfo passInfo = {
                         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                         .renderPass = r_state.renderPass,
@@ -944,8 +1134,15 @@ static void r_render_init(void) {
                         .renderArea.offset = { 0, 0 },
                         .renderArea.extent = { r_state.width, r_state.height },
                         .clearValueCount = 1,
-                        .pClearValues = &clear_value,
+                        .pClearValues = &clearValue,
                 };
+
+                // if (framebuffer resized)
+                Vec2 resolution
+                    = vec2((float)r_state.width, (float)r_state.height);
+                vkCmdPushConstants(cmdBuffer, r_state.pipelineLayout,
+                                   VK_SHADER_STAGE_VERTEX_BIT, 0,
+                                   sizeof(resolution), &resolution);
 
                 vkCmdBeginRenderPass(cmdBuffer, &passInfo,
                                      VK_SUBPASS_CONTENTS_INLINE);
@@ -973,12 +1170,16 @@ static void r_render_init(void) {
                 // vkCmdBindVertexBuffers(cmdBuffer, 0, 1,
                 // &r_state.vertexBuffer,
                 //                        &vertexOffsets);
-                // vkCmdBindDescriptorSets(cmdBuffer,
-                //                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-                //                         drawInfo->pipelineLayout, 0, 1,
-                //                         drawInfo->pDescriptorSet, 0, NULL);
+                VkDeviceSize instanceOffsets = {};
+                vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &r_state.instanceBuffer,
+                                       &instanceOffsets);
 
-                vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
+                // vkCmdBindDescriptorSets(
+                //     cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                //     r_state.pipelineLayout, 0, 1, &ub.descriptorSet, 0, 0);
+
+                // vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
+                vkCmdDraw(cmdBuffer, 4, 2, 0, 0);
 
                 vkCmdEndRenderPass(cmdBuffer);
 
@@ -1027,8 +1228,6 @@ static void r_render_init(void) {
 
         vkDestroyPipelineLayout(r_state.device, r_state.pipelineLayout, 0);
         vkDestroyPipeline(r_state.device, r_state.pipeline, 0);
-        vkDestroyBuffer(r_state.device, r_state.vertexBuffer, 0);
-        vkFreeMemory(r_state.device, r_state.vertexMemory, 0);
         vkDestroyCommandPool(r_state.device, r_state.commandPool, 0);
 
         vkDestroyRenderPass(r_state.device, r_state.renderPass, 0);

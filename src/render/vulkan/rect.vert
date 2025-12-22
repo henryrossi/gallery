@@ -1,23 +1,40 @@
 #version 450 core
 
-layout (binding = 0) uniform VSInput {
-    vec2 resolution; // should be global
-    vec2 pos0; // top left corner
-    vec2 pos1; // bottom right corner
-} vsInput;
+layout (push_constant) uniform Globals {
+    vec2 resolution;
+} globals;
 
-layout (location = 0) out vec3 color;
+layout (location = 0) in vec2 pos0; // top left corner
+layout (location = 1) in vec2 pos1; // bottom right corner
+layout (location = 2) in vec4 inColor0;
+layout (location = 3) in vec4 inColor1;
+layout (location = 4) in vec4 inColor2;
+layout (location = 5) in vec4 inColor3;
 
-vec2 vertices[6] = vec2[](
+layout (location = 0) out vec4 outColor;
+
+vec2 vertices[4] = vec2[](
     vec2(-1.0, -1.0),
     vec2(-1.0, 1.0),
     vec2(1.0, -1.0),
-    vec2(1.0, 1.0),
-    vec2(1.0, -1.0),
-    vec2(-1.0, 1.0)
+    vec2(1.0, 1.0)
 );
 
 void main() {
-	gl_Position = vec4(vertices[gl_VertexIndex], 0.0, 1.0);
-	color = vec3(1.0, 0.5, 0.0);
+	vec4 colors[4] = vec4[4](
+	        inColor0,
+		inColor1,
+		inColor2,
+		inColor3
+	);
+
+	vec2 dstHalfSize = (pos1 - pos0) / 2;
+        vec2 dstCenter = (pos1 + pos0) / 2;
+	vec2 dstPos = (vertices[gl_VertexIndex] * dstHalfSize) + dstCenter;
+
+	gl_Position = vec4(2 * dstPos.x / globals.resolution.x - 1,
+			   2 * dstPos.y / globals.resolution.y - 1, 
+		           0.0, 1.0);
+
+        outColor = colors[gl_VertexIndex];
 }
