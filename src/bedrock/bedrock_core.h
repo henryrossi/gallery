@@ -18,4 +18,6 @@ typedef float f32;
 typedef double f64;
 typedef uint32_t b32;
 
+#define array_count(array) sizeof(array) / sizeof(array[0])
+
 #endif // BEDROCK_CORE_H

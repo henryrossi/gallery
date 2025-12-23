@@ -1,6 +1,3 @@
-
-#define ARENA_BASE_SIZE OS_PAGESIZE
-
 // Allocates a memory chuck for the Arena. Returns 1 on success, 0 on failure.
 Arena make_arena(u64 size) {
         Arena a = { 0 };
@@ -12,6 +9,8 @@ Arena make_arena(u64 size) {
 
 void *arena_alloc(Arena *a, u64 size) {
         if (a->offset + size > a->size) {
+                printf("Allocation size (%llu) does not fit in arena (arena "
+                       "size %llu, already allocated %llu). Returning NULL");
                 return NULL;
         }
 

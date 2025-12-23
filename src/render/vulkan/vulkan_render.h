@@ -39,52 +39,30 @@ typedef struct {
         VkSwapchainKHR swapchain;
         VkImage *swapchainImages;
         VkImageView *swapchainImageViews;
-        VkRenderPass renderPass;
         VkFramebuffer *swapchainFramebuffers;
-        VkCommandPool commandPool;
-        VkCommandBuffer *renderCmdBuffers;
-        VkCommandBuffer setupCmdBuffer;
-        VkBuffer vertexBuffer;
-        VkDeviceMemory vertexMemory;
-        VkBuffer instanceBuffer;
-        VkDeviceMemory instanceMemory;
+        VkRenderPass renderPass;
         VkDescriptorSetLayout descriptorSetLayout;
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;
+        VkCommandPool commandPool;
+        VkCommandBuffer setupCmdBuffer;
+
+        VkCommandBuffer *renderCmdBuffers;
         VkSemaphore *imageAvailableSemaphore;
         VkSemaphore *renderFinishedSemaphore;
         VkFence *inflightFence;
+
+        u32 maxRects;
+        RRectInstanceData **instanceData;
+        VkBuffer *instanceBuffers;
+        VkDeviceMemory *instancesMemory;
 } RState;
 
-typedef struct {
-        Vec2 pos0;
-        Vec2 pos1;
-        Vec4 colors[4];
-} RRectInstanceData;
-
-typedef struct {
-        VkBuffer buffer;
-        VkDeviceMemory memory;
-        VkDescriptorPool descriptorPool;
-        VkDescriptorSet descriptorSet;
-} RShaderUniform;
-
-typedef struct {
-        const char *vertFile;
-        const char *fragFile;
-        VkPipelineVertexInputStateCreateInfo *vertexInputInfo;
-        VkPrimitiveTopology primativeTopology;
-        VkPolygonMode polygonMode;
-        VkCullModeFlags cullMode;
-        VkFrontFace frontFace;
-        uint32_t blendAttachmentStatesCount;
-        VkPipelineColorBlendAttachmentState *blendAttachmentStates;
-        VkPipelineDepthStencilStateCreateInfo *depthStencilState;
-        VkPipelineLayout pipelineLayout;
-        VkRenderPass renderPass;
-} RGraphicsPipelineCreateInfo;
-
-static VkPipeline
-r_create_graphics_pipeline(RGraphicsPipelineCreateInfo *createInfo);
+// typedef struct {
+//         VkBuffer buffer;
+//         VkDeviceMemory memory;
+//         VkDescriptorPool descriptorPool;
+//         VkDescriptorSet descriptorSet;
+// } RShaderUniform;
 
 #endif
