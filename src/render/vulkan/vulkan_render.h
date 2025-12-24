@@ -51,18 +51,15 @@ typedef struct {
         VkSemaphore *imageAvailableSemaphore;
         VkSemaphore *renderFinishedSemaphore;
         VkFence *inflightFence;
+        u32 imageIdx;
 
         u32 maxRects;
-        RRectInstanceData **instanceData;
+        u32 rectCount;
+        RRectInstanceData **instancesData;
+        VkBuffer *stagingBuffers;
+        VkDeviceMemory *stagingsMemory;
         VkBuffer *instanceBuffers;
         VkDeviceMemory *instancesMemory;
 } RState;
-
-// typedef struct {
-//         VkBuffer buffer;
-//         VkDeviceMemory memory;
-//         VkDescriptorPool descriptorPool;
-//         VkDescriptorSet descriptorSet;
-// } RShaderUniform;
 
 #endif

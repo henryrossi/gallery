@@ -86,6 +86,7 @@ static int createBuffer(BufferCreateInfo *createInfo) {
 
         return 1;
 }
+
 typedef struct {
         VkDevice device;
         VkQueue graphics_queue;

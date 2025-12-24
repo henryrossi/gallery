@@ -10,7 +10,8 @@ Arena make_arena(u64 size) {
 void *arena_alloc(Arena *a, u64 size) {
         if (a->offset + size > a->size) {
                 printf("Allocation size (%llu) does not fit in arena (arena "
-                       "size %llu, already allocated %llu). Returning NULL");
+                       "size %llu, already allocated %u). Returning NULL",
+                       size, a->size, a->offset);
                 return NULL;
         }
 
