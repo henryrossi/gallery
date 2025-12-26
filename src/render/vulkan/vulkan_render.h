@@ -60,6 +60,9 @@ typedef struct {
         VkDeviceMemory *stagingsMemory;
         VkBuffer *instanceBuffers;
         VkDeviceMemory *instancesMemory;
+
+        VkDescriptorPool descriptorPool;
+        VkDescriptorSet descriptorSet;
 } RState;
 
 #endif

@@ -162,6 +162,8 @@ static b32 r_check_validation_layer_support(Arena *a) {
 static const char *r_device_exts[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         "VK_KHR_portability_subset", // hr: macOs device extensions
+        "VK_KHR_maintenance3",
+        "VK_EXT_descriptor_indexing",
 };
 u32 r_device_ext_count = array_count(r_device_exts);
 
@@ -591,10 +593,15 @@ static void r_init_backend(void) {
                 .pQueuePriorities = queuePriorities,
         };
 
+        VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures = {
+                .sType
+                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+                .descriptorBindingPartiallyBound = VK_TRUE,
+        };
         VkPhysicalDeviceFeatures deviceFeatures = { 0 };
-
         VkDeviceCreateInfo deviceCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+                .pNext = &descriptorIndexingFeatures,
                 .queueCreateInfoCount = 1,
                 .pQueueCreateInfos = &queueCreateInfo,
                 .enabledLayerCount = r_validation_layer_count,
@@ -766,6 +773,34 @@ static void r_init_backend(void) {
                                        &r_state.setupCmdBuffer);
         r_check_vkresult(res, "Failed to allocate setup command buffer");
 
+        VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_ALL,
+        };
+        VkDescriptorBindingFlags descriptorPartiallyBound
+            = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT;
+        VkDescriptorSetLayoutBindingFlagsCreateInfo
+            descriptorSetLayoutBindingFlags
+            = {
+                      .sType
+                      = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                      .bindingCount = 1,
+                      .pBindingFlags = &descriptorPartiallyBound,
+              };
+        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .pNext = &descriptorSetLayoutBindingFlags,
+                .flags = 0,
+                .bindingCount = 1,
+                .pBindings = &descriptorSetLayoutBinding,
+        };
+        res = vkCreateDescriptorSetLayout(r_state.device,
+                                          &descriptorSetLayoutCreateInfo, 0,
+                                          &r_state.descriptorSetLayout);
+        r_check_vkresult(res, "Failed to create descriptor set layout");
+
         VkPushConstantRange pushConstantRange = {
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                 .offset = 0,
@@ -773,8 +808,8 @@ static void r_init_backend(void) {
         };
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .setLayoutCount = 0,
-                .pSetLayouts = 0,
+                .setLayoutCount = 1,
+                .pSetLayouts = &r_state.descriptorSetLayout,
                 .pushConstantRangeCount = 1,
                 .pPushConstantRanges = &pushConstantRange,
         };
@@ -927,6 +962,31 @@ static void r_init_backend(void) {
                                     | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         }
+
+        VkDescriptorPoolSize descriptorPoolSize = {
+                .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .descriptorCount = 1,
+        };
+        VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+                .maxSets = r_state.maxRects,
+                .poolSizeCount = 1,
+                .pPoolSizes = &descriptorPoolSize,
+        };
+        res = vkCreateDescriptorPool(r_state.device, &descriptorPoolCreateInfo,
+                                     0, &r_state.descriptorPool);
+        r_check_vkresult(res, "Failed to create descirptor pool");
+
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = r_state.descriptorPool,
+                .descriptorSetCount = 1,
+                .pSetLayouts = &r_state.descriptorSetLayout,
+        };
+        res = vkAllocateDescriptorSets(
+            r_state.device, &descriptorSetAllocateInfo, &r_state.descriptorSet);
+        r_check_vkresult(res, "Failed to allocate descriptor set");
 }
 
 static void r_begin_frame(void) {
@@ -1086,6 +1146,8 @@ static void r_destroy_backend(void) {
         VkDevice device = r_state.device;
         vkDeviceWaitIdle(device);
 
+        vkDestroyDescriptorPool(device, r_state.descriptorPool, 0);
+        vkDestroyDescriptorSetLayout(device, r_state.descriptorSetLayout, 0);
         vkDestroyPipelineLayout(device, r_state.pipelineLayout, 0);
         vkDestroyPipeline(device, r_state.pipeline, 0);
         vkDestroyCommandPool(device, r_state.commandPool, 0);
