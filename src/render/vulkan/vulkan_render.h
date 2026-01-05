@@ -12,6 +12,23 @@
 // "batches" items to be rendered
 
 typedef struct {
+        u64 key;
+        VkImage image;
+        VkDeviceMemory memory;
+        VkImageView view;
+        u32 lastBindingIndex;
+        u32 width;
+        u32 height;
+} RTexture;
+
+typedef struct {
+        RTexture **prev;
+        RTexture **cur;
+        u32 freeTop;
+        u16 *free;
+} RIndexingInfo;
+
+typedef struct {
         u32 width;
         u32 height;
 
@@ -61,8 +78,17 @@ typedef struct {
         VkBuffer *instanceBuffers;
         VkDeviceMemory *instancesMemory;
 
+        u32 maxTextures;
         VkDescriptorPool descriptorPool;
-        VkDescriptorSet descriptorSet;
+        VkDescriptorSet *descriptorSets;
+        VkSampler sampler;
+        RIndexingInfo *indexingInfo;
+        u32 writeDescriptorSetsCount;
+        VkWriteDescriptorSet *writeDescriptorSets;
+        VkDescriptorImageInfo *writeImageInfo;
+
+        RTexture texture;
+        RTexture texture2;
 } RState;
 
 #endif

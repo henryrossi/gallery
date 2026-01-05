@@ -1,5 +1,3 @@
-#include <math.h>
-
 /* Vulkan validation layer and debug extension */
 #ifdef NDEBUG
 static u32 r_validation_layers_enabled = 0;
@@ -360,28 +358,187 @@ static void r_create_buffer(VkBuffer *buffer, VkDeviceMemory *memory,
         vkBindBufferMemory(r_state.device, *buffer, *memory, 0);
 }
 
-// hr: the whole shader section needs to be updated to be os independent
-#include <sys/stat.h>
-
-static String8 r_read_shader_file(const char *filename, String8 buf) {
-        FILE *fp = fopen(filename, "rb");
-        r_assert(fp != NULL, "Failed to open shader file");
-
-        size_t res = fread(buf.data, 1, buf.length, fp);
-        fclose(fp);
-        r_assert(res > 0, "Failed to read in shader file");
-
-        return buf;
+static void r_copy_buffer_to_image(VkBuffer buffer, RTexture *texture) {
+        VkBufferImageCopy region = {
+                .bufferOffset = 0,
+                .bufferRowLength = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                },
+                .imageOffset = { 0, 0, 0},
+                .imageExtent = { texture->width, texture->height, 1 },
+        };
+        vkCmdCopyBufferToImage(r_state.setupCmdBuffer, buffer, texture->image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                               &region);
 }
 
-static String8 r_alloc_shader_buffer(Arena *a, const char *filename) {
-        String8 res;
+static void r_transition_image_layout(VkImage image, VkImageLayout oldLayout,
+                                      VkImageLayout newLayout) {
+        VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .oldLayout = oldLayout,
+                .newLayout = newLayout,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = image,
+                .subresourceRange = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                },
+                .srcAccessMask = 0,
+                .dstAccessMask = 0,
+        };
 
-        struct stat s;
-        stat(filename, &s);
+        VkPipelineStageFlags srcStage = 0;
+        VkPipelineStageFlags dstStage = 0;
 
-        res = string8_allocate(a, s.st_size);
-        return res;
+        if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED
+            && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+                   && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        } else {
+                r_assert(0, "Unsupported layout transition");
+        }
+
+        vkCmdPipelineBarrier(r_state.setupCmdBuffer, srcStage, dstStage, 0, 0,
+                             0, 0, 0, 1, &barrier);
+}
+
+static void r_create_image(RTexture *texture, VkFormat format,
+                           VkImageTiling tiling, VkBufferUsageFlags usage,
+                           VkMemoryPropertyFlags props) {
+        VkImageFormatProperties2 imageFormatProperties = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+        };
+        VkPhysicalDeviceImageFormatInfo2 formatInfo = {
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+                .format = format,
+                .type = VK_IMAGE_TYPE_2D,
+                .tiling = tiling,
+                .usage = usage,
+        };
+        VkResult result = vkGetPhysicalDeviceImageFormatProperties2(
+            r_state.physicalDevice, &formatInfo, &imageFormatProperties);
+        if (result != VK_SUCCESS) {
+                // The format is not supported with the given settings.
+                // Handle this scenario.
+                r_check_vkresult(result, "Unsupported Image Format");
+        }
+
+        VkImageCreateInfo imageCreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                .imageType = VK_IMAGE_TYPE_2D,
+                .extent = { .width = texture->width,
+                            .height = texture->height,
+                            .depth = 1 },
+                .mipLevels = 1,
+                .arrayLayers = 1,
+                .format = format,
+                .tiling = tiling,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .usage = usage,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        };
+        VkResult res = vkCreateImage(r_state.device, &imageCreateInfo, 0,
+                                     &texture->image);
+        r_check_vkresult(res, "Failed to create image");
+
+        VkMemoryRequirements memReqs;
+        vkGetImageMemoryRequirements(r_state.device, texture->image, &memReqs);
+
+        VkMemoryAllocateInfo allocInfo = {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                .allocationSize = memReqs.size,
+                .memoryTypeIndex
+                = r_find_memory_type(memReqs.memoryTypeBits, props),
+        };
+        res = vkAllocateMemory(r_state.device, &allocInfo, 0, &texture->memory);
+        r_check_vkresult(res, "Failed to allocate image memory");
+
+        vkBindImageMemory(r_state.device, texture->image, texture->memory, 0);
+}
+
+static void r_create_texture(u8 *pixels, u32 width, u32 height,
+                             RTexture *texture) {
+        VkDevice device = r_state.device;
+
+        texture->width = width;
+        texture->height = height;
+        VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+        VkDeviceSize imageSize = texture->width * texture->height * 4;
+
+        VkCommandBufferBeginInfo beginInfo = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        };
+        vkBeginCommandBuffer(r_state.setupCmdBuffer, &beginInfo);
+
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+        r_create_buffer(&stagingBuffer, &stagingBufferMemory, imageSize,
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                            | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        void *data;
+        vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+        memcpy(data, pixels, imageSize);
+        vkUnmapMemory(device, stagingBufferMemory);
+
+        r_create_image(texture, format, VK_IMAGE_TILING_LINEAR,
+                       VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                           | VK_IMAGE_USAGE_SAMPLED_BIT,
+                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        r_transition_image_layout(texture->image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        r_copy_buffer_to_image(stagingBuffer, texture);
+        r_transition_image_layout(texture->image,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        vkEndCommandBuffer(r_state.setupCmdBuffer);
+        VkSubmitInfo submitInfo = {
+                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                .commandBufferCount = 1,
+                .pCommandBuffers = &r_state.setupCmdBuffer,
+        };
+        vkQueueSubmit(r_state.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+
+        VkImageViewCreateInfo viewCreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = texture->image,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = format,
+                .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .subresourceRange.baseMipLevel = 0,
+                .subresourceRange.levelCount = 1,
+                .subresourceRange.baseArrayLayer = 0,
+                .subresourceRange.layerCount = 1,
+        };
+        VkResult res = vkCreateImageView(r_state.device, &viewCreateInfo, 0,
+                                         &texture->view);
+        r_check_vkresult(res, "Failed to create image view)");
+
+        vkQueueWaitIdle(r_state.graphicsQueue);
+        vkDestroyBuffer(device, stagingBuffer, 0);
+        vkFreeMemory(device, stagingBufferMemory, 0);
 }
 
 static VkShaderModule r_create_shader_module(const char *filename) {
@@ -597,8 +754,12 @@ static void r_init_backend(void) {
                 .sType
                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
                 .descriptorBindingPartiallyBound = VK_TRUE,
+                .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+                .runtimeDescriptorArray = VK_TRUE,
         };
-        VkPhysicalDeviceFeatures deviceFeatures = { 0 };
+        VkPhysicalDeviceFeatures deviceFeatures = {
+                .samplerAnisotropy = VK_TRUE,
+        };
         VkDeviceCreateInfo deviceCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
                 .pNext = &descriptorIndexingFeatures,
@@ -773,28 +934,42 @@ static void r_init_backend(void) {
                                        &r_state.setupCmdBuffer);
         r_check_vkresult(res, "Failed to allocate setup command buffer");
 
-        VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_ALL,
+        r_state.maxTextures = r_state.physicalDeviceProps.limits
+                                  .maxPerStageDescriptorSampledImages;
+        VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[2] = {
+                {
+                        .binding = 0,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                        .descriptorCount = r_state.maxTextures,
+                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                        .binding = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                        .descriptorCount = 1,
+                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
         };
-        VkDescriptorBindingFlags descriptorPartiallyBound
-            = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT;
+        VkDescriptorBindingFlags descriptorBindingFlags[2] = {
+                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT
+                    | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT,
+                0,
+        };
         VkDescriptorSetLayoutBindingFlagsCreateInfo
             descriptorSetLayoutBindingFlags
             = {
                       .sType
                       = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                      .bindingCount = 1,
-                      .pBindingFlags = &descriptorPartiallyBound,
+                      .bindingCount = 2,
+                      .pBindingFlags = descriptorBindingFlags,
               };
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .pNext = &descriptorSetLayoutBindingFlags,
-                .flags = 0,
-                .bindingCount = 1,
-                .pBindings = &descriptorSetLayoutBinding,
+                .flags
+                = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+                .bindingCount = 2,
+                .pBindings = descriptorSetLayoutBindings,
         };
         res = vkCreateDescriptorSetLayout(r_state.device,
                                           &descriptorSetLayoutCreateInfo, 0,
@@ -823,7 +998,7 @@ static void r_init_backend(void) {
                 .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
         };
 
-        VkVertexInputAttributeDescription vertexAttributeDescriptions[6] = {
+        VkVertexInputAttributeDescription vertexAttributeDescriptions[] = {
                 {
                         .location = 0,
                         .binding = 0,
@@ -839,25 +1014,43 @@ static void r_init_backend(void) {
                 {
                         .location = 2,
                         .binding = 0,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, src0),
+                },
+                {
+                        .location = 3,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32G32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, src1),
+                },
+                {
+                        .location = 4,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32_UINT,
+                        .offset = offsetof(RRectInstanceData, texID),
+                },
+                {
+                        .location = 5,
+                        .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors),
                 },
                 {
-                        .location = 3,
+                        .location = 6,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset
                         = offsetof(RRectInstanceData, colors) + sizeof(Vec4),
                 },
                 {
-                        .location = 4,
+                        .location = 7,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors)
                                   + sizeof(Vec4) * 2,
                 },
                 {
-                        .location = 5,
+                        .location = 8,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors)
@@ -871,7 +1064,8 @@ static void r_init_backend(void) {
                 = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
                 .vertexBindingDescriptionCount = 1,
                 .pVertexBindingDescriptions = &vertexBindingDescription,
-                .vertexAttributeDescriptionCount = 6,
+                .vertexAttributeDescriptionCount
+                = array_count(vertexAttributeDescriptions),
                 .pVertexAttributeDescriptions = vertexAttributeDescriptions,
         };
 
@@ -963,30 +1157,110 @@ static void r_init_backend(void) {
                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         }
 
-        VkDescriptorPoolSize descriptorPoolSize = {
-                .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .descriptorCount = 1,
+        VkDescriptorPoolSize descriptorPoolSizes[2] = {
+                {
+                        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                        .descriptorCount
+                        = r_state.maxTextures * r_state.maxFramesInFlight,
+                },
+                {
+                        .type = VK_DESCRIPTOR_TYPE_SAMPLER,
+                        .descriptorCount = r_state.maxFramesInFlight,
+                },
         };
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
                 .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-                .maxSets = r_state.maxRects,
-                .poolSizeCount = 1,
-                .pPoolSizes = &descriptorPoolSize,
+                .maxSets = r_state.maxFramesInFlight,
+                .poolSizeCount = 2,
+                .pPoolSizes = descriptorPoolSizes,
         };
         res = vkCreateDescriptorPool(r_state.device, &descriptorPoolCreateInfo,
                                      0, &r_state.descriptorPool);
         r_check_vkresult(res, "Failed to create descirptor pool");
 
-        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                .descriptorPool = r_state.descriptorPool,
-                .descriptorSetCount = 1,
-                .pSetLayouts = &r_state.descriptorSetLayout,
+        r_state.descriptorSets = arena_alloc(
+            arena, sizeof(VkDescriptorSet) * r_state.maxFramesInFlight);
+        for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
+                VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
+                        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                        .descriptorPool = r_state.descriptorPool,
+                        .descriptorSetCount = 1,
+                        .pSetLayouts = &r_state.descriptorSetLayout,
+                };
+                res = vkAllocateDescriptorSets(r_state.device,
+                                               &descriptorSetAllocateInfo,
+                                               r_state.descriptorSets + i);
+                r_check_vkresult(res, "Failed to allocate descriptor set");
+        }
+
+        VkSamplerCreateInfo samplerCreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                .magFilter = VK_FILTER_LINEAR,
+                .minFilter = VK_FILTER_LINEAR,
+                .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                .anisotropyEnable = VK_TRUE,
+                .maxAnisotropy
+                = r_state.physicalDeviceProps.limits.maxSamplerAnisotropy,
+                .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+                .unnormalizedCoordinates = VK_FALSE,
+                .compareEnable = VK_FALSE,
+                .compareOp = VK_COMPARE_OP_ALWAYS,
+                .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+                .mipLodBias = 0.0f,
+                .minLod = 0.0f,
+                .maxLod = 0.0f,
         };
-        res = vkAllocateDescriptorSets(
-            r_state.device, &descriptorSetAllocateInfo, &r_state.descriptorSet);
-        r_check_vkresult(res, "Failed to allocate descriptor set");
+        res = vkCreateSampler(r_state.device, &samplerCreateInfo, 0,
+                              &r_state.sampler);
+        r_check_vkresult(res, "Failed to create texture sampler");
+
+        for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
+                VkDescriptorImageInfo samplerInfo = {
+                        .sampler = r_state.sampler,
+                };
+                VkWriteDescriptorSet samplerWriteDescriptorSet = {
+                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                        .dstSet = r_state.descriptorSets[i],
+                        .dstBinding = 1,
+                        .dstArrayElement = 0,
+                        .descriptorCount = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                        .pImageInfo = &samplerInfo,
+                };
+                vkUpdateDescriptorSets(r_state.device, 1,
+                                       &samplerWriteDescriptorSet, 0, 0);
+        }
+
+        r_state.indexingInfo = arena_alloc(
+            arena, sizeof(RIndexingInfo) * r_state.maxFramesInFlight);
+        for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
+                RIndexingInfo ii = r_state.indexingInfo[i];
+                u32 maxTexs = r_state.maxTextures;
+
+                u64 prevSize = sizeof(*(ii.prev)) * maxTexs;
+                ii.prev = arena_alloc(arena, prevSize);
+                memset(ii.prev, 0, prevSize);
+
+                u64 curSize = sizeof(*(ii.cur)) * maxTexs;
+                ii.cur = arena_alloc(arena, curSize);
+                memset(ii.cur, 0, curSize);
+
+                ii.freeTop = maxTexs - 1;
+                ii.free = arena_alloc(arena, sizeof(*(ii.free)) * maxTexs);
+                for (u16 j = maxTexs; j > 0; j--) {
+                        ii.free[maxTexs - j] = j;
+                }
+                r_state.indexingInfo[i] = ii;
+        }
+
+        r_state.writeDescriptorSetsCount = 0;
+        r_state.writeDescriptorSets = arena_alloc(
+            arena, sizeof(VkWriteDescriptorSet) * r_state.maxTextures);
+        r_state.writeImageInfo = arena_alloc(
+            arena, sizeof(VkDescriptorImageInfo) * r_state.maxTextures);
 }
 
 static void r_begin_frame(void) {
@@ -1016,11 +1290,51 @@ static void r_begin_frame(void) {
         r_check_vkresult(res, "Failed to being command buffer recording");
 }
 
-static void r_add_rect_to_batch(RRectInstanceData *rect) {
+static void r_write_texture_descriptor(RRectInstanceData *rect, RTexture *tex) {
+        u32 currentFrame = r_state.currentFrame;
+        RIndexingInfo *i = r_state.indexingInfo + currentFrame;
+        if (i->prev[tex->lastBindingIndex] == tex) {
+                rect->texID = tex->lastBindingIndex;
+                i->cur[rect->texID] = tex;
+                return;
+        }
+        if (i->freeTop != 0) {
+                rect->texID = i->free[--i->freeTop];
+                i->cur[rect->texID] = tex;
+                tex->lastBindingIndex = rect->texID;
+
+                u32 writesCount = r_state.writeDescriptorSetsCount;
+                VkDescriptorImageInfo imageInfo = {
+                        .imageView = tex->view,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                };
+                VkWriteDescriptorSet wds = {
+                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                        .dstSet = r_state.descriptorSets[currentFrame],
+                        .dstBinding = 0,
+                        .dstArrayElement = rect->texID,
+                        .descriptorCount = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                        .pImageInfo = r_state.writeImageInfo + writesCount,
+                };
+                r_state.writeImageInfo[writesCount] = imageInfo;
+                r_state.writeDescriptorSets[writesCount] = wds;
+                r_state.writeDescriptorSetsCount++;
+        } else {
+                // hr: TODO - reclaim indices
+                rect->texID = 0;
+                tex->lastBindingIndex = rect->texID;
+        }
+}
+
+static void r_add_rect_to_batch(RRectInstanceData *rect, RTexture *tex) {
         u32 currentFrame = r_state.currentFrame;
         u32 rectCount = r_state.rectCount;
         if (r_state.rectCount >= r_state.maxRects) {
                 // hr: TODO
+        }
+        if (tex) {
+                r_write_texture_descriptor(rect, tex);
         }
         r_state.instancesData[currentFrame][rectCount] = *rect;
         r_state.rectCount++;
@@ -1042,14 +1356,22 @@ static void r_dispatch_batch(void) {
 static void r_end_frame(void) {
         u32 currentFrame = r_state.currentFrame;
         VkCommandBuffer cmdBuffer = r_state.renderCmdBuffers[currentFrame];
-        // vkResetCommandBuffer(cmdBuffer, 0);
-        //
-        // VkCommandBufferBeginInfo beginInfo = {
-        //         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        // };
-        //
-        // res = vkBeginCommandBuffer(cmdBuffer, &beginInfo);
-        // r_check_vkresult(res, "Failed to being command buffer recording");
+
+        vkUpdateDescriptorSets(r_state.device, r_state.writeDescriptorSetsCount,
+                               r_state.writeDescriptorSets, 0, 0);
+        r_state.writeDescriptorSetsCount = 0;
+
+        RIndexingInfo i = r_state.indexingInfo[currentFrame];
+        for (u32 k = 0; k < r_state.maxTextures; k++) {
+                if (i.prev[k] != 0 && i.prev[k] != i.cur[k]) {
+                        i.free[i.freeTop++] = k;
+                }
+        }
+        RTexture **tmp = i.prev;
+        i.prev = i.cur;
+        i.cur = tmp;
+        memset(i.cur, 0, sizeof(*(i.cur)) * r_state.maxTextures);
+        r_state.indexingInfo[currentFrame] = i;
 
         VkClearValue clearValue = { { { 0.3f, 0.3f, 0.3f, 1.0f } } };
         VkRenderPassBeginInfo passInfo = {
@@ -1094,9 +1416,9 @@ static void r_end_frame(void) {
                                r_state.instanceBuffers + currentFrame,
                                &instanceOffsets);
 
-        // vkCmdBindDescriptorSets(
-        //     cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        //     r_state.pipelineLayout, 0, 1, &ub.descriptorSet, 0, 0);
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                r_state.pipelineLayout, 0, 1,
+                                &r_state.descriptorSets[currentFrame], 0, 0);
 
         vkCmdDraw(cmdBuffer, 4, r_state.rectCount, 0, 0);
 
