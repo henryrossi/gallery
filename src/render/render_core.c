@@ -1,4 +1,10 @@
-#include "render/vulkan/vulkan_render.c"
+static void r_assert(b32 flag, char *msg) {
+        if (!flag) {
+                printf("ASSERT: %s\n", msg);
+                u32 *bomb = 0;
+                *bomb = 1;
+        }
+}
 
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -37,3 +43,6 @@ static String8 r_alloc_shader_buffer(Arena *a, const char *filename) {
         res = string8_allocate(a, s.st_size);
         return res;
 }
+
+// hr: choose backend
+#include "render/vulkan/vulkan_render.c"

@@ -86,9 +86,7 @@ typedef struct {
         u32 writeDescriptorSetsCount;
         VkWriteDescriptorSet *writeDescriptorSets;
         VkDescriptorImageInfo *writeImageInfo;
-
-        RTexture texture;
-        RTexture texture2;
+        RTexture blankTex;
 } RState;
 
 #endif

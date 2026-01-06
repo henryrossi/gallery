@@ -81,14 +81,6 @@ static int r_setup_debug_messenger(VkInstance instance) {
 
 static RState r_state = { .width = 1000, .height = 700 };
 
-static void r_assert(b32 flag, char *msg) {
-        if (!flag) {
-                printf("ASSERT: %s\n", msg);
-                u32 *bomb = 0;
-                *bomb = 1;
-        }
-}
-
 static void r_check_vkresult(VkResult res, char *msg) {
         if (res != VK_SUCCESS) {
                 printf("ASSERT: %s %s\n", msg, string_VkResult(res));
@@ -1261,6 +1253,28 @@ static void r_init_backend(void) {
             arena, sizeof(VkWriteDescriptorSet) * r_state.maxTextures);
         r_state.writeImageInfo = arena_alloc(
             arena, sizeof(VkDescriptorImageInfo) * r_state.maxTextures);
+
+        u64 blankSize = 32 * 32 * 4;
+        u8 *blankPixels = arena_alloc(arena, blankSize);
+        memset(blankPixels, 255, blankSize);
+        r_create_texture(blankPixels, 32, 32, &r_state.blankTex);
+
+        for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
+                VkDescriptorImageInfo imageInfo = {
+                        .imageView = r_state.blankTex.view,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                };
+                VkWriteDescriptorSet wds = {
+                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                        .dstSet = r_state.descriptorSets[i],
+                        .dstBinding = 0,
+                        .dstArrayElement = 0,
+                        .descriptorCount = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                        .pImageInfo = &imageInfo,
+                };
+                vkUpdateDescriptorSets(r_state.device, 1, &wds, 0, 0);
+        }
 }
 
 static void r_begin_frame(void) {
@@ -1308,6 +1322,7 @@ static void r_write_texture_descriptor(RRectInstanceData *rect, RTexture *tex) {
                         .imageView = tex->view,
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 };
+                r_state.writeImageInfo[writesCount] = imageInfo;
                 VkWriteDescriptorSet wds = {
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                         .dstSet = r_state.descriptorSets[currentFrame],
@@ -1317,7 +1332,6 @@ static void r_write_texture_descriptor(RRectInstanceData *rect, RTexture *tex) {
                         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                         .pImageInfo = r_state.writeImageInfo + writesCount,
                 };
-                r_state.writeImageInfo[writesCount] = imageInfo;
                 r_state.writeDescriptorSets[writesCount] = wds;
                 r_state.writeDescriptorSetsCount++;
         } else {
@@ -1335,6 +1349,8 @@ static void r_add_rect_to_batch(RRectInstanceData *rect, RTexture *tex) {
         }
         if (tex) {
                 r_write_texture_descriptor(rect, tex);
+        } else {
+                rect->texID = 0;
         }
         r_state.instancesData[currentFrame][rectCount] = *rect;
         r_state.rectCount++;
@@ -1464,10 +1480,19 @@ static void r_end_frame(void) {
         glfwPollEvents();
 }
 
+static void r_destroy_texture(RTexture *texture) {
+        VkDevice device = r_state.device;
+        vkDestroyImage(device, texture->image, 0);
+        vkFreeMemory(device, texture->memory, 0);
+        vkDestroyImageView(device, texture->view, 0);
+}
+
 static void r_destroy_backend(void) {
         VkDevice device = r_state.device;
         vkDeviceWaitIdle(device);
 
+        r_destroy_texture(&r_state.blankTex);
+        vkDestroySampler(device, r_state.sampler, 0);
         vkDestroyDescriptorPool(device, r_state.descriptorPool, 0);
         vkDestroyDescriptorSetLayout(device, r_state.descriptorSetLayout, 0);
         vkDestroyPipelineLayout(device, r_state.pipelineLayout, 0);
@@ -1490,6 +1515,7 @@ static void r_destroy_backend(void) {
                 vkDestroyImageView(device, r_state.swapchainImageViews[i], 0);
         }
         vkDestroySwapchainKHR(device, r_state.swapchain, 0);
+
         vkDestroyDevice(device, 0);
         vkDestroySurfaceKHR(r_state.instance, r_state.surface, 0);
         if (r_validation_layers_enabled) {
