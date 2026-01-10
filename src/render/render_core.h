@@ -6,8 +6,10 @@ typedef struct {
         Vec2 pos1;
         Vec2 src0;
         Vec2 src1;
-        u32 texID;
         Vec4 colors[4];
+        u32 texID;
+        f32 cornerRadius;
+        f32 edgeSoftness;
 } RRectInstanceData;
 
 // choose backend

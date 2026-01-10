@@ -1015,40 +1015,52 @@ static void r_init_backend(void) {
                         .format = VK_FORMAT_R32G32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, src1),
                 },
+
                 {
                         .location = 4,
-                        .binding = 0,
-                        .format = VK_FORMAT_R32_UINT,
-                        .offset = offsetof(RRectInstanceData, texID),
-                },
-                {
-                        .location = 5,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors),
                 },
                 {
-                        .location = 6,
+                        .location = 5,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset
                         = offsetof(RRectInstanceData, colors) + sizeof(Vec4),
                 },
                 {
-                        .location = 7,
+                        .location = 6,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors)
                                   + sizeof(Vec4) * 2,
                 },
                 {
-                        .location = 8,
+                        .location = 7,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors)
                                   + sizeof(Vec4) * 3,
                 },
-
+                {
+                        .location = 8,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32_UINT,
+                        .offset = offsetof(RRectInstanceData, texID),
+                },
+                {
+                        .location = 9,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, cornerRadius),
+                },
+                {
+                        .location = 10,
+                        .binding = 0,
+                        .format = VK_FORMAT_R32_SFLOAT,
+                        .offset = offsetof(RRectInstanceData, edgeSoftness),
+                },
         };
 
         VkPipelineVertexInputStateCreateInfo vertexInputInfo = {

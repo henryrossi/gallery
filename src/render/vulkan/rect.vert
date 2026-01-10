@@ -8,15 +8,23 @@ layout(location = 0) in vec2 pos0; // top left corner
 layout(location = 1) in vec2 pos1; // bottom right corner
 layout(location = 2) in vec2 src0;
 layout(location = 3) in vec2 src1;
-layout(location = 4) in uint srcID;
-layout(location = 5) in vec4 inColor0;
-layout(location = 6) in vec4 inColor1;
-layout(location = 7) in vec4 inColor2;
-layout(location = 8) in vec4 inColor3;
+layout(location = 4) in vec4 inColor0;
+layout(location = 5) in vec4 inColor1;
+layout(location = 6) in vec4 inColor2;
+layout(location = 7) in vec4 inColor3;
+layout(location = 8) in uint srcID;
+layout(location = 9) in float cornerRadius;
+layout(location = 10) in float edgeSoftness;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out uint texID;
 layout(location = 2) out vec2 uv;
+layout(location = 3) out vec2 outDstPos;
+layout(location = 4) out vec2 outDstCenter;
+layout(location = 5) out vec2 outDstHalfSize;
+layout(location = 6) out float outCornerRadius;
+layout(location = 7) out float outEdgeSoftness;
+
 
 vec2 vertices[4] = vec2[](
     vec2(-1.0, -1.0),
@@ -43,8 +51,13 @@ void main() {
 	
 	vec2 srcHalfSize = (src1 - src0) / 2;
 	vec2 srcCenter = (src1 + src0) / 2;
-	uv = (vertices[gl_VertexIndex] * srcHalfSize) + srcCenter;
 
         outColor = colors[gl_VertexIndex];
+	uv = (vertices[gl_VertexIndex] * srcHalfSize) + srcCenter;
 	texID = srcID;
+	outDstPos = dstPos;
+	outDstCenter = dstCenter;
+	outDstHalfSize = dstHalfSize;
+	outCornerRadius = cornerRadius;
+	outEdgeSoftness = edgeSoftness;
 }
