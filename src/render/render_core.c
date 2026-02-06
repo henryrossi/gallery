@@ -20,7 +20,7 @@ static void r_load_texture(const char *filename, RTexture *texture) {
         stbi_image_free(pixels);
 }
 
-// hr: TODO - the whole shader section needs to be updated to be os independent
+// TODO: hr: the whole shader section needs to be updated to be os independent
 #include <sys/stat.h>
 
 static String8 r_read_shader_file(const char *filename, String8 buf) {

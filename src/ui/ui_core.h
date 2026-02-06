@@ -21,7 +21,7 @@ typedef struct {
         UI_SIZEKIND kind;
         f32 value;
         f32 strictness;
-} SemanticSize;
+} UISemanticSize;
 
 typedef enum {
         UI_ELEMENTFLAG_Clickable = (1 << 0),
@@ -48,17 +48,17 @@ struct UIElement {
         u64 key;
         u64 lastFrameTouched;
 
-        SemanticSize size[UI_AXIS2D_Count];
-        Vec2 relPosition;
-        Vec2 computedSize;
-        Rect2D screenCoords;
+        UISemanticSize size[UI_AXIS2D_Count];
+        Vec2f32 relPosition;
+        Vec2f32 computedSize;
+        Rng2f32 screenCoords;
 
         UI_AXIS2D layoutDirection;
 
         UI_ELEMENTFLAGS flags;
         String8 text;
-        Vec4 backgroundColor;
-        Vec4 textColor;
+        Vec4f32 backgroundColor;
+        Vec4f32 textColor;
 };
 
 typedef struct UIElementNode UIElementNode;
@@ -127,7 +127,8 @@ typedef struct {
 
 static Arena *ui_build_arena(void);
 
-static SemanticSize semanticSize(UI_SIZEKIND kind, f32 value, f32 strictness);
+static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value, f32 strictness);
+#define uiSizeSumOfChildren() uiSemanticSize(UI_SIZEKIND_SumOfChildren, 0, 0)
 
 static b32 ui_key_match(u64 a, u64 b);
 
@@ -151,21 +152,21 @@ static void ui_push_parent(UIElement *v);
 static UIElement *ui_top_parent(void);
 static UIElement *ui_pop_parent(void);
 
-static void ui_push_text_color(Vec4 v);
-static Vec4 ui_get_top_text_color(void);
-static Vec4 ui_pop_text_color(void);
+static void ui_push_text_color(Vec4f32 v);
+static Vec4f32 ui_get_top_text_color(void);
+static Vec4f32 ui_pop_text_color(void);
 
-static void ui_push_background_color(Vec4 v);
-static Vec4 ui_get_top_background_color(void);
-static Vec4 ui_pop_background_color(void);
+static void ui_push_background_color(Vec4f32 v);
+static Vec4f32 ui_get_top_background_color(void);
+static Vec4f32 ui_pop_background_color(void);
 
-static void ui_push_width(SemanticSize v);
-static SemanticSize ui_get_top_width(void);
-static SemanticSize ui_pop_width(void);
+static void ui_push_width(UISemanticSize v);
+static UISemanticSize ui_get_top_width(void);
+static UISemanticSize ui_pop_width(void);
 
-static void ui_push_height(SemanticSize v);
-static SemanticSize ui_get_top_height(void);
-static SemanticSize ui_pop_height(void);
+static void ui_push_height(UISemanticSize v);
+static UISemanticSize ui_get_top_height(void);
+static UISemanticSize ui_pop_height(void);
 
 #define ui_text_color(v)                                                       \
         ui_stack_scope(ui_push_text_color(v), ui_pop_text_color())

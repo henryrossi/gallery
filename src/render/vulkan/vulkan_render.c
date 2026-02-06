@@ -89,6 +89,11 @@ static void r_check_vkresult(VkResult res, char *msg) {
         }
 }
 
+static u64 r_get_frame_count(void) {
+        u64 res = r_state.frameCount;
+        return res;
+}
+
 static Arena *r_get_arena(void) {
         Arena *res = &r_state.arena;
         return res;
@@ -971,7 +976,7 @@ static void r_init_backend(void) {
         VkPushConstantRange pushConstantRange = {
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                 .offset = 0,
-                .size = sizeof(Vec2),
+                .size = sizeof(Vec2f32),
         };
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -995,25 +1000,27 @@ static void r_init_backend(void) {
                         .location = 0,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32_SFLOAT,
-                        .offset = offsetof(RRectInstanceData, pos0),
+                        .offset = offsetof(RRectInstanceData, pos),
                 },
                 {
                         .location = 1,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32_SFLOAT,
-                        .offset = offsetof(RRectInstanceData, pos1),
+                        .offset
+                        = offsetof(RRectInstanceData, pos) + sizeof(Vec2f32),
                 },
                 {
                         .location = 2,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32_SFLOAT,
-                        .offset = offsetof(RRectInstanceData, src0),
+                        .offset = offsetof(RRectInstanceData, src),
                 },
                 {
                         .location = 3,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32_SFLOAT,
-                        .offset = offsetof(RRectInstanceData, src1),
+                        .offset
+                        = offsetof(RRectInstanceData, src) + sizeof(Vec2f32),
                 },
 
                 {
@@ -1027,21 +1034,21 @@ static void r_init_backend(void) {
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset
-                        = offsetof(RRectInstanceData, colors) + sizeof(Vec4),
+                        = offsetof(RRectInstanceData, colors) + sizeof(Vec4f32),
                 },
                 {
                         .location = 6,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors)
-                                  + sizeof(Vec4) * 2,
+                                  + sizeof(Vec4f32) * 2,
                 },
                 {
                         .location = 7,
                         .binding = 0,
                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                         .offset = offsetof(RRectInstanceData, colors)
-                                  + sizeof(Vec4) * 3,
+                                  + sizeof(Vec4f32) * 3,
                 },
                 {
                         .location = 8,
@@ -1347,7 +1354,7 @@ static void r_write_texture_descriptor(RRectInstanceData *rect, RTexture *tex) {
                 r_state.writeDescriptorSets[writesCount] = wds;
                 r_state.writeDescriptorSetsCount++;
         } else {
-                // hr: TODO - reclaim indices
+                // TODO: hr: reclaim indices
                 rect->texID = 0;
                 tex->lastBindingIndex = rect->texID;
         }
@@ -1357,7 +1364,8 @@ static void r_add_rect_to_batch(RRectInstanceData *rect, RTexture *tex) {
         u32 currentFrame = r_state.currentFrame;
         u32 rectCount = r_state.rectCount;
         if (r_state.rectCount >= r_state.maxRects) {
-                // hr: TODO
+                // TODO: hr: implement
+                r_assert(0, "Need to implement, no more rect space");
         }
         if (tex) {
                 r_write_texture_descriptor(rect, tex);
@@ -1413,7 +1421,7 @@ static void r_end_frame(void) {
         };
 
         // if (framebuffer resized)
-        Vec2 resolution = vec2((float)r_state.width, (float)r_state.height);
+        Vec2f32 resolution = v2f32((float)r_state.width, (float)r_state.height);
         vkCmdPushConstants(cmdBuffer, r_state.pipelineLayout,
                            VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(resolution),
                            &resolution);
@@ -1486,6 +1494,7 @@ static void r_end_frame(void) {
         };
         vkQueuePresentKHR(r_state.presentQueue, &presentInfo);
 
+        r_state.frameCount++;
         r_state.currentFrame = (currentFrame + 1) % r_state.maxFramesInFlight;
         r_state.rectCount = 0;
 

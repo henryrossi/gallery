@@ -35,12 +35,17 @@ __thread UIState ui_state;
 
 UIStackFuncImpl()
 
-// hr: temp function
-static Vec2 get_screen_size(void) {
-        Vec2 res = { .x = 1000.0f, .y = 800.0f };
+// hr: temp function,  TODO: query from rendering backend
+static Vec2f32 get_screen_size(void) {
+        Vec2f32 res = { .x = 2000.0f, .y = 1600.0f };
         return res;
 }
 // clang-format on
+
+static f32 ui_text_length_pixels(String8 text, FFont *font, f32 fontSize) {
+        f32 res = text.length * 16.0f;
+        return res;
+}
 
 static Arena *ui_build_arena(void) {
         Arena *res = &ui_state.arena;
@@ -111,8 +116,9 @@ static String8 ui_find_text_within_string(String8 str) {
         return res;
 }
 
-static SemanticSize semanticSize(UI_SIZEKIND kind, f32 value, f32 strictness) {
-        SemanticSize res = {
+static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
+                                     f32 strictness) {
+        UISemanticSize res = {
                 .kind = kind,
                 .value = value,
                 .strictness = strictness,
@@ -137,16 +143,17 @@ static void setup_ui_state() {
         root->firstChild = NULL;
         root->lastChild = NULL;
         root->layoutDirection = UI_AXIS2D_Y;
+        root->lastFrameTouched = UINT64_MAX;
 
         ui_state.root = root;
 
         ui_state.parentStackBottom.v = root;
-        ui_state.textColorStackBottom.v = vec4(1, 1, 1, 1);
-        ui_state.backgroundColorStackBottom.v = vec4(1, 1, 1, 1);
+        ui_state.textColorStackBottom.v = v4f32(1, 1, 1, 1);
+        ui_state.backgroundColorStackBottom.v = v4f32(1, 1, 1, 1);
         ui_state.widthStackBottom.v
-            = semanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
+            = uiSemanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
         ui_state.heightStackBottom.v
-            = semanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
+            = uiSemanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
 
         ui_state.parentStack.top = &ui_state.parentStackBottom;
         ui_state.textColorStack.top = &ui_state.textColorStackBottom;
@@ -213,6 +220,7 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         if (res == NULL) {
                 res = arena_alloc(&ui_state.arena, sizeof(UIElement));
                 res->key = key;
+                ui_cache_add(res);
         }
 
         UIElement *parent = ui_top_parent();
@@ -232,8 +240,11 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         parent->lastChild = res;
 
         res->flags = flags;
+        res->layoutDirection
+            = parent->layoutDirection; // hr: this needs more thought
         res->size[UI_AXIS2D_X] = ui_top_width();
         res->size[UI_AXIS2D_Y] = ui_top_height();
+        res->backgroundColor = ui_top_background_color();
         return res;
 }
 
@@ -266,7 +277,7 @@ static UIElement *ui_build_element_from_stringfv(UI_ELEMENTFLAGS flags,
 /* UI autolayout algorithm functions */
 
 static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
-        SemanticSize size = e->size[axis];
+        UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
         f32 parentSize = 0.0f;
 
@@ -275,7 +286,11 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                 computedSize = size.value;
                 break;
         case UI_SIZEKIND_TextContent:
-                // hr: TODO
+                if (axis == UI_AXIS2D_X) {
+                        computedSize = ui_text_length_pixels(e->text, NULL, 0);
+                } else {
+                        computedSize = 16.0f;
+                }
                 break;
         case UI_SIZEKIND_PercentOfParent:
                 parentSize = (axis == UI_AXIS2D_X) ? e->parent->computedSize.x
@@ -294,15 +309,22 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
 }
 
 static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
-        SemanticSize size = e->size[axis];
+        UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
 
         if (size.kind == UI_SIZEKIND_SumOfChildren) {
                 for (UIElement *child = e->firstChild; child;
                      child = child->next) {
-                        computedSize += (axis == UI_AXIS2D_X)
-                                            ? child->computedSize.x
-                                            : child->computedSize.y;
+                        if (axis == e->layoutDirection) {
+                                computedSize += (axis == UI_AXIS2D_X)
+                                                    ? child->computedSize.x
+                                                    : child->computedSize.y;
+                        } else {
+                                f32 childSize = (axis == UI_AXIS2D_X)
+                                                    ? child->computedSize.x
+                                                    : child->computedSize.y;
+                                computedSize = max(computedSize, childSize);
+                        }
                 }
 
                 if (axis == UI_AXIS2D_X) {
@@ -328,7 +350,7 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
 
 static void ui_element_autolayout(void) {
         Arena scratch = make_arena(OS_PAGESIZE);
-        Vec2 screenExtent = get_screen_size();
+        Vec2f32 screenExtent = get_screen_size();
         UIElement *root = ui_state.root;
         root->size[UI_AXIS2D_X].kind = UI_SIZEKIND_Pixels;
         root->size[UI_AXIS2D_X].value = screenExtent.x;
@@ -355,31 +377,83 @@ static void ui_element_autolayout(void) {
         // hr: Solve violations where children exceed parent
 
         // hr: Compute relative positions and on screen coords
-        //     Here we can apply margins, which will also be relevant to the
-        //     violation calculation above
+        //     Here we can apply margins, which will also be relevant to
+        //     the violation calculation above
+        root->screenCoords.p0 = v2f32(0, 0);
+        root->screenCoords.p1 = root->computedSize;
+        u64 frame = r_get_frame_count();
+
         arena_reset(&scratch);
         queue.first = NULL;
         queue.last = NULL;
         ui_element_list_append(&scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
                 UIElement *cur = ui_element_list_pop_first(&queue);
+                cur->lastFrameTouched = frame;
                 for (UIElement *child = cur->firstChild; child;
                      child = child->next) {
                         ui_element_list_append(&scratch, &queue, child);
                         if (!child->prev) {
                                 child->relPosition.x = 0.0f;
                                 child->relPosition.y = 0.0f;
-                                continue;
-                        }
-                        UIElement *prev = child->prev;
-                        if (root->layoutDirection == UI_AXIS2D_X) {
-                                child->relPosition.x = prev->relPosition.x
-                                                       + prev->computedSize.x;
                         } else {
-                                child->relPosition.y = prev->relPosition.y
-                                                       + prev->computedSize.y;
+                                UIElement *prev = child->prev;
+                                if (root->layoutDirection == UI_AXIS2D_X) {
+                                        child->relPosition.x
+                                            = prev->relPosition.x
+                                              + prev->computedSize.x;
+                                } else {
+                                        child->relPosition.y
+                                            = prev->relPosition.y
+                                              + prev->computedSize.y;
+                                }
                         }
+                        child->screenCoords.p0 = add_2f32(
+                            child->parent->screenCoords.p0, child->relPosition);
+                        child->screenCoords.p1 = add_2f32(
+                            child->computedSize, child->screenCoords.p0);
                 }
+        }
+        // hr: test
+        root->backgroundColor = v4f32(0, 0, 1, 1);
+}
+
+static void ui_draw_element_rec(UIElement *e) {
+        dr_rect(e->screenCoords, e->backgroundColor, 0, 0);
+        for (UIElement *child = e->firstChild; child; child = child->next) {
+                ui_draw_element_rec(child);
+        }
+}
+
+static void ui_draw_elements(void) {
+        u64 frame = r_get_frame_count();
+        ui_cache_prune(frame);
+
+        r_begin_frame();
+
+        ui_draw_element_rec(ui_state.root);
+
+        r_dispatch_batch();
+        r_end_frame();
+
+        ui_state.root->firstChild = 0;
+        ui_state.root->lastChild = 0;
+        // reset everything
+        while (ui_state.parentStack.top != &ui_state.parentStackBottom) {
+                ui_pop_parent();
+        }
+        while (ui_state.widthStack.top != &ui_state.widthStackBottom) {
+                ui_pop_width();
+        }
+        while (ui_state.heightStack.top != &ui_state.heightStackBottom) {
+                ui_pop_height();
+        }
+        while (ui_state.textColorStack.top != &ui_state.textColorStackBottom) {
+                ui_pop_text_color();
+        }
+        while (ui_state.backgroundColorStack.top
+               != &ui_state.backgroundColorStackBottom) {
+                ui_pop_background_color();
         }
 }
 

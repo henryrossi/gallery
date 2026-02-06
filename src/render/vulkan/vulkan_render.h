@@ -33,6 +33,7 @@ typedef struct {
         u32 height;
 
         u32 currentFrame;
+        u64 frameCount;
 
         Arena arena;
 

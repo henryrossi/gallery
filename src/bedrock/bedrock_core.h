@@ -18,6 +18,12 @@ typedef float f32;
 typedef double f64;
 typedef uint32_t b32;
 
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+// #define clamp_top(a, x) min(a, x)
+// #define clamp_bot(x, b) max(x, b)
+// #define clamp(a, x, b) (((x) < (a)) ? (a) : ((x) > (b)) ? (b) : (x))
+
 #define array_count(array) sizeof(array) / sizeof(array[0])
 
 #endif // BEDROCK_CORE_H

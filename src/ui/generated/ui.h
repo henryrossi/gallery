@@ -2,13 +2,13 @@
 typedef struct UIParentNode UIParentNode;\
 struct UIParentNode{UIParentNode*next;UIElement * v;}; \
 typedef struct UITextColorNode UITextColorNode;\
-struct UITextColorNode{UITextColorNode*next;Vec4 v;}; \
+struct UITextColorNode{UITextColorNode*next;Vec4f32 v;}; \
 typedef struct UIBackgroundColorNode UIBackgroundColorNode;\
-struct UIBackgroundColorNode{UIBackgroundColorNode*next;Vec4 v;}; \
+struct UIBackgroundColorNode{UIBackgroundColorNode*next;Vec4f32 v;}; \
 typedef struct UIWidthNode UIWidthNode;\
-struct UIWidthNode{UIWidthNode*next;SemanticSize v;}; \
+struct UIWidthNode{UIWidthNode*next;UISemanticSize v;}; \
 typedef struct UIHeightNode UIHeightNode;\
-struct UIHeightNode{UIHeightNode*next;SemanticSize v;}; \
+struct UIHeightNode{UIHeightNode*next;UISemanticSize v;}; \
 
 #define UIStacksDecl \
 UIParentNode parentStackBottom;\

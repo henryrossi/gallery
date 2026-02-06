@@ -1,23 +1,18 @@
-static RRectInstance *dr_rect(Vec2 pos0, Vec2 pos1, Vec4 color) {
+static void dr_rect(Rng2f32 rng, Vec4f32 color, f32 cornerRadius,
+                    f32 edgeSoftness) {
         RRectInstanceData rect = {
-                .pos0 = pos0,
-                .pos1 = pos1,
-                .src0 = vec2(0, 0),
-                .src1 = vec2(1, 1),
+                .pos = rng,
+                .src = r2f32p(0, 0, 1, 1),
                 .colors = { color, color, color, color },
+                .cornerRadius = cornerRadius,
+                .edgeSoftness = edgeSoftness,
         };
 
-        r_add_rect_to_batch(&rect);
-        return rect;
+        r_add_rect_to_batch(&rect, 0);
 }
 
-static RRectInstance *dr_img() {
-        RRectInstance rect = { 0 };
-        return rect;
-}
+static void dr_img(Rng2f32 rng, Vec4f32 color, String8 filename,
+                   Rng2f32 srcRng) {}
 
-static RRectInstance *dr_text(Font *f, f32 size, String8 text, Vec2 pos0,
-                              Vec4 color) {
-        RRectInstance rect = { 0 };
-        return rect;
-}
+static void dr_text(FFont *f, f32 size, String8 text, Vec2f32 pos0,
+                    Vec4f32 color) {}

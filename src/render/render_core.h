@@ -2,11 +2,9 @@
 #define RENDER_CORE_H
 
 typedef struct {
-        Vec2 pos0;
-        Vec2 pos1;
-        Vec2 src0;
-        Vec2 src1;
-        Vec4 colors[4];
+        Rng2f32 pos;
+        Rng2f32 src;
+        Vec4f32 colors[4];
         u32 texID;
         f32 cornerRadius;
         f32 edgeSoftness;
@@ -18,6 +16,8 @@ typedef struct {
 #include "vulkan/vulkan_render.h"
 
 static void r_init_backend(void);
+
+static u64 r_get_frame_count(void);
 
 static void r_begin_frame(void);
 static void r_add_rect_to_batch(RRectInstanceData *rect, RTexture *tex);
