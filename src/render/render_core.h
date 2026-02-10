@@ -26,7 +26,7 @@ static void r_end_frame(void);
 
 static void r_destroy_backend(void);
 
-static void r_create_texture(u8 *pixels, u32 width, u32 height, RTexture *tex);
+static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels, RTexture *tex);
 static void r_load_texture(const char *filename, RTexture *tex);
 
 #endif // RENDER_CORE_H

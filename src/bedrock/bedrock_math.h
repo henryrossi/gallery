@@ -81,5 +81,6 @@ static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w);
 #define r2f32(a, b) rng2f32(a, b)
 #define r2f32p(x0, y0, x1, y1) rng2f32(v2f32(x0, y0), v2f32(x1, y1))
 static Rng2f32 rng2f32(Vec2f32 a, Vec2f32 b);
+static Rng2f32 shift_2f32(Rng2f32 r, Vec2f32 x);
 
 #endif // BEDROCK_MATH_H

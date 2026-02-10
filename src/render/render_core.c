@@ -15,7 +15,7 @@ static void r_load_texture(const char *filename, RTexture *texture) {
         u8 *pixels = stbi_load(filename, &width, &height, &n, STBI_rgb_alpha);
         r_assert(pixels != 0, "Failed to load texture image");
 
-        r_create_texture(pixels, width, height, texture);
+        r_create_texture(pixels, width, height, n, texture);
 
         stbi_image_free(pixels);
 }

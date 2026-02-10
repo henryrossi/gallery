@@ -1,13 +1,14 @@
+// clang-format off
 #include "bedrock/bedrock_inc.h"
-#include "draw/draw_inc.h"
 #include "os/os_inc.h"
 #include "render/render_inc.h"
+#include "draw/draw_inc.h"
 #include "ui/ui_inc.h"
 
 #include "bedrock/bedrock_inc.c"
-#include "draw/draw_inc.c"
 #include "os/os_inc.c"
 #include "render/render_inc.c"
+#include "draw/draw_inc.c"
 #include "ui/ui_inc.c"
 
 static void print_ui_node(UIElement *e, u32 depth) {
@@ -40,8 +41,8 @@ int main(int argc, char *argv[]) {
 
         r_init_backend();
 
-        RTexture f = { 0 };
-        r_load_texture("resources/DejaVu Sans Mono.png", &f);
+       RTexture t = { 0 };
+        r_load_texture("resources/texture.jpg", &t);
 
         String8 str0 = string8_lit("Button 0");
         String8 str1 = string8_lit("Button 1");
@@ -52,6 +53,15 @@ int main(int argc, char *argv[]) {
         String8 str3 = string8_lit("Button 3");
 
         while (!glfwWindowShouldClose(r_state.window)) {
+                // TODO: hr: loop management
+                u64 frame = r_get_frame_count();
+                ui_cache_prune(frame);
+                r_begin_frame();
+
+                dr_rect(r2f32p(1000, 300, 1250, 500), v4f32(1, 1, 1, 1), 0, 0);
+                dr_text(0, 40.0, str0, r2f32p(1000, 300, 1240, 500), v4f32(0, 0, 0, 1));
+                dr_img(r2f32p(1000, 500, 1500, 1000), v4f32(1, 1, 1, 1), &t,
+                       r2f32p(0, 0, 1, 1), 50, 0);
                 ui_push_text_color(v4f32(0.5f, 1, 1, 1));
                 ui_pop_text_color();
                 ui_push_text_color(v4f32(0.2f, 1, 1, 1));
@@ -59,9 +69,9 @@ int main(int argc, char *argv[]) {
                 ui_push_background_color(v4f32(1, 1, 0, 1));
 
                 ui_push_width(
-                    uiSemanticSize(UI_SIZEKIND_PercentOfParent, 50.0f, 0));
+                    uiSemanticSize(UI_SIZEKIND_PercentOfParent, 25.0f, 0));
                 ui_push_height(
-                    uiSemanticSize(UI_SIZEKIND_PercentOfParent, 50.0f, 0));
+                    uiSemanticSize(UI_SIZEKIND_PercentOfParent, 25.0f, 0));
 
                 ui_push_height(uiSizeSumOfChildren());
                 UISignal sig0 = ui_button(str0);
@@ -94,9 +104,13 @@ int main(int argc, char *argv[]) {
 
                 ui_element_autolayout();
                 ui_draw_elements();
+
+                // TODO: hr: more loop management
+                r_end_frame();
         }
 
-        r_destroy_texture(&f);
+        r_destroy_texture(&t);
+        // r_destroy_texture(&dr_font);
         r_destroy_backend();
 
         return 0;

@@ -472,14 +472,19 @@ static void r_create_image(RTexture *texture, VkFormat format,
         vkBindImageMemory(r_state.device, texture->image, texture->memory, 0);
 }
 
-static void r_create_texture(u8 *pixels, u32 width, u32 height,
+static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels,
                              RTexture *texture) {
         VkDevice device = r_state.device;
 
         texture->width = width;
         texture->height = height;
+
         VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-        VkDeviceSize imageSize = texture->width * texture->height * 4;
+        VkDeviceSize imageSize = width * height * 4;
+        if (channels == 1) {
+                format = VK_FORMAT_R8_UNORM;
+                imageSize = width * height;
+        }
 
         VkCommandBufferBeginInfo beginInfo = {
                 .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1276,7 +1281,7 @@ static void r_init_backend(void) {
         u64 blankSize = 32 * 32 * 4;
         u8 *blankPixels = arena_alloc(arena, blankSize);
         memset(blankPixels, 255, blankSize);
-        r_create_texture(blankPixels, 32, 32, &r_state.blankTex);
+        r_create_texture(blankPixels, 32, 32, 4, &r_state.blankTex);
 
         for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
                 VkDescriptorImageInfo imageInfo = {

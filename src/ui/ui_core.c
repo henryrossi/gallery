@@ -148,7 +148,7 @@ static void setup_ui_state() {
         ui_state.root = root;
 
         ui_state.parentStackBottom.v = root;
-        ui_state.textColorStackBottom.v = v4f32(1, 1, 1, 1);
+        ui_state.textColorStackBottom.v = v4f32(0, 0, 0, 1);
         ui_state.backgroundColorStackBottom.v = v4f32(1, 1, 1, 1);
         ui_state.widthStackBottom.v
             = uiSemanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
@@ -244,6 +244,7 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
             = parent->layoutDirection; // hr: this needs more thought
         res->size[UI_AXIS2D_X] = ui_top_width();
         res->size[UI_AXIS2D_Y] = ui_top_height();
+        res->textColor = ui_top_text_color();
         res->backgroundColor = ui_top_background_color();
         return res;
 }
@@ -414,27 +415,20 @@ static void ui_element_autolayout(void) {
                             child->computedSize, child->screenCoords.p0);
                 }
         }
-        // hr: test
-        root->backgroundColor = v4f32(0, 0, 1, 1);
 }
 
 static void ui_draw_element_rec(UIElement *e) {
         dr_rect(e->screenCoords, e->backgroundColor, 0, 0);
+        dr_text(0, 32.0f, e->text, e->screenCoords, e->textColor);
         for (UIElement *child = e->firstChild; child; child = child->next) {
                 ui_draw_element_rec(child);
         }
 }
 
 static void ui_draw_elements(void) {
-        u64 frame = r_get_frame_count();
-        ui_cache_prune(frame);
-
-        r_begin_frame();
-
         ui_draw_element_rec(ui_state.root);
 
         r_dispatch_batch();
-        r_end_frame();
 
         ui_state.root->firstChild = 0;
         ui_state.root->lastChild = 0;
