@@ -89,6 +89,11 @@ static void r_check_vkresult(VkResult res, char *msg) {
         }
 }
 
+static Vec2f32 r_get_window_size(void) {
+        Vec2f32 res = { .x = (f32)r_state.width, .y = (f32)r_state.height };
+        return res;
+}
+
 static u64 r_get_frame_count(void) {
         u64 res = r_state.frameCount;
         return res;

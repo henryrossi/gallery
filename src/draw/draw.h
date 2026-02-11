@@ -1,11 +1,6 @@
 #ifndef DRAW_H
 #define DRAW_H
 
-// NOTE: hr: tmp
-typedef struct {
-        String8 name;
-} FFont;
-
 static void dr_rect(Rng2f32 rng, Vec4f32 color, f32 cornerRadius,
                     f32 edgeSoftness);
 

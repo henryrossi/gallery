@@ -22,7 +22,7 @@ __thread UIState ui_state;
 
 #define UIStackPushImpl(state, nameUpper, nameLower, value)                    \
         UI##nameUpper##Node *node = state.nameLower##Stack.free;               \
-        if (node != NULL) {                                                    \
+        if (node != 0) {                                                       \
                 SLLStackPop(state.nameLower##Stack.free);                      \
         } else {                                                               \
                 node = arena_alloc(ui_build_arena(),                           \
@@ -35,32 +35,21 @@ __thread UIState ui_state;
 
 UIStackFuncImpl()
 
-// hr: temp function,  TODO: query from rendering backend
-static Vec2f32 get_screen_size(void) {
-        Vec2f32 res = { .x = 2000.0f, .y = 1600.0f };
-        return res;
-}
-// clang-format on
-
-static f32 ui_text_length_pixels(String8 text, FFont *font, f32 fontSize) {
-        f32 res = text.length * 16.0f;
-        return res;
-}
-
 static Arena *ui_build_arena(void) {
         Arena *res = &ui_state.arena;
         return res;
 }
+// clang-format on
 
 static inline u32 ui_element_list_is_empty(UIElementList *list) {
-        return list->first == NULL;
+        return list->first == 0;
 }
 
 static void ui_element_list_append(Arena *arena, UIElementList *list,
                                    UIElement *element) {
         UIElementNode *node = arena_alloc(arena, sizeof(UIElementNode));
         node->element = element;
-        node->next = NULL;
+        node->next = 0;
 
         if (ui_element_list_is_empty(list)) {
                 list->first = node;
@@ -75,7 +64,7 @@ static UIElement *ui_element_list_pop_first(UIElementList *list) {
         UIElement *res = list->first->element;
         list->first = list->first->next;
         if (ui_element_list_is_empty(list)) {
-                list->last = NULL;
+                list->last = 0;
         }
         return res;
 }
@@ -84,14 +73,14 @@ static UIElement *ui_element_list_pop_last(UIElementList *list) {
         UIElement *res = list->last->element;
 
         if (list->first == list->last) {
-                list->first = NULL;
-                list->last = NULL;
+                list->first = 0;
+                list->last = 0;
         } else {
                 UIElementNode *penult = list->first;
                 while (penult->next != list->last) {
                         penult = penult->next;
                 }
-                penult->next = NULL;
+                penult->next = 0;
                 list->last = penult;
         }
 
@@ -130,24 +119,30 @@ static void setup_ui_state() {
         ui_state.arena = make_arena(0xF0000);
         ui_state.strArena = make_arena(0xF0000);
 
+        ui_state.defaultFont
+            = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
+        assert(ui_state.defaultFont && "Failed to load default font");
+
         u64 elementSize = sizeof(UIElement *);
 
         ui_state.bucketCount = 0xF00;
         ui_state.buckets
             = arena_alloc(&ui_state.arena, elementSize * ui_state.bucketCount);
+        ui_state.eFree = 0;
 
         UIElement *root = arena_alloc(&ui_state.arena, sizeof(UIElement));
-        root->parent = NULL;
-        root->next = NULL;
-        root->prev = NULL;
-        root->firstChild = NULL;
-        root->lastChild = NULL;
+        root->parent = 0;
+        root->next = 0;
+        root->prev = 0;
+        root->firstChild = 0;
+        root->lastChild = 0;
         root->layoutDirection = UI_AXIS2D_Y;
         root->lastFrameTouched = UINT64_MAX;
 
         ui_state.root = root;
 
         ui_state.parentStackBottom.v = root;
+        ui_state.textSizeStackBottom.v = 32.0f;
         ui_state.textColorStackBottom.v = v4f32(0, 0, 0, 1);
         ui_state.backgroundColorStackBottom.v = v4f32(1, 1, 1, 1);
         ui_state.widthStackBottom.v
@@ -156,6 +151,7 @@ static void setup_ui_state() {
             = uiSemanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
 
         ui_state.parentStack.top = &ui_state.parentStackBottom;
+        ui_state.textSizeStack.top = &ui_state.textSizeStackBottom;
         ui_state.textColorStack.top = &ui_state.textColorStackBottom;
         ui_state.backgroundColorStack.top
             = &ui_state.backgroundColorStackBottom;
@@ -175,14 +171,17 @@ static UIElement *ui_cache_lookup(u64 key) {
 static void ui_cache_add(UIElement *element) {
         u64 index = element->key % ui_state.bucketCount;
         UIElement *existing = ui_state.buckets[index];
-        if (existing == NULL) {
+        if (existing == 0) {
                 ui_state.buckets[index] = element;
+                element->hashNext = 0;
+                element->hashPrev = 0;
         } else {
                 while (existing->hashNext) {
                         existing = existing->hashNext;
                 }
                 existing->hashNext = element;
                 element->hashPrev = existing;
+                element->hashNext = 0;
         }
 }
 
@@ -190,8 +189,9 @@ static void ui_cache_prune(u64 frame) {
         for (u64 i = 0; i < ui_state.bucketCount; i++) {
                 UIElement *e = ui_state.buckets[i];
                 while (e) {
+                        UIElement *next = e->hashNext;
                         if (e->lastFrameTouched < frame) {
-                                if (e->hashPrev == NULL) {
+                                if (e->hashPrev == 0) {
                                         ui_state.buckets[i] = e->hashNext;
                                 } else {
                                         e->hashPrev->hashNext = e->hashNext;
@@ -199,12 +199,12 @@ static void ui_cache_prune(u64 frame) {
                                 if (e->hashNext) {
                                         e->hashNext->hashPrev = e->hashPrev;
                                 }
-                                // e->hashPrev = NULL;
-                                // e->hashNext = NULL;
-                                // hr: We should reclaim empty UIElements
-                                //     instead of just leaking memory
+
+                                e->hashPrev = 0;
+                                e->hashNext = ui_state.eFree;
+                                ui_state.eFree = e;
                         }
-                        e = e->hashNext;
+                        e = next;
                 }
         }
 }
@@ -217,8 +217,13 @@ static b32 ui_key_match(u64 a, u64 b) {
 static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         UIElement *res = ui_cache_lookup(key);
 
-        if (res == NULL) {
-                res = arena_alloc(&ui_state.arena, sizeof(UIElement));
+        if (res == 0) {
+                if (ui_state.eFree) {
+                        res = ui_state.eFree;
+                        ui_state.eFree = res->hashNext;
+                } else {
+                        res = arena_alloc(&ui_state.arena, sizeof(UIElement));
+                }
                 res->key = key;
                 ui_cache_add(res);
         }
@@ -226,10 +231,10 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         UIElement *parent = ui_top_parent();
 
         res->parent = parent;
-        res->next = NULL;
+        res->next = 0;
         res->prev = parent->lastChild;
-        res->firstChild = NULL;
-        res->lastChild = NULL;
+        res->firstChild = 0;
+        res->lastChild = 0;
 
         if (!parent->firstChild) {
                 parent->firstChild = res;
@@ -241,9 +246,10 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
 
         res->flags = flags;
         res->layoutDirection
-            = parent->layoutDirection; // hr: this needs more thought
+            = parent->layoutDirection; // NOTE: hr: this needs more thought
         res->size[UI_AXIS2D_X] = ui_top_width();
         res->size[UI_AXIS2D_Y] = ui_top_height();
+        res->textSize = ui_top_text_size();
         res->textColor = ui_top_text_color();
         res->backgroundColor = ui_top_background_color();
         return res;
@@ -288,9 +294,12 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                 break;
         case UI_SIZEKIND_TextContent:
                 if (axis == UI_AXIS2D_X) {
-                        computedSize = ui_text_length_pixels(e->text, NULL, 0);
+                        computedSize = f_text_length(ui_state.defaultFont,
+                                                     e->textSize, e->text);
                 } else {
-                        computedSize = 16.0f;
+                        // TODO: hr: we need an algorithm that can compute how
+                        // many lines of text a paragraph is given it's width.
+                        computedSize = e->textSize;
                 }
                 break;
         case UI_SIZEKIND_PercentOfParent:
@@ -351,7 +360,7 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
 
 static void ui_element_autolayout(void) {
         Arena scratch = make_arena(OS_PAGESIZE);
-        Vec2f32 screenExtent = get_screen_size();
+        Vec2f32 screenExtent = r_get_window_size();
         UIElement *root = ui_state.root;
         root->size[UI_AXIS2D_X].kind = UI_SIZEKIND_Pixels;
         root->size[UI_AXIS2D_X].value = screenExtent.x;
@@ -385,8 +394,8 @@ static void ui_element_autolayout(void) {
         u64 frame = r_get_frame_count();
 
         arena_reset(&scratch);
-        queue.first = NULL;
-        queue.last = NULL;
+        queue.first = 0;
+        queue.last = 0;
         ui_element_list_append(&scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
                 UIElement *cur = ui_element_list_pop_first(&queue);
@@ -419,7 +428,8 @@ static void ui_element_autolayout(void) {
 
 static void ui_draw_element_rec(UIElement *e) {
         dr_rect(e->screenCoords, e->backgroundColor, 0, 0);
-        dr_text(0, 32.0f, e->text, e->screenCoords, e->textColor);
+        dr_text(ui_state.defaultFont, e->textSize, e->text, e->screenCoords,
+                e->textColor);
         for (UIElement *child = e->firstChild; child; child = child->next) {
                 ui_draw_element_rec(child);
         }
@@ -429,6 +439,9 @@ static void ui_draw_elements(void) {
         ui_draw_element_rec(ui_state.root);
 
         r_dispatch_batch();
+
+        u64 frame = r_get_frame_count();
+        ui_cache_prune(frame);
 
         ui_state.root->firstChild = 0;
         ui_state.root->lastChild = 0;

@@ -56,6 +56,7 @@ struct UIElement {
         UI_AXIS2D layoutDirection;
 
         UI_ELEMENTFLAGS flags;
+        f32 textSize;
         String8 text;
         Vec4f32 backgroundColor;
         Vec4f32 textColor;
@@ -110,24 +111,30 @@ typedef struct {
         UIInputFlags flags;
 } UISignal;
 
+// clang-format off
 UIStackNodesDecl
 
 typedef struct {
         Arena arena;
         Arena strArena;
 
+        FFont *defaultFont;
+
         UIElement *root;
         u32 numElements;
 
         u64 bucketCount;
         UIElement **buckets;
+        UIElement *eFree;
 
         UIStacksDecl
 } UIState;
+// clang-format on
 
 static Arena *ui_build_arena(void);
 
-static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value, f32 strictness);
+static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
+                                     f32 strictness);
 #define uiSizeSumOfChildren() uiSemanticSize(UI_SIZEKIND_SumOfChildren, 0, 0)
 
 static b32 ui_key_match(u64 a, u64 b);
@@ -152,22 +159,27 @@ static void ui_push_parent(UIElement *v);
 static UIElement *ui_top_parent(void);
 static UIElement *ui_pop_parent(void);
 
+static void ui_push_text_size(f32 v);
+static Vec4f32 ui_top_size_color(void);
+static Vec4f32 ui_pop_text_color(void);
+
 static void ui_push_text_color(Vec4f32 v);
-static Vec4f32 ui_get_top_text_color(void);
+static Vec4f32 ui_top_text_color(void);
 static Vec4f32 ui_pop_text_color(void);
 
 static void ui_push_background_color(Vec4f32 v);
-static Vec4f32 ui_get_top_background_color(void);
+static Vec4f32 ui_top_background_color(void);
 static Vec4f32 ui_pop_background_color(void);
 
 static void ui_push_width(UISemanticSize v);
-static UISemanticSize ui_get_top_width(void);
+static UISemanticSize ui_top_width(void);
 static UISemanticSize ui_pop_width(void);
 
 static void ui_push_height(UISemanticSize v);
-static UISemanticSize ui_get_top_height(void);
+static UISemanticSize ui_top_height(void);
 static UISemanticSize ui_pop_height(void);
 
+#define ui_text_size(v) ui_stack_scope(ui_push_text_size(v), ui_pop_text_size())
 #define ui_text_color(v)                                                       \
         ui_stack_scope(ui_push_text_color(v), ui_pop_text_color())
 #define ui_background_color(v)                                                 \

@@ -16,6 +16,7 @@ static u8 string8_at(String8 string, u64 index);
 static void print_string8(String8 string);
 
 static String8 string8_skip(String8 str, u64 pos);
+static String8 string8_skip_whitespace(String8 str);
 static String8 string8_prune(String8 str, u64 pos);
 
 static String8 string8_concat(Arena *arena, String8 str1, String8 str2);

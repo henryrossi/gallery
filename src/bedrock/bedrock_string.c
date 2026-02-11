@@ -49,6 +49,21 @@ static String8 string8_skip(String8 str, u64 pos) {
         return str;
 }
 
+static String8 string8_skip_whitespace(String8 str) {
+        u32 count = 0;
+        u32 done = 0;
+        while (!done) {
+                u8 c = string8_at(str, count);
+                if (c == '\t' || c == ' ' || c == '\n') {
+                        count++;
+                } else {
+                        done = 1;
+                }
+        }
+        str = string8_skip(str, count);
+        return str;
+}
+
 static String8 string8_prune(String8 str, u64 pos) {
         if (pos < str.length) {
                 str.length = pos;

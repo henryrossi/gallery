@@ -9,6 +9,6 @@ static void *os_reserve(u64 size) {
 }
 
 static void os_release(void *ptr, u64 size) {
-        // hr: There are a couple scenarios when munmap might fail.
+        // NOTE: hr: There are a couple scenarios when munmap might fail.
         munmap(ptr, size);
 }

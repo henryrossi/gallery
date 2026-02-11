@@ -1,5 +1,5 @@
-#ifndef VULKAN_RENDER_H
-#define VULKAN_RENDER_H
+#ifndef RENDER_VULKAN_VULKAN_RENDER_H
+#define RENDER_VULKAN_VULKAN_RENDER_H
 
 #include "vulkan/vulkan.h"
 // #include "vulkan/vk_platform.h"
@@ -90,4 +90,4 @@ typedef struct {
         RTexture blankTex;
 } RState;
 
-#endif
+#endif // RENDER_VULKAN_VULKAN_RENDER_H
