@@ -251,7 +251,11 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         res->size[UI_AXIS2D_Y] = ui_top_height();
         res->textSize = ui_top_text_size();
         res->textColor = ui_top_text_color();
-        res->backgroundColor = ui_top_background_color();
+        Vec4f32 bg = ui_top_background_color();
+        res->backgroundColor[0] = bg;
+        res->backgroundColor[1] = bg;
+        res->backgroundColor[2] = bg;
+        res->backgroundColor[3] = bg;
         return res;
 }
 
@@ -301,6 +305,7 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                         // many lines of text a paragraph is given it's width.
                         computedSize = e->textSize;
                 }
+                computedSize += (2 * e->borderSize);
                 break;
         case UI_SIZEKIND_PercentOfParent:
                 parentSize = (axis == UI_AXIS2D_X) ? e->parent->computedSize.x
@@ -338,9 +343,9 @@ static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
                 }
 
                 if (axis == UI_AXIS2D_X) {
-                        e->computedSize.x = computedSize;
+                        e->computedSize.x = computedSize + (2 * e->borderSize);
                 } else {
-                        e->computedSize.y = computedSize;
+                        e->computedSize.y = computedSize + (2 * e->borderSize);
                 }
         }
 }
@@ -362,6 +367,11 @@ static void ui_element_autolayout(void) {
         Arena scratch = make_arena(OS_PAGESIZE);
         Vec2f32 screenExtent = r_get_window_size();
         UIElement *root = ui_state.root;
+        Vec4f32 bg = ui_state.backgroundColorStackBottom.v;
+        root->backgroundColor[0] = bg;
+        root->backgroundColor[1] = bg;
+        root->backgroundColor[2] = bg;
+        root->backgroundColor[3] = bg;
         root->size[UI_AXIS2D_X].kind = UI_SIZEKIND_Pixels;
         root->size[UI_AXIS2D_X].value = screenExtent.x;
         root->size[UI_AXIS2D_Y].kind = UI_SIZEKIND_Pixels;
@@ -427,9 +437,19 @@ static void ui_element_autolayout(void) {
 }
 
 static void ui_draw_element_rec(UIElement *e) {
-        dr_rect(e->screenCoords, e->backgroundColor, 0, 0);
-        dr_text(ui_state.defaultFont, e->textSize, e->text, e->screenCoords,
-                e->textColor);
+        f32 border = e->borderSize;
+        Rng2f32 pos = e->screenCoords;
+        if (border > 0.0f) {
+                Vec4f32 bc[4] = { e->borderColor, e->borderColor,
+                                  e->borderColor, e->borderColor };
+                dr_rect(pos, bc, 0, 0);
+                pos.min = add_2f32(pos.min, v2f32(border, border));
+                pos.max = add_2f32(pos.max, v2f32(-border, -border));
+        }
+
+        dr_rect(pos, e->backgroundColor, 0, 0);
+        dr_text(ui_state.defaultFont, e->textSize, e->text, pos, e->textColor);
+
         for (UIElement *child = e->firstChild; child; child = child->next) {
                 ui_draw_element_rec(child);
         }
@@ -470,6 +490,10 @@ static void ui_element_add_display_string(UIElement *e, String8 str) {
 
 static void ui_element_add_child_layout_axis(UIElement *e, UI_AXIS2D axis) {
         e->layoutDirection = axis;
+}
+
+static void ui_element_bg_colors(UIElement *e, Vec4f32 *colors) {
+        memcpy(e->backgroundColor, colors, sizeof(Vec4f32) * 4);
 }
 
 static UISignal ui_signal_from_element(UIElement *e) {

@@ -1,5 +1,6 @@
 Task List
   [ ] start working on menu bar for glyph
+  [ ] resize elements using strictness 
   [ ] handle window resizing
   [ ] read UI, part 7
   [ ] port onto windows

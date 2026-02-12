@@ -17,6 +17,7 @@ typedef struct {
 
 static void r_init_backend(void);
 
+static Vec2f32 r_get_window_size(void);
 static u64 r_get_frame_count(void);
 
 static void r_begin_frame(void);

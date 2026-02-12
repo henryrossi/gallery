@@ -31,6 +31,14 @@ static FFont *f_init_font(String8 filename) {
         stbtt_BakeFontBitmap(ttf_buffer, 0, font->bakedSize, bitmap,
                              ATLAS_WIDTH, ATLAS_WIDTH, 32, 96, font->cdata);
 
+        stbtt_fontinfo fontinfo;
+        stbtt_InitFont(&fontinfo, ttf_buffer, 0);
+        s32 ascent, descent, lineGap;
+        stbtt_GetFontVMetrics(&fontinfo, &ascent, &descent, &lineGap);
+
+        f32 scale = stbtt_ScaleForPixelHeight(&fontinfo, font->bakedSize);
+        font->baseline = ascent * scale;
+
         u8 *atlas_tex = arena_alloc(&a, ATLAS_WIDTH * ATLAS_WIDTH * 4);
         for (u32 i = 0; i < ATLAS_WIDTH * ATLAS_WIDTH; i++) {
                 atlas_tex[i * 4] = 255;
@@ -70,6 +78,7 @@ static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
         f32 x = 0.0f;
         f32 y = 0.0f;
         f32 sizeR = size / font->bakedSize;
+        f32 shift = font->bakedSize - font->baseline;
         stbtt_aligned_quad q = { 0 };
 
         stbtt_GetBakedQuad(font->cdata, ATLAS_WIDTH, ATLAS_WIDTH, c - 32, &x,
@@ -79,8 +88,8 @@ static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
         src->min = p0;
         src->max = p1;
 
-        Vec2f32 p2 = { .x = q.x0 * sizeR, .y = q.y0 * sizeR };
-        Vec2f32 p3 = { .x = q.x1 * sizeR, .y = q.y1 * sizeR };
+        Vec2f32 p2 = { .x = q.x0 * sizeR, .y = (q.y0 - shift) * sizeR };
+        Vec2f32 p3 = { .x = q.x1 * sizeR, .y = (q.y1 - shift) * sizeR };
         pos->min = p2;
         pos->max = p3;
 }

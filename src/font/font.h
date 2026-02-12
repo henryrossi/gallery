@@ -8,6 +8,7 @@ typedef struct {
         RTexture tex;
         stbtt_bakedchar cdata[96];
         f32 bakedSize;
+        f32 baseline;
 } FFont;
 
 static FFont *f_init_font(String8 filename);

@@ -1,7 +1,7 @@
 #ifndef DRAW_H
 #define DRAW_H
 
-static void dr_rect(Rng2f32 rng, Vec4f32 color, f32 cornerRadius,
+static void dr_rect(Rng2f32 rng, Vec4f32 *colors, f32 cornerRadius,
                     f32 edgeSoftness);
 
 static void dr_img(Rng2f32 rng, Vec4f32 color, RTexture *tex, Rng2f32 srcRngf32,

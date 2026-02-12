@@ -1,9 +1,9 @@
-static void dr_rect(Rng2f32 rng, Vec4f32 color, f32 cornerRadius,
+static void dr_rect(Rng2f32 rng, Vec4f32 *colors, f32 cornerRadius,
                     f32 edgeSoftness) {
         RRectInstanceData rect = {
                 .pos = rng,
                 .src = r2f32p(0, 0, 1, 1),
-                .colors = { color, color, color, color },
+                .colors = { colors[0], colors[1], colors[2], colors[3] },
                 .cornerRadius = cornerRadius,
                 .edgeSoftness = edgeSoftness,
         };
@@ -35,19 +35,18 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
             = r2f32(rng.min, v2f32(rng.min.x + size, rng.min.y + size));
         text = string8_skip_whitespace(text);
         for (b32 done = 0; done == 0;) {
-                // grab next word
                 u64 space = string8_find_substr(text, s);
                 if (space == UINT64_MAX) {
                         space = text.length;
                         done = 1;
                 }
-                // if it fits lay out left to right
+
                 String8 word = string8_prune(text, space);
                 f32 len = f_text_length(f, size, word);
                 if (remaining < len) {
                         goto next_line;
                 }
-                // loop and draw word
+
                 for (u32 i = 0; i < space; i++) {
                         Rng2f32 pos = { 0 };
                         Rng2f32 src = { 0 };
@@ -64,7 +63,6 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                 remaining -= len;
                 text = string8_skip(text, space);
 
-                // remove excess whitespace
                 while (string8_at(text, 0) == ' ') {
                         if (remaining < size) {
                                 goto next_line;

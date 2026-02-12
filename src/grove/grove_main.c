@@ -48,76 +48,18 @@ int main(int argc, char *argv[]) {
         r_load_texture("resources/texture.jpg", &t);
 
         String8 str0 = string8_lit("Button 0");
-        String8 str1 = string8_lit("Button 1");
+        String8 str1 = string8_lit("Buttony 1");
         u32 a = 2;
         String8 str10 = string8_concat(
             &arena, str1,
             string8_lit("###This is the hashed part of the string"));
-        String8 str3 = string8_lit("Button 3");
+        String8 str3 = string8_lit("El Chalupa");
 
         while (!glfwWindowShouldClose(r_state.window)) {
                 // TODO: hr: loop management
-
                 r_begin_frame();
 
-                u64 frame = r_get_frame_count();
-                if (frame % 2 == 0) {
-                        dr_rect(r2f32p(1000, 300, 1250, 500), v4f32(1, 1, 1, 1),
-                                0, 0);
-                        dr_text(ui_state.defaultFont, 40.0, str0,
-                                r2f32p(1000, 300, 1240, 500),
-                                v4f32(0, 0, 0, 1));
-                        dr_img(r2f32p(1000, 500, 1500, 1000), v4f32(1, 1, 1, 1),
-                               &t, r2f32p(0, 0, 1, 1), 50, 0);
-                        ui_push_text_color(v4f32(0.5f, 1, 1, 1));
-                        ui_pop_text_color();
-                        ui_push_text_color(v4f32(0.2f, 1, 1, 1));
-
-                        ui_push_background_color(v4f32(1, 1, 0, 1));
-
-                        ui_push_width(uiSemanticSize(
-                            UI_SIZEKIND_PercentOfParent, 25.0f, 0));
-                        ui_push_height(uiSemanticSize(
-                            UI_SIZEKIND_PercentOfParent, 25.0f, 0));
-
-                        ui_text_size(64.0f) {
-                                ui_width(uiSemanticSize(UI_SIZEKIND_TextContent,
-                                                        0, 0)) {
-                                        ui_push_height(uiSizeSumOfChildren());
-                                        UISignal sig0 = ui_button(str0);
-                                        ui_pop_height();
-                                        ui_push_parent(sig0.element);
-                                }
-                        }
-
-                        ui_push_background_color(v4f32(1, 0.5, 0.5, 1));
-                        ui_push_width(
-                            uiSemanticSize(UI_SIZEKIND_Pixels, 100.0f, 0));
-                        ui_push_height(
-                            uiSemanticSize(UI_SIZEKIND_Pixels, 100.0f, 0));
-                        UISignal sig = ui_button(str1);
-                        ui_pop_width();
-                        ui_pop_height();
-                        ui_push_parent(sig.element);
-
-                        ui_push_background_color(v4f32(0, 0, 1, 1));
-
-                        ui_buttonf("Button %d", a);
-                        ui_pop_parent();
-
-                        ui_push_background_color(v4f32(1, 0, 1, 1));
-
-                        ui_push_width(
-                            uiSemanticSize(UI_SIZEKIND_Pixels, 100.0f, 0));
-                        ui_push_height(
-                            uiSemanticSize(UI_SIZEKIND_Pixels, 100.0f, 0));
-                        ui_button(str10);
-                        ui_pop_width();
-                        ui_pop_height();
-                        ui_pop_parent();
-
-                        ui_button(str3);
-                }
+                UISignal sig = ui_button(str3);
 
                 ui_element_autolayout();
                 ui_draw_elements();

@@ -48,18 +48,22 @@ struct UIElement {
         u64 key;
         u64 lastFrameTouched;
 
+        UI_ELEMENTFLAGS flags;
         UISemanticSize size[UI_AXIS2D_Count];
+        UI_AXIS2D layoutDirection;
+        String8 text;
+        f32 textSize;
+        Vec4f32 textColor;
+        Vec4f32 backgroundColor[4]; // embossing? gradient?
+        Vec4f32 borderColor;
+        f32 borderSize;
+        f32 cornerRadius;
+        f32 padding;
+
+        // hr: autolayout computed
         Vec2f32 relPosition;
         Vec2f32 computedSize;
         Rng2f32 screenCoords;
-
-        UI_AXIS2D layoutDirection;
-
-        UI_ELEMENTFLAGS flags;
-        f32 textSize;
-        String8 text;
-        Vec4f32 backgroundColor;
-        Vec4f32 textColor;
 };
 
 typedef struct UIElementNode UIElementNode;
@@ -135,7 +139,8 @@ static Arena *ui_build_arena(void);
 
 static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
                                      f32 strictness);
-#define uiSizeSumOfChildren() uiSemanticSize(UI_SIZEKIND_SumOfChildren, 0, 0)
+#define uiSizeSumOfChildren(s) uiSemanticSize(UI_SIZEKIND_SumOfChildren, 0, s)
+#define uiSizeTextContent(s) uiSemanticSize(UI_SIZEKIND_TextContent, 0, s)
 
 static b32 ui_key_match(u64 a, u64 b);
 
@@ -149,6 +154,7 @@ static UIElement *ui_build_element_from_stringfv(UI_ELEMENTFLAGS flags,
 
 static void ui_element_add_display_string(UIElement *e, String8 str);
 static void ui_element_add_child_layout_axis(UIElement *e, UI_AXIS2D axis);
+static void ui_element_bg_colors(UIElement *e, Vec4f32 *colors);
 
 static UISignal ui_signal_from_element(UIElement *e);
 
