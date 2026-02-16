@@ -1,3 +1,13 @@
+#include <math.h>
+
+static b32 nequal_f32(f32 a, f32 b, f32 epsilon) {
+        f32 d = fabs(a - b);
+        if (d == 0) {
+                return 1;
+        }
+        return d < epsilon * (fabs(a) + fabs(b));
+}
+
 static Vec2f32 vec2f32(f32 x, f32 y) {
         Vec2f32 res = { { x, y } };
         return res;
@@ -13,8 +23,14 @@ static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w) {
         return res;
 }
 
-static Vec2f32 add_2f32(Vec2f32 a, Vec2f32 b) {
+static Vec2f32 add_v2f32(Vec2f32 a, Vec2f32 b) {
         Vec2f32 res = { { a.x + b.x, a.y + b.y } };
+        return res;
+}
+
+static b32 equal_v2f32(Vec2f32 a, Vec2f32 b) {
+        f32 e = 0.00001;
+        b32 res = nequal_f32(a.x, b.x, e) && nequal_f32(a.y, b.y, e);
         return res;
 }
 
@@ -23,7 +39,14 @@ static Rng2f32 rng2f32(Vec2f32 a, Vec2f32 b) {
         return res;
 }
 
-static Rng2f32 shift_2f32(Rng2f32 r, Vec2f32 x) {
-        Rng2f32 res = { .min = add_2f32(r.min, x), .max = add_2f32(r.max, x) };
+static Rng2f32 shift_r2f32(Rng2f32 r, Vec2f32 a) {
+        Rng2f32 res
+            = { .min = add_v2f32(r.min, a), .max = add_v2f32(r.max, a) };
+        return res;
+}
+
+static b32 contains_r2f32(Rng2f32 r, Vec2f32 a) {
+        b32 res = (a.x > r.min.x && a.x < r.max.x)
+                  && (a.y > r.min.y && a.y < r.max.y);
         return res;
 }

@@ -7,6 +7,8 @@ typedef struct UITextColorNode UITextColorNode;\
 struct UITextColorNode{UITextColorNode*next;Vec4f32 v;}; \
 typedef struct UIBackgroundColorNode UIBackgroundColorNode;\
 struct UIBackgroundColorNode{UIBackgroundColorNode*next;Vec4f32 v;}; \
+typedef struct UIBorderColorNode UIBorderColorNode;\
+struct UIBorderColorNode{UIBorderColorNode*next;Vec4f32 v;}; \
 typedef struct UIWidthNode UIWidthNode;\
 struct UIWidthNode{UIWidthNode*next;UISemanticSize v;}; \
 typedef struct UIHeightNode UIHeightNode;\
@@ -21,6 +23,8 @@ UITextColorNode textColorStackBottom;\
 struct{UITextColorNode*top;UITextColorNode*free;}textColorStack;\
 UIBackgroundColorNode backgroundColorStackBottom;\
 struct{UIBackgroundColorNode*top;UIBackgroundColorNode*free;}backgroundColorStack;\
+UIBorderColorNode borderColorStackBottom;\
+struct{UIBorderColorNode*top;UIBorderColorNode*free;}borderColorStack;\
 UIWidthNode widthStackBottom;\
 struct{UIWidthNode*top;UIWidthNode*free;}widthStack;\
 UIHeightNode heightStackBottom;\

@@ -12,6 +12,9 @@ static Vec4f32 ui_pop_text_color(void) { UIStackPopImpl(ui_state, TextColor, tex
 static void ui_push_background_color(Vec4f32 v) { UIStackPushImpl(ui_state, BackgroundColor, backgroundColor, v)}\
 static Vec4f32 ui_top_background_color(void) { UIStackTopImpl(ui_state, BackgroundColor, backgroundColor)}\
 static Vec4f32 ui_pop_background_color(void) { UIStackPopImpl(ui_state, BackgroundColor, backgroundColor)}\
+static void ui_push_border_color(Vec4f32 v) { UIStackPushImpl(ui_state, BorderColor, borderColor, v)}\
+static Vec4f32 ui_top_border_color(void) { UIStackTopImpl(ui_state, BorderColor, borderColor)}\
+static Vec4f32 ui_pop_border_color(void) { UIStackPopImpl(ui_state, BorderColor, borderColor)}\
 static void ui_push_width(UISemanticSize v) { UIStackPushImpl(ui_state, Width, width, v)}\
 static UISemanticSize ui_top_width(void) { UIStackTopImpl(ui_state, Width, width)}\
 static UISemanticSize ui_pop_width(void) { UIStackPopImpl(ui_state, Width, width)}\

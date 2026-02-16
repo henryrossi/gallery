@@ -1,4 +1,5 @@
 Task List
+  [ ] add padding and border size to ui layout
   [ ] start working on menu bar for glyph
   [ ] resize elements using strictness 
   [ ] handle window resizing
@@ -14,6 +15,10 @@ export VK_ICD_FILENAMES=$VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json
 export VK_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d   
 
 Task History
+February 16, 2026:
+  [x] handle ui elements input interation
+February 15, 2026:
+  [x] button embossing and debossing
 February 10, 2026:
   [x] rework text length calculataion using stbtt api
   [x] split font code into its own module

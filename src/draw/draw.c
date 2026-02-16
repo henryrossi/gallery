@@ -54,11 +54,11 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                                          &src);
 
                         f32 shift = pos.x1;
-                        pos = shift_2f32(pos, v2f32(cRng.x0, cRng.y0 + size));
+                        pos = shift_r2f32(pos, v2f32(cRng.x0, cRng.y0 + size));
 
                         dr_img(pos, color, &f->tex, src, 0, 0);
 
-                        cRng = shift_2f32(cRng, v2f32(shift, 0.0f));
+                        cRng = shift_r2f32(cRng, v2f32(shift, 0.0f));
                 }
                 remaining -= len;
                 text = string8_skip(text, space);
@@ -68,8 +68,8 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                                 goto next_line;
                         } else {
                                 remaining -= size;
-                                cRng = shift_2f32(cRng,
-                                                  v2f32(size / 2.0f, 0.0f));
+                                cRng = shift_r2f32(cRng,
+                                                   v2f32(size / 2.0f, 0.0f));
                         }
                         text = string8_skip(text, 1);
                 }
@@ -79,7 +79,7 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                 if (cRng.max.y + size < rng.y1) {
                         cRng.min.x = rng.min.x;
                         cRng.max.x = rng.min.x + size;
-                        cRng = shift_2f32(cRng, v2f32(0.0f, size));
+                        cRng = shift_r2f32(cRng, v2f32(0.0f, size));
                         remaining = lineLen;
                         text = string8_skip_whitespace(text);
                 } else {

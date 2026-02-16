@@ -14,30 +14,6 @@
 #include "ui/ui_inc.c"
 // clang-format on
 
-static void print_ui_node(UIElement *e, u32 depth) {
-        if (e == NULL) {
-                return;
-        }
-
-        if (e->text.length > 0) {
-                for (u32 i = 0; i < depth; i++) {
-                        printf("   ");
-                }
-                print_string8(e->text);
-                printf(" size: [%.2f, %.2f], relPos: [%.2f, %.2f], key: %llu\n",
-                       e->computedSize.x, e->computedSize.y, e->relPosition.x,
-                       e->relPosition.y, e->key);
-        }
-
-        print_ui_node(e->firstChild, depth + 1);
-        print_ui_node(e->next, depth);
-}
-
-static void print_ui_tree() {
-        printf("ui state %p\n", ui_state.root);
-        print_ui_node(ui_state.root, 1);
-}
-
 int main(int argc, char *argv[]) {
         r_init_backend();
 
@@ -49,7 +25,6 @@ int main(int argc, char *argv[]) {
 
         String8 str0 = string8_lit("Button 0");
         String8 str1 = string8_lit("Buttony 1");
-        u32 a = 2;
         String8 str10 = string8_concat(
             &arena, str1,
             string8_lit("###This is the hashed part of the string"));
@@ -59,7 +34,11 @@ int main(int argc, char *argv[]) {
                 // TODO: hr: loop management
                 r_begin_frame();
 
-                UISignal sig = ui_button(str3);
+                ui_button(str1);
+                if (ui_button(str3).flags & UI_INTERACTIONFLAG_LeftClicked) {
+                        glfwSetWindowShouldClose(r_state.window, GLFW_TRUE);
+                }
+                ui_button(str0);
 
                 ui_element_autolayout();
                 ui_draw_elements();

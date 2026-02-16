@@ -52,6 +52,8 @@ typedef struct {
         VkFormat colorFormat;
         VkColorSpaceKHR colorSpace;
         VkPresentModeKHR presentMode;
+        u32 availablePresentModesCount;
+        VkPresentModeKHR *availablePresentModes;
         VkSurfaceTransformFlagBitsKHR preTransform;
         VkDevice device;
         VkSwapchainKHR swapchain;

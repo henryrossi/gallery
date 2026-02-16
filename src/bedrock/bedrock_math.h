@@ -69,7 +69,8 @@ union Rng2f32 {
 
 #define v2f32(x, y) vec2f32(x, y)
 static Vec2f32 vec2f32(f32 x, f32 y);
-static Vec2f32 add_2f32(Vec2f32 a, Vec2f32 b);
+static Vec2f32 add_v2f32(Vec2f32 a, Vec2f32 b);
+static b32 equal_v2f32(Vec2f32 a, Vec2f32 b);
 
 #define v3f32(x, y, z) vec3f32(x, y, z)
 static Vec3f32 vec3f32(f32 x, f32 y, f32 z);
@@ -81,6 +82,7 @@ static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w);
 #define r2f32(a, b) rng2f32(a, b)
 #define r2f32p(x0, y0, x1, y1) rng2f32(v2f32(x0, y0), v2f32(x1, y1))
 static Rng2f32 rng2f32(Vec2f32 a, Vec2f32 b);
-static Rng2f32 shift_2f32(Rng2f32 r, Vec2f32 x);
+static Rng2f32 shift_r2f32(Rng2f32 r, Vec2f32 a);
+static b32 contains_r2f32(Rng2f32 r, Vec2f32 a);
 
 #endif // BEDROCK_MATH_H

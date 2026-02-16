@@ -54,7 +54,7 @@ struct UIElement {
         String8 text;
         f32 textSize;
         Vec4f32 textColor;
-        Vec4f32 backgroundColor[4]; // embossing? gradient?
+        Vec4f32 backgroundColors[4]; // embossing? gradient?
         Vec4f32 borderColor;
         f32 borderSize;
         f32 cornerRadius;
@@ -84,35 +84,35 @@ static UIElement *ui_element_list_pop_first(UIElementList *list);
 static UIElement *ui_element_list_pop_last(UIElementList *list);
 
 typedef enum {
-        UIInputFlagLeftPressed = (1 << 0),
-        UIInputFlagMiddlePressed = (1 << 1),
-        UIInputFlagRightPressed = (1 << 2),
+        UI_INTERACTIONFLAG_LeftPressed = (1 << 0),
+        UI_INTERACTIONFLAG_MiddlePressed = (1 << 1),
+        UI_INTERACTIONFLAG_RightPressed = (1 << 2),
 
-        UIInputFlagLeftDragging = (1 << 3),
-        UIInputFlagMiddleDragging = (1 << 4),
-        UIInputFlagRightDragging = (1 << 5),
+        UI_INTERACTIONFLAG_LeftDragging = (1 << 3),
+        UI_INTERACTIONFLAG_MiddleDragging = (1 << 4),
+        UI_INTERACTIONFLAG_RightDragging = (1 << 5),
 
-        UIInputFlagLeftReleased = (1 << 6),
-        UIInputFlagMiddleReleased = (1 << 7),
-        UIInputFlagRightReleased = (1 << 8),
+        UI_INTERACTIONFLAG_LeftReleased = (1 << 6),
+        UI_INTERACTIONFLAG_MiddleReleased = (1 << 7),
+        UI_INTERACTIONFLAG_RightReleased = (1 << 8),
 
-        UIInputFlagLeftClicked = (1 << 9),
-        UIInputFlagMiddleClicked = (1 << 10),
-        UIInputFlagRightClicked = (1 << 11),
+        UI_INTERACTIONFLAG_LeftClicked = (1 << 9),
+        UI_INTERACTIONFLAG_MiddleClicked = (1 << 10),
+        UI_INTERACTIONFLAG_RightClicked = (1 << 11),
 
-        UIInputFlagLeftDoubleClicked = (1 << 12),
-        UIInputFlagMiddleDoubleClicked = (1 << 13),
-        UIInputFlagRightDoubleClicked = (1 << 14),
+        UI_INTERACTIONFLAG_LeftDoubleClicked = (1 << 12),
+        UI_INTERACTIONFLAG_MiddleDoubleClicked = (1 << 13),
+        UI_INTERACTIONFLAG_RightDoubleClicked = (1 << 14),
 
-        UIInputFlagKeyboardPressed = (1 << 15),
+        UI_INTERACTIONFLAG_KeyboardPressed = (1 << 15),
 
-        UIInputFlagHovering = (1 << 16),
-        UIInputFlagMouseOver = (1 << 17),
-} UIInputFlags;
+        UI_INTERACTIONFLAG_Hovering = (1 << 16),
+        UI_INTERACTIONFLAG_MouseOver = (1 << 17),
+} UI_INTERACTIONFLAGS;
 
 typedef struct {
         UIElement *element;
-        UIInputFlags flags;
+        UI_INTERACTIONFLAGS flags;
 } UISignal;
 
 // clang-format off
@@ -130,6 +130,21 @@ typedef struct {
         u64 bucketCount;
         UIElement **buckets;
         UIElement *eFree;
+
+        u32 prevLeft;
+        u32 prevMiddle;
+        u32 prevRight;
+        Vec2f32 leftClickOrigin;
+        Vec2f32 middleClickOrigin;
+        Vec2f32 rightClickOrigin;
+
+        // hr: time limit
+        u64 prevLeftClickFrame;
+        Vec2f32 prevLeftClick;
+        u64 prevMiddleClickFrame;
+        Vec2f32 prevMiddleClick;
+        u64 prevRightClickFrame;
+        Vec2f32 prevRightClick;
 
         UIStacksDecl
 } UIState;

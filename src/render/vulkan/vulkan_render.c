@@ -194,6 +194,22 @@ static b32 r_device_supports_extensions(Arena *a, VkPhysicalDevice device) {
         return 1;
 }
 
+static void r_vsync(b32 on) {
+        VkPresentModeKHR ideal = 0;
+        if (on) {
+                ideal = VK_PRESENT_MODE_MAILBOX_KHR;
+        } else {
+                ideal = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        }
+        r_state.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        for (u32 i = 0; i < r_state.availablePresentModesCount; i++) {
+                if (r_state.availablePresentModes[i] == ideal) {
+                        r_state.presentMode = ideal;
+                        return;
+                }
+        }
+}
+
 static void r_pick_physical_device(Arena *a) {
         u32 deviceCount = 0;
         vkEnumeratePhysicalDevices(r_state.instance, &deviceCount, 0);
@@ -215,8 +231,6 @@ static void r_pick_physical_device(Arena *a) {
                 VkSurfaceCapabilitiesKHR capabilities;
                 u32 formatsCount;
                 VkSurfaceFormatKHR *formats;
-                u32 presentModesCount;
-                VkPresentModeKHR *presentModes;
                 vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
                     device, r_state.surface, &capabilities);
 
@@ -228,13 +242,19 @@ static void r_pick_physical_device(Arena *a) {
                                                      &formatsCount, formats);
 
                 vkGetPhysicalDeviceSurfacePresentModesKHR(
-                    device, r_state.surface, &presentModesCount, 0);
-                presentModes = arena_alloc(a, sizeof(VkPresentModeKHR)
-                                                  * presentModesCount);
-                vkGetPhysicalDeviceSurfacePresentModesKHR(
-                    device, r_state.surface, &presentModesCount, presentModes);
+                    device, r_state.surface,
+                    &r_state.availablePresentModesCount, 0);
 
-                b32 swapchainAdequate = formatsCount && presentModesCount;
+                r_state.availablePresentModes
+                    = arena_alloc(a, sizeof(VkPresentModeKHR)
+                                         * r_state.availablePresentModesCount);
+                vkGetPhysicalDeviceSurfacePresentModesKHR(
+                    device, r_state.surface,
+                    &r_state.availablePresentModesCount,
+                    r_state.availablePresentModes);
+
+                b32 swapchainAdequate
+                    = formatsCount && r_state.availablePresentModesCount;
 
                 u32 queueFamilyCount = 0;
                 vkGetPhysicalDeviceQueueFamilyProperties(device,
@@ -296,15 +316,7 @@ static void r_pick_physical_device(Arena *a) {
                                 r_state.preTransform
                                     = capabilities.currentTransform;
 
-                                r_state.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-                                for (u32 k = 0; k < presentModesCount; k++) {
-                                        if (presentModes[k]
-                                            == VK_PRESENT_MODE_MAILBOX_KHR) {
-                                                r_state.presentMode
-                                                    = presentModes[k];
-                                                break;
-                                        }
-                                }
+                                r_vsync(1);
                                 return;
                         }
                 }
