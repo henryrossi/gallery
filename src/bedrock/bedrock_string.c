@@ -94,6 +94,9 @@ static b32 string8_compare_leading(String8 str1, String8 str2) {
 
 static u64 string8_find_substr(String8 str, String8 substr) {
         String8 tmp = { 0 };
+        if (str.length == 0) {
+                return UINT64_MAX;
+        }
         for (u64 i = 0; i <= str.length - substr.length; i++) {
                 tmp = string8_skip(str, i);
                 if (string8_compare_leading(tmp, substr)) {
@@ -109,6 +112,9 @@ static u64 string8_find_substr(String8 str, String8 substr) {
 #endif
 
 static u64 string8_hashkey_from_seed(u64 seed, String8 str) {
+        if (str.length == 0) {
+                return 0;
+        }
         XXH64_hash_t res = XXH3_64bits_withSeed(str.data, str.length, seed);
         return res;
 }

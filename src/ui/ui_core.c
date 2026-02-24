@@ -41,6 +41,27 @@ static Arena *ui_build_arena(void) {
 }
 // clang-format on
 
+static Vec2f32 ui_content_scale(void) {
+        Vec2f32 res = { .x = 1, .y = 1 };
+        glfwGetWindowContentScale(r_state.window, &res.x, &res.y);
+        return res;
+}
+
+static Vec2f32 ui_mouse_pos(void) {
+        f64 xpos = 0;
+        f64 ypos = 0;
+        glfwGetCursorPos(r_state.window, &xpos, &ypos);
+        Vec2f32 scale = ui_content_scale();
+
+        Vec2f32 res = v2f32(xpos * scale.x, ypos * scale.y);
+        return res;
+}
+
+static Vec2f32 ui_drag_delta(void) {
+        Vec2f32 res = sub_v2f32(ui_mouse_pos(), ui_state.prevMousePos);
+        return res;
+}
+
 static inline u32 ui_element_list_is_empty(UIElementList *list) {
         return list->first == 0;
 }
@@ -130,9 +151,10 @@ static void setup_ui_state() {
             = arena_alloc(&ui_state.arena, elementSize * ui_state.bucketCount);
         ui_state.eFree = 0;
 
-        ui_state.leftClickOrigin = v2f32(-1.0f, -1.0f);
-        ui_state.middleClickOrigin = v2f32(-1.0f, -1.0f);
-        ui_state.rightClickOrigin = v2f32(-1.0f, -1.0f);
+        for (u32 i = 0; i < UI_BUTTON_Count; i++) {
+                ui_state.pressOrigin[i] = v2f32(-1.0f, -1.0f);
+                ui_state.pressedElementKey[i] = 0;
+        }
 
         UIElement *root = arena_alloc(&ui_state.arena, sizeof(UIElement));
         root->parent = 0;
@@ -146,10 +168,13 @@ static void setup_ui_state() {
         ui_state.root = root;
 
         ui_state.parentStackBottom.v = root;
-        ui_state.textSizeStackBottom.v = 32.0f;
+        ui_state.textSizeStackBottom.v = 16.0f;
         ui_state.textColorStackBottom.v = v4f32(0, 0, 0, 1);
         ui_state.backgroundColorStackBottom.v = v4f32(1, 1, 1, 1);
         ui_state.borderColorStackBottom.v = v4f32(0, 0, 0, 1);
+        ui_state.borderSizeStackBottom.v = 1.0f;
+        ui_state.cornerRadiusStackBottom.v = 0;
+        ui_state.paddingStackBottom.v = v4f32(0, 0, 0, 0);
         ui_state.widthStackBottom.v
             = uiSemanticSize(UI_SIZEKIND_PercentOfParent, 100, 0);
         ui_state.heightStackBottom.v
@@ -161,11 +186,17 @@ static void setup_ui_state() {
         ui_state.backgroundColorStack.top
             = &ui_state.backgroundColorStackBottom;
         ui_state.borderColorStack.top = &ui_state.borderColorStackBottom;
+        ui_state.borderSizeStack.top = &ui_state.borderSizeStackBottom;
+        ui_state.cornerRadiusStack.top = &ui_state.cornerRadiusStackBottom;
+        ui_state.paddingStack.top = &ui_state.paddingStackBottom;
         ui_state.widthStack.top = &ui_state.widthStackBottom;
         ui_state.heightStack.top = &ui_state.heightStackBottom;
 }
 
 static UIElement *ui_cache_lookup(u64 key) {
+        if (key == 0) {
+                return 0;
+        }
         u64 index = key % ui_state.bucketCount;
         UIElement *res = ui_state.buckets[index];
         while (res && res->key != key) {
@@ -251,8 +282,8 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         parent->lastChild = res;
 
         res->flags = flags;
-        res->layoutDirection
-            = parent->layoutDirection; // NOTE: hr: this needs more thought
+        res->layoutDirection = parent->layoutDirection; // NOTE: hr: this needs
+                                                        // more thought
         res->size[UI_AXIS2D_X] = ui_top_width();
         res->size[UI_AXIS2D_Y] = ui_top_height();
         res->textSize = ui_top_text_size();
@@ -263,6 +294,9 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         res->backgroundColors[2] = bg;
         res->backgroundColors[3] = bg;
         res->borderColor = ui_top_border_color();
+        res->borderSize = ui_top_border_size();
+        res->cornerRadius = ui_top_corner_radius();
+        res->padding = ui_top_padding();
         return res;
 }
 
@@ -298,28 +332,41 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
         UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
         f32 parentSize = 0.0f;
+        Vec2f32 scale = ui_content_scale();
 
         switch (size.kind) {
         case UI_SIZEKIND_Pixels:
-                computedSize = size.value;
+                if (axis == UI_AXIS2D_X) {
+                        computedSize = size.value * scale.x;
+                } else {
+                        computedSize = size.value * scale.y;
+                }
                 break;
         case UI_SIZEKIND_TextContent:
                 if (axis == UI_AXIS2D_X) {
                         computedSize = f_text_length(ui_state.defaultFont,
                                                      e->textSize, e->text);
+                        computedSize += (e->padding.x + e->padding.z);
+                        computedSize += (2 * e->borderSize);
+                        computedSize *= scale.x;
                 } else {
-                        // TODO: hr: we need an algorithm that can compute how
-                        // many lines of text a paragraph is given it's width.
+                        // TODO: hr: we need an algorithm that can
+                        // compute how many lines of text a paragraph is
+                        // given it's width.
                         computedSize = e->textSize;
+                        computedSize += (e->padding.y + e->padding.w);
+                        computedSize += (2 * e->borderSize);
+                        computedSize *= scale.y;
                 }
-                computedSize += (2 * e->borderSize);
                 break;
         case UI_SIZEKIND_PercentOfParent:
                 parentSize = (axis == UI_AXIS2D_X) ? e->parent->computedSize.x
                                                    : e->parent->computedSize.y;
-                computedSize = parentSize * size.value / 100.0f;
+                computedSize = parentSize * size.value * 0.01f;
                 break;
-        default:
+        case UI_SIZEKIND_SumOfChildren:
+        case UI_SIZEKIND_PercentOfOtherAxis:
+        case UI_SIZEKIND_Null:
                 return;
         }
 
@@ -333,8 +380,10 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
 static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
         UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
+        Vec2f32 scale = ui_content_scale();
 
-        if (size.kind == UI_SIZEKIND_SumOfChildren) {
+        switch (size.kind) {
+        case UI_SIZEKIND_SumOfChildren:
                 for (UIElement *child = e->firstChild; child;
                      child = child->next) {
                         if (axis == e->layoutDirection) {
@@ -350,10 +399,32 @@ static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
                 }
 
                 if (axis == UI_AXIS2D_X) {
-                        e->computedSize.x = computedSize + (2 * e->borderSize);
+                        computedSize += (2 * e->borderSize) * scale.x;
+                        computedSize += (e->padding.x + e->padding.z) * scale.x;
+                        e->computedSize.x = computedSize;
                 } else {
-                        e->computedSize.y = computedSize + (2 * e->borderSize);
+                        computedSize += (2 * e->borderSize) * scale.y;
+                        computedSize += (e->padding.y + e->padding.w) * scale.y;
+                        e->computedSize.y = computedSize;
                 }
+                break;
+
+        case UI_SIZEKIND_PercentOfOtherAxis:
+                if (axis == UI_AXIS2D_X) {
+                        e->computedSize.x
+                            = size.value * 0.01f * e->computedSize.y;
+
+                } else {
+                        e->computedSize.y
+                            = size.value * 0.01f * e->computedSize.x;
+                }
+                break;
+
+        case UI_SIZEKIND_Pixels:
+        case UI_SIZEKIND_TextContent:
+        case UI_SIZEKIND_PercentOfParent:
+        case UI_SIZEKIND_Null:
+                return;
         }
 }
 
@@ -420,21 +491,22 @@ static void ui_element_autolayout(void) {
                 for (UIElement *child = cur->firstChild; child;
                      child = child->next) {
                         ui_element_list_append(&scratch, &queue, child);
-                        if (!child->prev) {
+                        UIElement *prev = child->prev;
+                        UIElement *parent = child->parent;
+                        if (!child->prev
+                            || parent->layoutDirection == UI_AXIS2D_None) {
                                 child->relPosition.x = 0.0f;
                                 child->relPosition.y = 0.0f;
-                        } else {
-                                UIElement *prev = child->prev;
-                                if (root->layoutDirection == UI_AXIS2D_X) {
-                                        child->relPosition.x
-                                            = prev->relPosition.x
-                                              + prev->computedSize.x;
-                                } else {
-                                        child->relPosition.y
-                                            = prev->relPosition.y
-                                              + prev->computedSize.y;
-                                }
+                        } else if (child->parent->layoutDirection
+                                   == UI_AXIS2D_X) {
+                                child->relPosition.x = prev->relPosition.x
+                                                       + prev->computedSize.x;
+                        } else if (child->parent->layoutDirection
+                                   == UI_AXIS2D_Y) {
+                                child->relPosition.y = prev->relPosition.y
+                                                       + prev->computedSize.y;
                         }
+
                         child->screenCoords.p0 = add_v2f32(
                             child->parent->screenCoords.p0, child->relPosition);
                         child->screenCoords.p1 = add_v2f32(
@@ -446,16 +518,27 @@ static void ui_element_autolayout(void) {
 static void ui_draw_element_rec(UIElement *e) {
         f32 border = e->borderSize;
         Rng2f32 pos = e->screenCoords;
-        if (border > 0.0f) {
+        Vec2f32 scale = ui_content_scale();
+        if (e->flags & UI_ELEMENTFLAG_DrawBorder) {
                 Vec4f32 bc[4] = { e->borderColor, e->borderColor,
                                   e->borderColor, e->borderColor };
                 dr_rect(pos, bc, 0, 0);
-                pos.min = add_v2f32(pos.min, v2f32(border, border));
-                pos.max = add_v2f32(pos.max, v2f32(-border, -border));
+                pos.min = add_v2f32(pos.min,
+                                    mul_v2f32(v2f32(border, border), scale));
+                pos.max = add_v2f32(pos.max,
+                                    mul_v2f32(v2f32(-border, -border), scale));
         }
-
-        dr_rect(pos, e->backgroundColors, 0, 0);
-        dr_text(ui_state.defaultFont, e->textSize, e->text, pos, e->textColor);
+        if (e->flags & UI_ELEMENTFLAG_DrawBackground) {
+                dr_rect(pos, e->backgroundColors, e->cornerRadius * scale.x, 0);
+        }
+        if (e->flags & UI_ELEMENTFLAG_DrawText) {
+                Vec4f32 p = e->padding;
+                pos.min = add_v2f32(pos.min, mul_v2f32(v2f32(p.x, p.y), scale));
+                pos.max
+                    = add_v2f32(pos.max, mul_v2f32(v2f32(-p.z, -p.w), scale));
+                dr_text(ui_state.defaultFont, e->textSize * scale.x, e->text,
+                        pos, e->textColor);
+        }
 
         for (UIElement *child = e->firstChild; child; child = child->next) {
                 ui_draw_element_rec(child);
@@ -463,6 +546,8 @@ static void ui_draw_element_rec(UIElement *e) {
 }
 
 static void ui_draw_elements(void) {
+        ui_signal_from_element(ui_state.root);
+
         ui_draw_element_rec(ui_state.root);
 
         r_dispatch_batch();
@@ -490,15 +575,16 @@ static void ui_draw_elements(void) {
                 ui_pop_background_color();
         }
 
-        // TODO: hr: these probably need to be moved into a function and runs
-        // once at the end of every frame
+        // TODO: hr: these probably need to be moved into a function and
+        // runs once at the end of every frame
         u32 left = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_LEFT);
         u32 middle
             = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_MIDDLE);
         u32 right = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_RIGHT);
-        ui_state.prevLeft = left;
-        ui_state.prevMiddle = middle;
-        ui_state.prevRight = right;
+        ui_state.prevMouseState[0] = left;
+        ui_state.prevMouseState[1] = middle;
+        ui_state.prevMouseState[2] = right;
+        ui_state.prevMousePos = ui_mouse_pos();
 }
 
 static void ui_element_add_display_string(UIElement *e, String8 str) {
@@ -534,131 +620,63 @@ static void ui_element_flip_embossment(UIElement *e) {
 }
 
 static inline UI_INTERACTIONFLAGS
-ui_left_mouse_signal(UI_INTERACTIONFLAGS flags, Rng2f32 bbox, Vec2f32 mousePos,
-                     b32 inside, u64 frame) {
-        u32 left = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_LEFT);
-        Vec2f32 origin = ui_state.leftClickOrigin;
-        if (left == GLFW_PRESS) {
-                if (inside) {
-                        if (ui_state.prevLeft == GLFW_RELEASE
-                            && origin.x < 0.0f) {
-                                ui_state.leftClickOrigin = mousePos;
-                                origin = mousePos;
-                        }
-                        flags |= UI_INTERACTIONFLAG_LeftPressed;
-                }
-                if (contains_r2f32(bbox, origin)
-                    && !equal_v2f32(mousePos, origin)) {
-                        flags |= UI_INTERACTIONFLAG_LeftDragging;
-                }
-        } else if (ui_state.prevLeft == GLFW_PRESS) {
-                if (inside) {
-                        if (contains_r2f32(bbox, origin)) {
-                                if (contains_r2f32(bbox, ui_state.prevLeftClick)
-                                    && (frame - ui_state.prevLeftClickFrame)
-                                           < 60) {
-                                        flags
-                                            |= UI_INTERACTIONFLAG_LeftDoubleClicked;
-                                }
-                                ui_state.prevLeftClickFrame = frame;
-                                ui_state.prevLeftClick
-                                    = ui_state.leftClickOrigin;
-                                flags |= UI_INTERACTIONFLAG_LeftClicked;
-                        }
-
-                        flags |= UI_INTERACTIONFLAG_LeftReleased;
-
-                        // hr: this probably needs to happen someplace else
-                        ui_state.leftClickOrigin = v2f32(-1, -1);
-                }
+ui_mouse_signal(UI_BUTTONS button, UI_INTERACTIONFLAGS flags, UIElement *e,
+                Vec2f32 mousePos, b32 inside) {
+        u32 state = 0;
+        if (button == UI_BUTTON_Left) {
+                state = glfwGetMouseButton(r_state.window,
+                                           GLFW_MOUSE_BUTTON_LEFT);
+        } else if (button == UI_BUTTON_Middle) {
+                state = glfwGetMouseButton(r_state.window,
+                                           GLFW_MOUSE_BUTTON_MIDDLE);
+        } else if (button == UI_BUTTON_Right) {
+                state = glfwGetMouseButton(r_state.window,
+                                           GLFW_MOUSE_BUTTON_RIGHT);
+        } else {
+                return flags;
         }
 
-        return flags;
-}
-
-static inline UI_INTERACTIONFLAGS
-ui_middle_mouse_signal(UI_INTERACTIONFLAGS flags, Rng2f32 bbox,
-                       Vec2f32 mousePos, b32 inside, u64 frame) {
-        u32 middle
-            = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_MIDDLE);
-        Vec2f32 origin = ui_state.middleClickOrigin;
-        if (middle == GLFW_PRESS) {
+        Rng2f32 bbox = e->screenCoords;
+        u64 frame = r_get_frame_count();
+        Vec2f32 origin = ui_state.pressOrigin[button];
+        if (state == GLFW_PRESS) {
                 if (inside) {
-                        if (ui_state.prevMiddle == GLFW_RELEASE
+                        if (ui_state.prevMouseState[button] == GLFW_RELEASE
                             && origin.x < 0.0f) {
-                                ui_state.middleClickOrigin = mousePos;
+                                ui_state.pressOrigin[button] = mousePos;
+                                ui_state.pressedElementKey[button] = e->key;
                                 origin = mousePos;
                         }
-                        flags |= UI_INTERACTIONFLAG_MiddlePressed;
+                        flags |= (UI_INTERACTIONFLAG_LeftPressed << button);
                 }
-                if (contains_r2f32(bbox, origin)
+                if (e->key == ui_state.pressedElementKey[button]
                     && !equal_v2f32(mousePos, origin)) {
-                        flags |= UI_INTERACTIONFLAG_MiddleDragging;
+                        flags |= (UI_INTERACTIONFLAG_LeftDragging << button);
                 }
-        } else if (ui_state.prevMiddle == GLFW_PRESS) {
+        } else if (ui_state.prevMouseState[button] == GLFW_PRESS) {
                 if (inside) {
                         if (contains_r2f32(bbox, origin)) {
                                 if (contains_r2f32(bbox,
-                                                   ui_state.prevMiddleClick)
-                                    && (frame - ui_state.prevMiddleClickFrame)
+                                                   ui_state.prevClick[button])
+                                    && (frame - ui_state.prevClickFrame[button])
                                            < 60) {
                                         flags
-                                            |= UI_INTERACTIONFLAG_MiddleDoubleClicked;
+                                            |= (UI_INTERACTIONFLAG_LeftDoubleClicked
+                                                << button);
                                 }
-                                ui_state.prevMiddleClickFrame = frame;
-                                ui_state.prevMiddleClick
-                                    = ui_state.middleClickOrigin;
-                                flags |= UI_INTERACTIONFLAG_MiddleClicked;
+                                ui_state.prevClickFrame[button] = frame;
+                                ui_state.prevClick[button]
+                                    = ui_state.pressOrigin[button];
+                                flags |= (UI_INTERACTIONFLAG_LeftClicked
+                                          << button);
                         }
 
-                        flags |= UI_INTERACTIONFLAG_MiddleReleased;
+                        flags |= (UI_INTERACTIONFLAG_LeftReleased << button);
 
-                        // hr: this probably needs to happen someplace else
-                        ui_state.middleClickOrigin = v2f32(-1, -1);
-                }
-        }
-
-        return flags;
-}
-
-static inline UI_INTERACTIONFLAGS
-ui_right_mouse_signal(UI_INTERACTIONFLAGS flags, Rng2f32 bbox, Vec2f32 mousePos,
-                      b32 inside, u64 frame) {
-        u32 right = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_RIGHT);
-        Vec2f32 origin = ui_state.rightClickOrigin;
-        if (right == GLFW_PRESS) {
-                if (inside) {
-                        if (ui_state.prevRight == GLFW_RELEASE
-                            && origin.x < 0.0f) {
-                                ui_state.rightClickOrigin = mousePos;
-                                origin = mousePos;
-                        }
-                        flags |= UI_INTERACTIONFLAG_RightPressed;
-                }
-                if (contains_r2f32(bbox, origin)
-                    && !equal_v2f32(mousePos, origin)) {
-                        flags |= UI_INTERACTIONFLAG_RightDragging;
-                }
-        } else if (ui_state.prevRight == GLFW_PRESS) {
-                if (inside) {
-                        if (contains_r2f32(bbox, origin)) {
-                                if (contains_r2f32(bbox,
-                                                   ui_state.prevRightClick)
-                                    && (frame - ui_state.prevRightClickFrame)
-                                           < 60) {
-                                        flags
-                                            |= UI_INTERACTIONFLAG_RightDoubleClicked;
-                                }
-                                ui_state.prevRightClickFrame = frame;
-                                ui_state.prevRightClick
-                                    = ui_state.rightClickOrigin;
-                                flags |= UI_INTERACTIONFLAG_RightClicked;
-                        }
-
-                        flags |= UI_INTERACTIONFLAG_RightReleased;
-
-                        // hr: this probably needs to happen someplace else
-                        ui_state.rightClickOrigin = v2f32(-1, -1);
+                        // hr: this probably needs to happen someplace
+                        // else
+                        ui_state.pressedElementKey[button] = 0;
+                        ui_state.pressOrigin[button] = v2f32(-1, -1);
                 }
         }
 
@@ -667,25 +685,17 @@ ui_right_mouse_signal(UI_INTERACTIONFLAGS flags, Rng2f32 bbox, Vec2f32 mousePos,
 
 static UISignal ui_signal_from_element(UIElement *e) {
         UI_INTERACTIONFLAGS flags = 0;
-        f64 xpos = 0;
-        f64 ypos = 0;
-        glfwGetCursorPos(r_state.window, &xpos, &ypos);
-        b32 isRetinaDisplay = 1;
-        if (isRetinaDisplay) {
-                xpos *= 2;
-                ypos *= 2;
-        }
 
-        Vec2f32 mousePos = v2f32(xpos, ypos);
-        Rng2f32 bbox = e->screenCoords;
-        b32 inside = contains_r2f32(bbox, mousePos);
+        Vec2f32 mousePos = ui_mouse_pos();
+        b32 inside = contains_r2f32(e->screenCoords, mousePos);
 
         // Vec2f32 n = v2f32(-1, -1);
         if (inside) {
                 flags |= UI_INTERACTIONFLAG_MouseOver;
 
-                // TODO: hr: define the difference between hovering and mousing
-                // over something
+                // TODO: hr: define the difference between hovering and
+                // mousing over something. Is hovering when it's the
+                // topmost element?
 
                 // if ((equal_v2f32(ui_state.leftClickOrigin, n))
                 //     && (equal_v2f32(ui_state.middleClickOrigin, n))
@@ -694,11 +704,12 @@ static UISignal ui_signal_from_element(UIElement *e) {
                 // }
         }
 
-        u64 frame = r_get_frame_count();
+        for (u32 i = 0; i < UI_BUTTON_Count; i++) {
+                flags = ui_mouse_signal(i, flags, e, mousePos, inside);
+        }
 
-        flags = ui_left_mouse_signal(flags, bbox, mousePos, inside, frame);
-        flags = ui_middle_mouse_signal(flags, bbox, mousePos, inside, frame);
-        flags = ui_right_mouse_signal(flags, bbox, mousePos, inside, frame);
+        // TODO: hr: there should be someway to mark ui events as
+        // "eaten"
 
         UISignal sig = { .element = e, .flags = flags };
         return sig;

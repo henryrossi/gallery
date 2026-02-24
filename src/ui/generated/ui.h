@@ -9,6 +9,12 @@ typedef struct UIBackgroundColorNode UIBackgroundColorNode;\
 struct UIBackgroundColorNode{UIBackgroundColorNode*next;Vec4f32 v;}; \
 typedef struct UIBorderColorNode UIBorderColorNode;\
 struct UIBorderColorNode{UIBorderColorNode*next;Vec4f32 v;}; \
+typedef struct UIBorderSizeNode UIBorderSizeNode;\
+struct UIBorderSizeNode{UIBorderSizeNode*next;f32 v;}; \
+typedef struct UICornerRadiusNode UICornerRadiusNode;\
+struct UICornerRadiusNode{UICornerRadiusNode*next;f32 v;}; \
+typedef struct UIPaddingNode UIPaddingNode;\
+struct UIPaddingNode{UIPaddingNode*next;Vec4f32 v;}; \
 typedef struct UIWidthNode UIWidthNode;\
 struct UIWidthNode{UIWidthNode*next;UISemanticSize v;}; \
 typedef struct UIHeightNode UIHeightNode;\
@@ -25,6 +31,12 @@ UIBackgroundColorNode backgroundColorStackBottom;\
 struct{UIBackgroundColorNode*top;UIBackgroundColorNode*free;}backgroundColorStack;\
 UIBorderColorNode borderColorStackBottom;\
 struct{UIBorderColorNode*top;UIBorderColorNode*free;}borderColorStack;\
+UIBorderSizeNode borderSizeStackBottom;\
+struct{UIBorderSizeNode*top;UIBorderSizeNode*free;}borderSizeStack;\
+UICornerRadiusNode cornerRadiusStackBottom;\
+struct{UICornerRadiusNode*top;UICornerRadiusNode*free;}cornerRadiusStack;\
+UIPaddingNode paddingStackBottom;\
+struct{UIPaddingNode*top;UIPaddingNode*free;}paddingStack;\
 UIWidthNode widthStackBottom;\
 struct{UIWidthNode*top;UIWidthNode*free;}widthStack;\
 UIHeightNode heightStackBottom;\

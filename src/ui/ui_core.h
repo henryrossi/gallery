@@ -7,6 +7,7 @@ typedef enum {
         UI_AXIS2D_X,
         UI_AXIS2D_Y,
         UI_AXIS2D_Count,
+        UI_AXIS2D_None,
 } UI_AXIS2D;
 
 typedef enum {
@@ -15,6 +16,7 @@ typedef enum {
         UI_SIZEKIND_TextContent,
         UI_SIZEKIND_PercentOfParent,
         UI_SIZEKIND_SumOfChildren,
+        UI_SIZEKIND_PercentOfOtherAxis,
 } UI_SIZEKIND;
 
 typedef struct {
@@ -58,7 +60,7 @@ struct UIElement {
         Vec4f32 borderColor;
         f32 borderSize;
         f32 cornerRadius;
-        f32 padding;
+        Vec4f32 padding;
 
         // hr: autolayout computed
         Vec2f32 relPosition;
@@ -108,7 +110,15 @@ typedef enum {
 
         UI_INTERACTIONFLAG_Hovering = (1 << 16),
         UI_INTERACTIONFLAG_MouseOver = (1 << 17),
+
 } UI_INTERACTIONFLAGS;
+
+typedef enum {
+        UI_BUTTON_Left,
+        UI_BUTTON_Middle,
+        UI_BUTTON_Right,
+        UI_BUTTON_Count,
+} UI_BUTTONS;
 
 typedef struct {
         UIElement *element;
@@ -131,20 +141,12 @@ typedef struct {
         UIElement **buckets;
         UIElement *eFree;
 
-        u32 prevLeft;
-        u32 prevMiddle;
-        u32 prevRight;
-        Vec2f32 leftClickOrigin;
-        Vec2f32 middleClickOrigin;
-        Vec2f32 rightClickOrigin;
-
-        // hr: time limit
-        u64 prevLeftClickFrame;
-        Vec2f32 prevLeftClick;
-        u64 prevMiddleClickFrame;
-        Vec2f32 prevMiddleClick;
-        u64 prevRightClickFrame;
-        Vec2f32 prevRightClick;
+        Vec2f32 prevMousePos;
+        u32 prevMouseState[UI_BUTTON_Count];
+        Vec2f32 pressOrigin[UI_BUTTON_Count];
+        u64 pressedElementKey[UI_BUTTON_Count];
+        u64 prevClickFrame[UI_BUTTON_Count];
+        Vec2f32 prevClick[UI_BUTTON_Count];
 
         UIStacksDecl
 } UIState;
@@ -154,6 +156,8 @@ static Arena *ui_build_arena(void);
 
 static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
                                      f32 strictness);
+#define uiPixels(p, s) uiSemanticSize(UI_SIZEKIND_Pixels, p, s)
+#define uiPct(p, s) uiSemanticSize(UI_SIZEKIND_PercentOfParent, p, s)
 #define uiSizeSumOfChildren(s) uiSemanticSize(UI_SIZEKIND_SumOfChildren, 0, s)
 #define uiSizeTextContent(s) uiSemanticSize(UI_SIZEKIND_TextContent, 0, s)
 
@@ -200,6 +204,7 @@ static void ui_push_height(UISemanticSize v);
 static UISemanticSize ui_top_height(void);
 static UISemanticSize ui_pop_height(void);
 
+#define ui_parent(v) ui_stack_scope(ui_push_parent(v), ui_pop_parent())
 #define ui_text_size(v) ui_stack_scope(ui_push_text_size(v), ui_pop_text_size())
 #define ui_text_color(v)                                                       \
         ui_stack_scope(ui_push_text_color(v), ui_pop_text_color())

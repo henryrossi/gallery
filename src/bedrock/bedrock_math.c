@@ -9,28 +9,38 @@ static b32 nequal_f32(f32 a, f32 b, f32 epsilon) {
 }
 
 static Vec2f32 vec2f32(f32 x, f32 y) {
-        Vec2f32 res = { { x, y } };
-        return res;
-}
-
-static Vec3f32 vec3f32(f32 x, f32 y, f32 z) {
-        Vec3f32 res = { { x, y, z } };
-        return res;
-}
-
-static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w) {
-        Vec4f32 res = { { x, y, z, w } };
+        Vec2f32 res = { .x = x, .y = y };
         return res;
 }
 
 static Vec2f32 add_v2f32(Vec2f32 a, Vec2f32 b) {
-        Vec2f32 res = { { a.x + b.x, a.y + b.y } };
+        Vec2f32 res = { .x = a.x + b.x, .y = a.y + b.y };
+        return res;
+}
+
+static Vec2f32 sub_v2f32(Vec2f32 a, Vec2f32 b) {
+        Vec2f32 res = { .x = a.x - b.x, .y = a.y - b.y };
+        return res;
+}
+
+static Vec2f32 mul_v2f32(Vec2f32 a, Vec2f32 b) {
+        Vec2f32 res = { .x = a.x * b.x, .y = a.y * b.y };
         return res;
 }
 
 static b32 equal_v2f32(Vec2f32 a, Vec2f32 b) {
         f32 e = 0.00001;
         b32 res = nequal_f32(a.x, b.x, e) && nequal_f32(a.y, b.y, e);
+        return res;
+}
+
+static Vec3f32 vec3f32(f32 x, f32 y, f32 z) {
+        Vec3f32 res = { .x = x, .y = y, .z = z };
+        return res;
+}
+
+static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w) {
+        Vec4f32 res = { .x = x, .y = y, .z = z, .w = w };
         return res;
 }
 

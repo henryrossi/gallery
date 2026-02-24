@@ -30,6 +30,7 @@ int main(int argc, char *argv[]) {
             string8_lit("###This is the hashed part of the string"));
         String8 str3 = string8_lit("El Chalupa");
 
+        f32 val = 0;
         while (!glfwWindowShouldClose(r_state.window)) {
                 // TODO: hr: loop management
                 r_begin_frame();
@@ -39,6 +40,7 @@ int main(int argc, char *argv[]) {
                         glfwSetWindowShouldClose(r_state.window, GLFW_TRUE);
                 }
                 ui_button(str0);
+                ui_slider(&val, str10);
 
                 ui_element_autolayout();
                 ui_draw_elements();

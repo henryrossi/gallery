@@ -70,6 +70,8 @@ union Rng2f32 {
 #define v2f32(x, y) vec2f32(x, y)
 static Vec2f32 vec2f32(f32 x, f32 y);
 static Vec2f32 add_v2f32(Vec2f32 a, Vec2f32 b);
+static Vec2f32 sub_v2f32(Vec2f32 a, Vec2f32 b);
+static Vec2f32 mul_v2f32(Vec2f32 a, Vec2f32 b);
 static b32 equal_v2f32(Vec2f32 a, Vec2f32 b);
 
 #define v3f32(x, y, z) vec3f32(x, y, z)
