@@ -27,6 +27,11 @@ static String8 string8f(Arena *arena, char *fmt, ...) {
         return res;
 }
 
+static String8 string8_empty(void) {
+        String8 res = { 0 };
+        return res;
+}
+
 static u8 string8_at(String8 string, u64 index) {
         if (index < string.length) {
                 return string.data[index];

@@ -4,16 +4,21 @@ static void ui_spacer(UISemanticSize size) {
         e->size[e->layoutDirection] = size;
 }
 
-static UI_ELEMENTFLAGS ui_button_flags
-    = UI_ELEMENTFLAG_Clickable | UI_ELEMENTFLAG_DrawText
-      | UI_ELEMENTFLAG_DrawBorder | UI_ELEMENTFLAG_DrawBackground;
+static void ui_text(String8 text) {
+        UIElement *e = ui_build_element_from_string(UI_ELEMENTFLAG_DrawText,
+                                                    string8_empty());
+        ui_element_add_display_string(e, text);
+}
 
 static UISignal ui_button(String8 text) {
         ui_push_width(uiSizeTextContent(0));
         ui_push_height(uiSizeTextContent(0));
         ui_push_padding(v4f32(8, 4, 8, 4));
 
-        UIElement *e = ui_build_element_from_string(ui_button_flags, text);
+        UIElement *e = ui_build_element_from_string(
+            UI_ELEMENTFLAG_Clickable | UI_ELEMENTFLAG_DrawText
+                | UI_ELEMENTFLAG_DrawBorder | UI_ELEMENTFLAG_DrawBackground,
+            text);
         UISignal sig = ui_signal_from_element(e);
 
         ui_element_emboss_from_solid(e);
@@ -31,15 +36,15 @@ static UISignal ui_button(String8 text) {
 static UISignal ui_buttonf(char *fmt, ...) {
         va_list args;
         va_start(args, fmt);
-        UIElement *e
-            = ui_build_element_from_stringfv(ui_button_flags, fmt, args);
+        // TODO: hr: replace this with string8f and remove
+        // ui_build_element_from_stringfv as a function
+        UIElement *e = ui_build_element_from_stringfv(0, fmt, args);
         UISignal sig = ui_signal_from_element(e);
         va_end(args);
         return sig;
 }
 
-static UI_ELEMENTFLAGS ui_slider_flags
-    = UI_ELEMENTFLAG_Clickable | UI_ELEMENTFLAG_DrawBackground;
+// static UISignal ui_checkbox(
 
 static UISignal ui_slider(f32 *val, String8 text) {
         f32 SLIDER_HEIGHT = ui_top_text_size();
@@ -77,8 +82,7 @@ static UISignal ui_slider(f32 *val, String8 text) {
                 UIElement *nob = ui_build_element_from_string(
                     UI_ELEMENTFLAG_Clickable | UI_ELEMENTFLAG_DrawBackground,
                     text);
-                nob->size[UI_AXIS2D_X]
-                    = uiSemanticSize(UI_SIZEKIND_PercentOfOtherAxis, 100, 0);
+                nob->size[UI_AXIS2D_X] = uiPixels(SLIDER_HEIGHT, 0);
                 nob->cornerRadius = HALF_SLIDER_HEIGHT;
                 ui_pop_background_color();
 

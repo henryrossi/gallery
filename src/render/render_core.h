@@ -15,12 +15,12 @@ typedef struct {
 #include "thirdparty/GLFW/glfw3.h"
 #include "vulkan/vulkan_render.h"
 
-static void r_init_backend(void);
+static void r_init_backend(const char *name, u32 width, u32 height);
 
 static Vec2f32 r_get_window_size(void);
 static u64 r_get_frame_count(void);
 
-static void r_begin_frame(void);
+static b32 r_begin_frame(void);
 static void r_add_rect_to_batch(RRectInstanceData *rect, RTexture *tex);
 static void r_dispatch_batch(void);
 static void r_end_frame(void);

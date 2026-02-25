@@ -1,7 +1,7 @@
 Task List
+  [ ] write tests for each module
   [ ] start working on menu bar for glyph
   [ ] resize elements using strictness 
-  [ ] handle window resizing
   [ ] read UI, part 7
   [ ] port onto windows
 
@@ -16,6 +16,7 @@ export VK_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d
 Task History
 February 24, 2026:
   [x] finished slider widget and ui input interaction
+  [x] handle window resizing
 February 17, 2026:
   [x] add padding, corner radius, and border size to ui layout
 February 16, 2026:

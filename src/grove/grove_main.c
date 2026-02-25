@@ -15,7 +15,7 @@
 // clang-format on
 
 int main(int argc, char *argv[]) {
-        r_init_backend();
+        r_init_backend("grove", 1000, 800);
 
         setup_ui_state();
         Arena arena = make_arena(0xF000);
@@ -33,7 +33,10 @@ int main(int argc, char *argv[]) {
         f32 val = 0;
         while (!glfwWindowShouldClose(r_state.window)) {
                 // TODO: hr: loop management
-                r_begin_frame();
+                b32 res = r_begin_frame();
+                if (res) {
+                        continue;
+                }
 
                 ui_button(str1);
                 if (ui_button(str3).flags & UI_INTERACTIONFLAG_LeftClicked) {

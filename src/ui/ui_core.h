@@ -16,7 +16,6 @@ typedef enum {
         UI_SIZEKIND_TextContent,
         UI_SIZEKIND_PercentOfParent,
         UI_SIZEKIND_SumOfChildren,
-        UI_SIZEKIND_PercentOfOtherAxis,
 } UI_SIZEKIND;
 
 typedef struct {

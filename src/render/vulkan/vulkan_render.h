@@ -29,14 +29,14 @@ typedef struct {
 } RIndexingInfo;
 
 typedef struct {
-        u32 width;
-        u32 height;
-
         u32 currentFrame;
         u64 frameCount;
 
         Arena arena;
+        Arena scratch;
+        Arena swapchainArena;
 
+        b32 framebufferResized;
         u32 maxFramesInFlight;
         VkInstance instance;
         GLFWwindow *window;
@@ -52,8 +52,6 @@ typedef struct {
         VkFormat colorFormat;
         VkColorSpaceKHR colorSpace;
         VkPresentModeKHR presentMode;
-        u32 availablePresentModesCount;
-        VkPresentModeKHR *availablePresentModes;
         VkSurfaceTransformFlagBitsKHR preTransform;
         VkDevice device;
         VkSwapchainKHR swapchain;

@@ -1,5 +1,9 @@
 #include "ui/generated/ui.c"
 
+// NOTE: hr: for dropdowns, I think they should be removed from the main root
+// tree, but still have a parent. They can be held in a seperate list and
+// treated as their own boxes to be laid out
+
 __thread UIState ui_state;
 
 #define SLLStackPop_N(head, next) ((head) = (head)->next)
@@ -51,9 +55,8 @@ static Vec2f32 ui_mouse_pos(void) {
         f64 xpos = 0;
         f64 ypos = 0;
         glfwGetCursorPos(r_state.window, &xpos, &ypos);
-        Vec2f32 scale = ui_content_scale();
 
-        Vec2f32 res = v2f32(xpos * scale.x, ypos * scale.y);
+        Vec2f32 res = v2f32(xpos, ypos);
         return res;
 }
 
@@ -332,15 +335,10 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
         UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
         f32 parentSize = 0.0f;
-        Vec2f32 scale = ui_content_scale();
 
         switch (size.kind) {
         case UI_SIZEKIND_Pixels:
-                if (axis == UI_AXIS2D_X) {
-                        computedSize = size.value * scale.x;
-                } else {
-                        computedSize = size.value * scale.y;
-                }
+                computedSize = size.value;
                 break;
         case UI_SIZEKIND_TextContent:
                 if (axis == UI_AXIS2D_X) {
@@ -348,7 +346,6 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                                                      e->textSize, e->text);
                         computedSize += (e->padding.x + e->padding.z);
                         computedSize += (2 * e->borderSize);
-                        computedSize *= scale.x;
                 } else {
                         // TODO: hr: we need an algorithm that can
                         // compute how many lines of text a paragraph is
@@ -356,7 +353,6 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                         computedSize = e->textSize;
                         computedSize += (e->padding.y + e->padding.w);
                         computedSize += (2 * e->borderSize);
-                        computedSize *= scale.y;
                 }
                 break;
         case UI_SIZEKIND_PercentOfParent:
@@ -365,7 +361,6 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                 computedSize = parentSize * size.value * 0.01f;
                 break;
         case UI_SIZEKIND_SumOfChildren:
-        case UI_SIZEKIND_PercentOfOtherAxis:
         case UI_SIZEKIND_Null:
                 return;
         }
@@ -380,7 +375,6 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
 static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
         UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
-        Vec2f32 scale = ui_content_scale();
 
         switch (size.kind) {
         case UI_SIZEKIND_SumOfChildren:
@@ -398,25 +392,13 @@ static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
                         }
                 }
 
+                computedSize += (2 * e->borderSize);
                 if (axis == UI_AXIS2D_X) {
-                        computedSize += (2 * e->borderSize) * scale.x;
-                        computedSize += (e->padding.x + e->padding.z) * scale.x;
+                        computedSize += (e->padding.x + e->padding.z);
                         e->computedSize.x = computedSize;
                 } else {
-                        computedSize += (2 * e->borderSize) * scale.y;
-                        computedSize += (e->padding.y + e->padding.w) * scale.y;
+                        computedSize += (e->padding.y + e->padding.w);
                         e->computedSize.y = computedSize;
-                }
-                break;
-
-        case UI_SIZEKIND_PercentOfOtherAxis:
-                if (axis == UI_AXIS2D_X) {
-                        e->computedSize.x
-                            = size.value * 0.01f * e->computedSize.y;
-
-                } else {
-                        e->computedSize.y
-                            = size.value * 0.01f * e->computedSize.x;
                 }
                 break;
 
@@ -516,9 +498,12 @@ static void ui_element_autolayout(void) {
 }
 
 static void ui_draw_element_rec(UIElement *e) {
-        f32 border = e->borderSize;
-        Rng2f32 pos = e->screenCoords;
         Vec2f32 scale = ui_content_scale();
+        f32 border = e->borderSize;
+        Rng2f32 pos = {
+                .min = mul_v2f32(e->screenCoords.min, scale),
+                .max = mul_v2f32(e->screenCoords.max, scale),
+        };
         if (e->flags & UI_ELEMENTFLAG_DrawBorder) {
                 Vec4f32 bc[4] = { e->borderColor, e->borderColor,
                                   e->borderColor, e->borderColor };
