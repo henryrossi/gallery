@@ -1,4 +1,6 @@
 Task List
+  [ ] Fix framebuffer resize bug:
+      Validation Layer: vkAcquireNextImageKHR(): Semaphore must not be currently signaled.
   [ ] write tests for each module
   [ ] start working on menu bar for glyph
   [ ] resize elements using strictness 

@@ -1,13 +1,13 @@
 // clang-format off
 #include "bedrock/bedrock_inc.h"
-#include "os/os_inc.h"
+#include "os/os.h"
 #include "render/render_inc.h"
 #include "font/font.h"
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
 
 #include "bedrock/bedrock_inc.c"
-#include "os/os_inc.c"
+#include "os/os.c"
 #include "render/render_inc.c"
 #include "font/font.c"
 #include "draw/draw.c"

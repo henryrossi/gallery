@@ -21,7 +21,7 @@ static void r_load_texture(const char *filename, RTexture *texture) {
 }
 
 // TODO: hr: the whole shader section needs to be updated to be os independent
-#include <sys/stat.h>
+// #include <sys/stat.h>
 
 static String8 r_read_shader_file(const char *filename, String8 buf) {
         FILE *fp = fopen(filename, "rb");
@@ -36,11 +36,8 @@ static String8 r_read_shader_file(const char *filename, String8 buf) {
 
 static String8 r_alloc_shader_buffer(Arena *a, const char *filename) {
         String8 res;
-
-        struct stat s;
-        stat(filename, &s);
-
-        res = string8_allocate(a, s.st_size);
+        OSFileInfo info = os_file_info(filename);
+        res = string8_allocate(a, info.size);
         return res;
 }
 
