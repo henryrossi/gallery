@@ -52,6 +52,11 @@ static FFont *f_init_font(String8 filename) {
         return font;
 }
 
+static void f_destroy_font(FFont *font) {
+        //
+        r_destroy_texture(&font->tex);
+}
+
 static f32 f_text_length(FFont *font, f32 size, String8 str) {
         f32 res = 0.0f;
         f32 x = 0.0f;

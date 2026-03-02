@@ -44,14 +44,12 @@ static UISignal ui_buttonf(char *fmt, ...) {
         return sig;
 }
 
-// static UISignal ui_checkbox(
-
 static UISignal ui_slider(f32 *val, String8 text) {
         f32 SLIDER_HEIGHT = ui_top_text_size();
         f32 SLIDER_WIDTH = SLIDER_HEIGHT * 5.0f;
         f32 HALF_SLIDER_HEIGHT = SLIDER_HEIGHT / 2.0f;
         String8 nstr = { 0 };
-        f32 v = clamp(0, *val, 1);
+        f32 v = clamp(0.0f, *val, 1.0f);
 
         ui_push_width(uiPixels(SLIDER_WIDTH, 0));
         ui_push_height(uiPixels(SLIDER_HEIGHT, 0));

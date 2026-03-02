@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
         }
 
         r_destroy_texture(&t);
-        // r_destroy_texture(&dr_font);
+        f_destroy_font(&ui_state.defualtFont);
         r_destroy_backend();
 
         return 0;

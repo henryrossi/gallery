@@ -56,7 +56,7 @@ static Vec2f32 ui_mouse_pos(void) {
         f64 ypos = 0;
         glfwGetCursorPos(r_state.window, &xpos, &ypos);
 
-        Vec2f32 res = v2f32(xpos, ypos);
+        Vec2f32 res = mul_v2f32(v2f32(xpos, ypos), ui_content_scale());
         return res;
 }
 
@@ -300,6 +300,7 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         res->borderSize = ui_top_border_size();
         res->cornerRadius = ui_top_corner_radius();
         res->padding = ui_top_padding();
+        res->texture = 0;
         return res;
 }
 
@@ -498,31 +499,30 @@ static void ui_element_autolayout(void) {
 }
 
 static void ui_draw_element_rec(UIElement *e) {
-        Vec2f32 scale = ui_content_scale();
         f32 border = e->borderSize;
-        Rng2f32 pos = {
-                .min = mul_v2f32(e->screenCoords.min, scale),
-                .max = mul_v2f32(e->screenCoords.max, scale),
-        };
+        Rng2f32 pos = e->screenCoords;
         if (e->flags & UI_ELEMENTFLAG_DrawBorder) {
                 Vec4f32 bc[4] = { e->borderColor, e->borderColor,
                                   e->borderColor, e->borderColor };
                 dr_rect(pos, bc, 0, 0);
-                pos.min = add_v2f32(pos.min,
-                                    mul_v2f32(v2f32(border, border), scale));
-                pos.max = add_v2f32(pos.max,
-                                    mul_v2f32(v2f32(-border, -border), scale));
+                pos.min = add_v2f32(pos.min, v2f32(border, border));
+                pos.max = add_v2f32(pos.max, v2f32(-border, -border));
         }
         if (e->flags & UI_ELEMENTFLAG_DrawBackground) {
-                dr_rect(pos, e->backgroundColors, e->cornerRadius * scale.x, 0);
+                if (e->texture) {
+                        Rng2f32 src = r2f32p(0, 0, 1, 1);
+                        dr_img(pos, e->backgroundColors[0], e->texture, src,
+                               e->cornerRadius, 0);
+                } else {
+                        dr_rect(pos, e->backgroundColors, e->cornerRadius, 0);
+                }
         }
         if (e->flags & UI_ELEMENTFLAG_DrawText) {
                 Vec4f32 p = e->padding;
-                pos.min = add_v2f32(pos.min, mul_v2f32(v2f32(p.x, p.y), scale));
-                pos.max
-                    = add_v2f32(pos.max, mul_v2f32(v2f32(-p.z, -p.w), scale));
-                dr_text(ui_state.defaultFont, e->textSize * scale.x, e->text,
-                        pos, e->textColor);
+                pos.min = add_v2f32(pos.min, v2f32(p.x, p.y));
+                pos.max = add_v2f32(pos.max, v2f32(-p.z, -p.w));
+                dr_text(ui_state.defaultFont, e->textSize, e->text, pos,
+                        e->textColor);
         }
 
         for (UIElement *child = e->firstChild; child; child = child->next) {
@@ -574,6 +574,10 @@ static void ui_draw_elements(void) {
 
 static void ui_element_add_display_string(UIElement *e, String8 str) {
         e->text = str;
+}
+
+static void ui_element_attach_texture(UIElement *e, RTexture *tex) {
+        e->texture = tex;
 }
 
 static void ui_element_add_child_layout_axis(UIElement *e, UI_AXIS2D axis) {

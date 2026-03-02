@@ -39,6 +39,11 @@ static Vec3f32 vec3f32(f32 x, f32 y, f32 z) {
         return res;
 }
 
+static Vec4u8 vec4u8(u8 x, u8 y, u8 z, u8 w) {
+        Vec4u8 res = { .x = x, .y = y, .z = z, .w = w };
+        return res;
+}
+
 static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w) {
         Vec4f32 res = { .x = x, .y = y, .z = z, .w = w };
         return res;

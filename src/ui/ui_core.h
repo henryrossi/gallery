@@ -60,6 +60,7 @@ struct UIElement {
         f32 borderSize;
         f32 cornerRadius;
         Vec4f32 padding;
+        RTexture *texture;
 
         // hr: autolayout computed
         Vec2f32 relPosition;

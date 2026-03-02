@@ -1,26 +1,18 @@
-#include "glyph.h"
-
-#include <stdlib.h>
 #include <string.h>
 
-#define ARENA_IMPL
-#include "arena.h"
-
 typedef struct {
-        uint32_t pos;
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
-        uint8_t a;
-} DrawingActionChange;
+        u32 pos;
+        Vec4u8 color;
+} GLDrawingActionChange;
 
-typedef struct historyState {
-        struct historyState *next;
-        struct historyState *prev;
-        DrawingActionChange *execute;
-        DrawingActionChange *revert;
-        uint32_t size;
-} HistoryState;
+typedef struct GLHistoryState GLHistoryState;
+struct GLHistoryState {
+        GLHistoryState *next;
+        GLHistoryState *prev;
+        GLDrawingActionChange *execute;
+        GLDrawingActionChange *revert;
+        u32 size;
+};
 
 static DrawingActionChange *staging = NULL;
 static uint32_t stagingSize = 0;

@@ -27,7 +27,14 @@ static void r_end_frame(void);
 
 static void r_destroy_backend(void);
 
-static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels, RTexture *tex);
+static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels,
+                             RTexture *tex);
 static void r_load_texture(const char *filename, RTexture *tex);
+static void r_destroy_texture(RTexture *texture);
+
+static void r_create_dynamic_texture(Arena *a, u32 width, u32 height,
+                                     RDynamicTexture *tex);
+static RTexture *r_prep_dynamic_texture(RDynamicTexture *tex);
+static void r_destroy_dynamic_texture(RDynamicTexture *dTex);
 
 #endif // RENDER_CORE_H
