@@ -16,7 +16,7 @@ typedef struct {
 } RTexture;
 
 typedef struct {
-        Vec4u8 *data; 
+        Vec4u8 *data;
         VkBuffer *stagingBuffers;
         VkDeviceMemory *stagingMemory;
         RTexture *textures;
@@ -33,9 +33,9 @@ typedef struct {
         u32 currentFrame;
         u64 frameCount;
 
-        Arena arena;
-        Arena scratch;
-        Arena swapchainArena;
+        Arena *arena;
+        Arena *scratch;
+        Arena *swapchainArena;
 
         b32 framebufferResized;
         u32 maxFramesInFlight;

@@ -129,8 +129,8 @@ typedef struct {
 UIStackNodesDecl
 
 typedef struct {
-        Arena arena;
-        Arena strArena;
+        Arena *arena;
+        Arena *strArena;
 
         FFont *defaultFont;
 

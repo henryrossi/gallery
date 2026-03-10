@@ -102,12 +102,12 @@ static u64 r_get_frame_count(void) {
 }
 
 static Arena *r_get_arena(void) {
-        Arena *res = &r_state.arena;
+        Arena *res = r_state.arena;
         return res;
 }
 
 static Arena *r_get_scratch(void) {
-        Arena *res = &r_state.scratch;
+        Arena *res = r_state.scratch;
         return res;
 }
 
@@ -625,7 +625,7 @@ static void r_destroy_dynamic_texture(RDynamicTexture *dTex) {
 static VkShaderModule r_create_shader_module(const char *filename) {
         VkShaderModule shader = VK_NULL_HANDLE;
 
-        String8 code = r_alloc_shader_buffer(&r_state.arena, filename);
+        String8 code = r_alloc_shader_buffer(r_state.arena, filename);
         code = r_read_shader_file(filename, code);
         VkShaderModuleCreateInfo createInfo = {
                 .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -759,7 +759,7 @@ r_create_graphics_pipeline(RGraphicsPipelineCreateInfo *createInfo) {
 }
 
 static void r_create_swapchain(void) {
-        Arena *arena = &r_state.swapchainArena;
+        Arena *arena = r_state.swapchainArena;
         VkSwapchainCreateInfoKHR swapchainCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
                 .surface = r_state.surface,
@@ -819,7 +819,7 @@ static void r_create_swapchain(void) {
 }
 
 static void r_create_framebuffers(void) {
-        Arena *arena = &r_state.swapchainArena;
+        Arena *arena = r_state.swapchainArena;
         r_state.swapchainFramebuffers
             = arena_alloc(arena, sizeof(VkFramebuffer) * r_state.imageCount);
 
@@ -854,7 +854,7 @@ static void r_destroy_swapchain(void) {
         }
         vkDestroySwapchainKHR(r_state.device, r_state.swapchain, 0);
 
-        arena_reset(&r_state.swapchainArena);
+        arena_reset(r_state.swapchainArena);
 }
 
 static void r_recreate_swapchain(void) {
@@ -1245,11 +1245,11 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         };
 
         r_state.imageAvailableSemaphore = arena_alloc(
-            &r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
+            r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
         r_state.renderFinishedSemaphore = arena_alloc(
-            &r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
+            r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
         r_state.inflightFence = arena_alloc(
-            &r_state.arena, sizeof(VkFence) * r_state.maxFramesInFlight);
+            r_state.arena, sizeof(VkFence) * r_state.maxFramesInFlight);
 
         for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
                 res = vkCreateSemaphore(r_state.device, &semaphoreInfo, 0,

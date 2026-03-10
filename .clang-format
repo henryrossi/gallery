@@ -1,5 +1,6 @@
 Language: C
 AlignArrayOfStructures: None
+AllowShortFunctionsOnASingleLine: None
 BracedInitializerIndentWidth: 8
 BreakBeforeBinaryOperators: All
 Cpp11BracedListStyle: false

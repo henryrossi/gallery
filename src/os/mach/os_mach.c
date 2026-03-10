@@ -1,11 +1,11 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-static void *os_reserve(u64 size) {
+static void *os_commit(u64 size) {
         void *res = mmap(NULL, size, PROT_READ | PROT_WRITE,
                          MAP_PRIVATE | MAP_ANON, -1, 0);
         if (res == MAP_FAILED)
-                perror(0);
+                perror("ERROR: Memory allocation failed");
         return res;
 }
 

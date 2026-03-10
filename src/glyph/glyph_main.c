@@ -19,7 +19,7 @@ typedef struct {
         const char *filename;
         u32 width;
         u32 height;
-        Arena arena;
+        Arena *arena;
 
         RDynamicTexture canvas;
         b32 pressedPick;
@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
 
         r_init_backend("glyph", 1000, 800);
 
-        glf_state.arena = make_arena(0xF000000);
+        glf_state.arena = make_arena(0xF00000000);
         glf_state.filename = args.filename;
         glf_state.width = args.width;
         glf_state.height = args.height;
@@ -165,13 +165,14 @@ int main(int argc, char *argv[]) {
                 if (!data) {
                         return 1;
                 }
-                r_create_dynamic_texture(&glf_state.arena, glf_state.width,
+                r_create_dynamic_texture(glf_state.arena, glf_state.width,
                                          glf_state.height, &glf_state.canvas);
                 memcpy(glf_state.canvas.data, data,
                        glf_state.width * glf_state.height * 4);
                 stbi_image_free(data);
         } else {
-                r_create_dynamic_texture(&glf_state.arena, glf_state.width,
+                printf("%d by %d file\n", glf_state.width, glf_state.height);
+                r_create_dynamic_texture(glf_state.arena, glf_state.width,
                                          glf_state.height, &glf_state.canvas);
                 for (u32 i = 0; i < glf_state.width * glf_state.height; i++) {
                         glf_state.canvas.data[i] = v4u8(255, 255, 255, 255);
@@ -224,7 +225,7 @@ int main(int argc, char *argv[]) {
 
                 String8 colorStr = string8_lit("current color");
                 ui_push_width(uiPct(100, 0));
-                ui_push_height(uiPixels(500, 0));
+                ui_push_height(uiPixels(200, 0));
                 ui_push_background_color(glf_state.currentColor);
                 e = ui_build_element_from_string(UI_ELEMENTFLAG_DrawBackground,
                                                  colorStr);
@@ -243,7 +244,7 @@ int main(int argc, char *argv[]) {
                 ui_pop_height();
 
                 ui_push_background_color(v4f32(0.7, 0.7, 0.75, 1));
-                ui_push_text_size(48.0f);
+                ui_push_text_size(32.0f);
                 ui_spacer(uiPixels(10, 0));
                 ui_slider(&glf_state.colorPicker.x, string8_lit("preview red"));
                 ui_spacer(uiPixels(10, 0));

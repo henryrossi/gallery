@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
         r_init_backend("grove", 1000, 800);
 
         setup_ui_state();
-        Arena arena = make_arena(0xF000);
+        Arena *arena = make_arena(0xF000);
 
         RTexture t = { 0 };
         r_load_texture("resources/texture.jpg", &t);
@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
         String8 str0 = string8_lit("Button 0");
         String8 str1 = string8_lit("Buttony 1");
         String8 str10 = string8_concat(
-            &arena, str1,
+            arena, str1,
             string8_lit("###This is the hashed part of the string"));
         String8 str3 = string8_lit("El Chalupa");
 
@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
         }
 
         r_destroy_texture(&t);
-        f_destroy_font(&ui_state.defualtFont);
+        f_destroy_font(ui_state.defaultFont);
         r_destroy_backend();
 
         return 0;

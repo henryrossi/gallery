@@ -7,3 +7,7 @@
 #else
 #error OS core layer not implemented for this operating system.
 #endif
+
+static void os_abort(s32 exitCode) {
+        exit(exitCode);
+}

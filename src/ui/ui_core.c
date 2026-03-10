@@ -40,7 +40,7 @@ __thread UIState ui_state;
 UIStackFuncImpl()
 
 static Arena *ui_build_arena(void) {
-        Arena *res = &ui_state.arena;
+        Arena *res = ui_state.arena;
         return res;
 }
 // clang-format on
@@ -140,8 +140,8 @@ static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
 }
 
 static void setup_ui_state() {
-        ui_state.arena = make_arena(0xF0000);
-        ui_state.strArena = make_arena(0xF0000);
+        ui_state.arena = make_arena(mb(1));
+        ui_state.strArena = make_arena(mb(1));
 
         ui_state.defaultFont
             = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
@@ -151,7 +151,7 @@ static void setup_ui_state() {
 
         ui_state.bucketCount = 0xF00;
         ui_state.buckets
-            = arena_alloc(&ui_state.arena, elementSize * ui_state.bucketCount);
+            = arena_alloc(ui_state.arena, elementSize * ui_state.bucketCount);
         ui_state.eFree = 0;
 
         for (u32 i = 0; i < UI_BUTTON_Count; i++) {
@@ -159,7 +159,7 @@ static void setup_ui_state() {
                 ui_state.pressedElementKey[i] = 0;
         }
 
-        UIElement *root = arena_alloc(&ui_state.arena, sizeof(UIElement));
+        UIElement *root = arena_alloc(ui_state.arena, sizeof(UIElement));
         root->parent = 0;
         root->next = 0;
         root->prev = 0;
@@ -262,7 +262,7 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
                         res = ui_state.eFree;
                         ui_state.eFree = res->hashNext;
                 } else {
-                        res = arena_alloc(&ui_state.arena, sizeof(UIElement));
+                        res = arena_alloc(ui_state.arena, sizeof(UIElement));
                 }
                 res->key = key;
                 ui_cache_add(res);
@@ -317,7 +317,7 @@ static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
                                                 char *fmt, ...) {
         va_list args;
         va_start(args, fmt);
-        String8 str = string8fv(&ui_state.strArena, fmt, args);
+        String8 str = string8fv(ui_state.strArena, fmt, args);
         UIElement *res = ui_build_element_from_string(flags, str);
         va_end(args);
         return res;
@@ -325,7 +325,7 @@ static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
 
 static UIElement *ui_build_element_from_stringfv(UI_ELEMENTFLAGS flags,
                                                  char *fmt, va_list args) {
-        String8 str = string8fv(&ui_state.strArena, fmt, args);
+        String8 str = string8fv(ui_state.strArena, fmt, args);
         UIElement *res = ui_build_element_from_string(flags, str);
         return res;
 }
@@ -336,10 +336,12 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
         UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
         f32 parentSize = 0.0f;
+        Vec2f32 scale = ui_content_scale();
+        f32 axisScale = axis == UI_AXIS2D_X ? scale.x : scale.y;
 
         switch (size.kind) {
         case UI_SIZEKIND_Pixels:
-                computedSize = size.value;
+                computedSize = size.value * axisScale;
                 break;
         case UI_SIZEKIND_TextContent:
                 if (axis == UI_AXIS2D_X) {
@@ -347,6 +349,7 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                                                      e->textSize, e->text);
                         computedSize += (e->padding.x + e->padding.z);
                         computedSize += (2 * e->borderSize);
+                        computedSize *= scale.x;
                 } else {
                         // TODO: hr: we need an algorithm that can
                         // compute how many lines of text a paragraph is
@@ -354,6 +357,7 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                         computedSize = e->textSize;
                         computedSize += (e->padding.y + e->padding.w);
                         computedSize += (2 * e->borderSize);
+                        computedSize *= scale.y;
                 }
                 break;
         case UI_SIZEKIND_PercentOfParent:
@@ -425,7 +429,9 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
 }
 
 static void ui_element_autolayout(void) {
-        Arena scratch = make_arena(OS_PAGESIZE);
+        Arena *scratch
+            = make_arena(OS_PAGESIZE); // TODO: hr: this is a memory leak,
+                                       // rework with new arena_pop api
         Vec2f32 screenExtent = r_get_window_size();
         UIElement *root = ui_state.root;
         Vec4f32 bg = ui_state.backgroundColorStackBottom.v;
@@ -433,13 +439,15 @@ static void ui_element_autolayout(void) {
         root->backgroundColors[1] = bg;
         root->backgroundColors[2] = bg;
         root->backgroundColors[3] = bg;
+        // TODO: hr: hacky! need to fix
+        Vec2f32 scale = ui_content_scale();
         root->size[UI_AXIS2D_X].kind = UI_SIZEKIND_Pixels;
-        root->size[UI_AXIS2D_X].value = screenExtent.x;
+        root->size[UI_AXIS2D_X].value = screenExtent.x / scale.x;
         root->size[UI_AXIS2D_Y].kind = UI_SIZEKIND_Pixels;
-        root->size[UI_AXIS2D_Y].value = screenExtent.y;
+        root->size[UI_AXIS2D_Y].value = screenExtent.y / scale.y;
 
         UIElementList queue = { 0 };
-        ui_element_list_append(&scratch, &queue, root);
+        ui_element_list_append(scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
                 UIElement *e = ui_element_list_pop_first(&queue);
                 UIElement *child = e->firstChild;
@@ -448,7 +456,7 @@ static void ui_element_autolayout(void) {
                 ui_autolayout_calc_preorder(e, UI_AXIS2D_Y);
 
                 while (child) {
-                        ui_element_list_append(&scratch, &queue, child);
+                        ui_element_list_append(scratch, &queue, child);
                         child = child->next;
                 }
         }
@@ -464,16 +472,16 @@ static void ui_element_autolayout(void) {
         root->screenCoords.p1 = root->computedSize;
         u64 frame = r_get_frame_count();
 
-        arena_reset(&scratch);
+        arena_reset(scratch);
         queue.first = 0;
         queue.last = 0;
-        ui_element_list_append(&scratch, &queue, root);
+        ui_element_list_append(scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
                 UIElement *cur = ui_element_list_pop_first(&queue);
                 cur->lastFrameTouched = frame;
                 for (UIElement *child = cur->firstChild; child;
                      child = child->next) {
-                        ui_element_list_append(&scratch, &queue, child);
+                        ui_element_list_append(scratch, &queue, child);
                         UIElement *prev = child->prev;
                         UIElement *parent = child->parent;
                         if (!child->prev
@@ -501,6 +509,7 @@ static void ui_element_autolayout(void) {
 static void ui_draw_element_rec(UIElement *e) {
         f32 border = e->borderSize;
         Rng2f32 pos = e->screenCoords;
+        Vec2f32 scale = ui_content_scale();
         if (e->flags & UI_ELEMENTFLAG_DrawBorder) {
                 Vec4f32 bc[4] = { e->borderColor, e->borderColor,
                                   e->borderColor, e->borderColor };
@@ -521,8 +530,8 @@ static void ui_draw_element_rec(UIElement *e) {
                 Vec4f32 p = e->padding;
                 pos.min = add_v2f32(pos.min, v2f32(p.x, p.y));
                 pos.max = add_v2f32(pos.max, v2f32(-p.z, -p.w));
-                dr_text(ui_state.defaultFont, e->textSize, e->text, pos,
-                        e->textColor);
+                dr_text(ui_state.defaultFont, e->textSize * scale.x, e->text,
+                        pos, e->textColor);
         }
 
         for (UIElement *child = e->firstChild; child; child = child->next) {
