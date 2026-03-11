@@ -1,4 +1,6 @@
 Task List
+  [ ] Pixelize large image at smaller scale
+  [ ] Implement delta-based state mutation
   [ ] Fix framebuffer resize bug:
       Validation Layer: vkAcquireNextImageKHR(): Semaphore must not be currently signaled.
   [ ] write tests for each module
@@ -16,6 +18,11 @@ export VK_ICD_FILENAMES=$VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json
 export VK_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d   
 
 Task History
+March 10, 2026:
+  [x] Size text based on content scale
+  [x] how to handle discrepancy in sizes with retina displays 
+March 9, 2026:
+  [x] extended arena functionality to chain pages when out of memory
 February 24, 2026:
   [x] finished slider widget and ui input interaction
   [x] handle window resizing

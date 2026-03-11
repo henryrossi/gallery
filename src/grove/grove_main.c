@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
         r_init_backend("grove", 1000, 800);
 
         setup_ui_state();
-        Arena *arena = make_arena(0xF000);
+        Arena *arena = make_arena(kb(6));
 
         RTexture t = { 0 };
         r_load_texture("resources/texture.jpg", &t);
@@ -37,6 +37,7 @@ int main(int argc, char *argv[]) {
                 if (res) {
                         continue;
                 }
+                ui_push_text_size(16.0f);
 
                 ui_button(str1);
                 if (ui_button(str3).flags & UI_INTERACTIONFLAG_LeftClicked) {

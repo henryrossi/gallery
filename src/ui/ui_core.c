@@ -139,9 +139,16 @@ static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
         return res;
 }
 
+static f32 ui_scale_value(f32 value, UI_AXIS2D scaledBy) {
+        Vec2f32 scale = ui_content_scale();
+        return scaledBy == UI_AXIS2D_X   ? value * scale.x
+               : scaledBy == UI_AXIS2D_Y ? value * scale.y
+                                         : value;
+}
+
 static void setup_ui_state() {
         ui_state.arena = make_arena(mb(1));
-        ui_state.strArena = make_arena(mb(1));
+        ui_state.strArena = make_arena(1);
 
         ui_state.defaultFont
             = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
@@ -336,12 +343,10 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
         UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
         f32 parentSize = 0.0f;
-        Vec2f32 scale = ui_content_scale();
-        f32 axisScale = axis == UI_AXIS2D_X ? scale.x : scale.y;
 
         switch (size.kind) {
         case UI_SIZEKIND_Pixels:
-                computedSize = size.value * axisScale;
+                computedSize = size.value;
                 break;
         case UI_SIZEKIND_TextContent:
                 if (axis == UI_AXIS2D_X) {
@@ -349,15 +354,13 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                                                      e->textSize, e->text);
                         computedSize += (e->padding.x + e->padding.z);
                         computedSize += (2 * e->borderSize);
-                        computedSize *= scale.x;
                 } else {
                         // TODO: hr: we need an algorithm that can
                         // compute how many lines of text a paragraph is
                         // given it's width.
-                        computedSize = e->textSize;
+                        computedSize = e->textSize * ui_content_scale().y;
                         computedSize += (e->padding.y + e->padding.w);
                         computedSize += (2 * e->borderSize);
-                        computedSize *= scale.y;
                 }
                 break;
         case UI_SIZEKIND_PercentOfParent:
@@ -429,9 +432,8 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
 }
 
 static void ui_element_autolayout(void) {
-        Arena *scratch
-            = make_arena(OS_PAGESIZE); // TODO: hr: this is a memory leak,
-                                       // rework with new arena_pop api
+        Arena *scratch = ui_build_arena();
+        u64 resetPos = arena_pos(scratch);
         Vec2f32 screenExtent = r_get_window_size();
         UIElement *root = ui_state.root;
         Vec4f32 bg = ui_state.backgroundColorStackBottom.v;
@@ -440,11 +442,10 @@ static void ui_element_autolayout(void) {
         root->backgroundColors[2] = bg;
         root->backgroundColors[3] = bg;
         // TODO: hr: hacky! need to fix
-        Vec2f32 scale = ui_content_scale();
         root->size[UI_AXIS2D_X].kind = UI_SIZEKIND_Pixels;
-        root->size[UI_AXIS2D_X].value = screenExtent.x / scale.x;
+        root->size[UI_AXIS2D_X].value = screenExtent.x;
         root->size[UI_AXIS2D_Y].kind = UI_SIZEKIND_Pixels;
-        root->size[UI_AXIS2D_Y].value = screenExtent.y / scale.y;
+        root->size[UI_AXIS2D_Y].value = screenExtent.y;
 
         UIElementList queue = { 0 };
         ui_element_list_append(scratch, &queue, root);
@@ -472,7 +473,7 @@ static void ui_element_autolayout(void) {
         root->screenCoords.p1 = root->computedSize;
         u64 frame = r_get_frame_count();
 
-        arena_reset(scratch);
+        arena_pop_at(scratch, resetPos);
         queue.first = 0;
         queue.last = 0;
         ui_element_list_append(scratch, &queue, root);
@@ -504,12 +505,13 @@ static void ui_element_autolayout(void) {
                             child->computedSize, child->screenCoords.p0);
                 }
         }
+
+        arena_pop_at(scratch, resetPos);
 }
 
 static void ui_draw_element_rec(UIElement *e) {
         f32 border = e->borderSize;
         Rng2f32 pos = e->screenCoords;
-        Vec2f32 scale = ui_content_scale();
         if (e->flags & UI_ELEMENTFLAG_DrawBorder) {
                 Vec4f32 bc[4] = { e->borderColor, e->borderColor,
                                   e->borderColor, e->borderColor };
@@ -530,8 +532,8 @@ static void ui_draw_element_rec(UIElement *e) {
                 Vec4f32 p = e->padding;
                 pos.min = add_v2f32(pos.min, v2f32(p.x, p.y));
                 pos.max = add_v2f32(pos.max, v2f32(-p.z, -p.w));
-                dr_text(ui_state.defaultFont, e->textSize * scale.x, e->text,
-                        pos, e->textColor);
+                dr_text(ui_state.defaultFont, e->textSize, e->text, pos,
+                        e->textColor);
         }
 
         for (UIElement *child = e->firstChild; child; child = child->next) {
@@ -579,6 +581,9 @@ static void ui_draw_elements(void) {
         ui_state.prevMouseState[1] = middle;
         ui_state.prevMouseState[2] = right;
         ui_state.prevMousePos = ui_mouse_pos();
+
+        // TODO: hr: where should this go?
+        arena_reset(ui_state.strArena);
 }
 
 static void ui_element_add_display_string(UIElement *e, String8 str) {

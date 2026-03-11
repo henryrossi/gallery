@@ -52,6 +52,12 @@ static FFont *f_init_font(String8 filename) {
         return font;
 }
 
+static Vec2f32 f_content_scale(void) {
+        Vec2f32 res = { .x = 1, .y = 1 };
+        glfwGetWindowContentScale(r_state.window, &res.x, &res.y);
+        return res;
+}
+
 static void f_destroy_font(FFont *font) {
         r_destroy_texture(&font->tex);
 }
@@ -60,6 +66,7 @@ static f32 f_text_length(FFont *font, f32 size, String8 str) {
         f32 res = 0.0f;
         f32 x = 0.0f;
         f32 y = 0.0f;
+        Vec2f32 scale = f_content_scale();
         f32 sizeR = size / font->bakedSize;
         stbtt_aligned_quad q = { 0 };
 
@@ -74,13 +81,14 @@ static f32 f_text_length(FFont *font, f32 size, String8 str) {
                 }
         }
 
-        return res;
+        return res * scale.x;
 }
 
 static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
                              Rng2f32 *src) {
         f32 x = 0.0f;
         f32 y = 0.0f;
+        Vec2f32 scale = f_content_scale();
         f32 sizeR = size / font->bakedSize;
         f32 shift = font->bakedSize - font->baseline;
         stbtt_aligned_quad q = { 0 };
@@ -94,6 +102,6 @@ static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
 
         Vec2f32 p2 = { .x = q.x0 * sizeR, .y = (q.y0 - shift) * sizeR };
         Vec2f32 p3 = { .x = q.x1 * sizeR, .y = (q.y1 - shift) * sizeR };
-        pos->min = p2;
-        pos->max = p3;
+        pos->min = mul_v2f32(p2, scale);
+        pos->max = mul_v2f32(p3, scale);
 }

@@ -34,7 +34,6 @@ typedef struct {
         u64 frameCount;
 
         Arena *arena;
-        Arena *scratch;
         Arena *swapchainArena;
 
         b32 framebufferResized;

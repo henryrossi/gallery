@@ -121,7 +121,7 @@ static void glf_color_history_ui(void) {
 
                 u32 rlen = GLF_COLOR_HISTORY_LEN / 2;
                 ui_push_width(uiPct(100.0f / (f32)rlen, 0));
-                ui_push_height(uiPixels(80, 0));
+                ui_push_height(uiPixelsY(80, 0));
                 for (u32 c = 0; c < rlen; c++) {
                         u32 i = r * rlen + c;
                         ui_push_background_color(glf_state.colorHistory[i]);
@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
 
         r_init_backend("glyph", 1000, 800);
 
-        glf_state.arena = make_arena(0xF00000000);
+        glf_state.arena = make_arena(gb(1));
         glf_state.filename = args.filename;
         glf_state.width = args.width;
         glf_state.height = args.height;
@@ -201,7 +201,7 @@ int main(int argc, char *argv[]) {
                 UIElement *canvas = ui_build_element_from_string(
                     UI_ELEMENTFLAG_DrawBackground, c);
                 UISignal canvasSig = ui_signal_from_element(canvas);
-                if (canvasSig.flags & UI_INTERACTIONFLAG_LeftPressed) {
+                if (canvasSig.flags & UI_INTERACTIONFLAG_LeftDragging) {
                         s32 i = glf_canvas_pixel_at_pos(canvas->screenCoords);
                         if (i > 0) {
                                 Vec4f32 c = glf_state.currentColor;
@@ -225,7 +225,7 @@ int main(int argc, char *argv[]) {
 
                 String8 colorStr = string8_lit("current color");
                 ui_push_width(uiPct(100, 0));
-                ui_push_height(uiPixels(200, 0));
+                ui_push_height(uiPixelsY(200, 0));
                 ui_push_background_color(glf_state.currentColor);
                 e = ui_build_element_from_string(UI_ELEMENTFLAG_DrawBackground,
                                                  colorStr);
@@ -233,10 +233,10 @@ int main(int argc, char *argv[]) {
 
                 glf_color_history_ui();
 
-                ui_spacer(uiPixels(20, 0));
+                ui_spacer(uiPixelsY(20, 0));
                 ui_push_background_color(glf_state.colorPicker);
-                ui_push_width(uiPixels(100, 0));
-                ui_push_height(uiPixels(100, 0));
+                ui_push_width(uiPixelsX(100, 0));
+                ui_push_height(uiPixelsY(100, 0));
                 e = ui_build_element_from_string(UI_ELEMENTFLAG_DrawBackground,
                                                  string8_lit("preview"));
                 ui_pop_background_color();
@@ -244,26 +244,26 @@ int main(int argc, char *argv[]) {
                 ui_pop_height();
 
                 ui_push_background_color(v4f32(0.7, 0.7, 0.75, 1));
-                ui_push_text_size(32.0f);
-                ui_spacer(uiPixels(10, 0));
+                ui_push_text_size(16.0f);
+                ui_spacer(uiPixelsY(10, 0));
                 ui_slider(&glf_state.colorPicker.x, string8_lit("preview red"));
-                ui_spacer(uiPixels(10, 0));
+                ui_spacer(uiPixelsY(10, 0));
                 ui_slider(&glf_state.colorPicker.y,
                           string8_lit("preview green"));
-                ui_spacer(uiPixels(10, 0));
+                ui_spacer(uiPixelsY(10, 0));
                 ui_slider(&glf_state.colorPicker.z,
                           string8_lit("preview blue"));
-                ui_spacer(uiPixels(10, 0));
+                ui_spacer(uiPixelsY(10, 0));
                 ui_slider(&glf_state.colorPicker.w,
                           string8_lit("preview alpha"));
 
-                ui_spacer(uiPixels(10, 0));
+                ui_spacer(uiPixelsY(10, 0));
                 UISignal sig = ui_button(string8_lit("Pick color"));
                 if (sig.flags & UI_INTERACTIONFLAG_LeftClicked) {
                         glf_set_current_color(glf_state.colorPicker);
                 }
 
-                ui_spacer(uiPixels(20, 0));
+                ui_spacer(uiPixelsY(20, 0));
                 sig = ui_button(string8_lit("Save image"));
                 if (sig.flags & UI_INTERACTIONFLAG_LeftClicked) {
                         glf_save_canvas_to_png();

@@ -83,8 +83,7 @@ static RState r_state = { 0 };
 static void r_check_vkresult(VkResult res, char *msg) {
         if (res != VK_SUCCESS) {
                 printf("ASSERT: %s %s\n", msg, string_VkResult(res));
-                u32 *bomb = 0;
-                *bomb = 1;
+                os_abort(1);
         }
 }
 
@@ -103,11 +102,6 @@ static u64 r_get_frame_count(void) {
 
 static Arena *r_get_arena(void) {
         Arena *res = r_state.arena;
-        return res;
-}
-
-static Arena *r_get_scratch(void) {
-        Arena *res = r_state.scratch;
         return res;
 }
 
@@ -291,7 +285,8 @@ static void r_pick_physical_device(Arena *a) {
                 b32 supportsExtensions
                     = r_device_supports_extensions(a, device);
 
-                Arena *scratch = r_get_scratch();
+                Arena *scratch = r_get_arena();
+                u64 resetPos = arena_pos(scratch);
                 VkSurfaceCapabilitiesKHR capabilities;
                 VkSurfaceFormatKHR *formats;
                 u32 formatsCount;
@@ -333,7 +328,7 @@ static void r_pick_physical_device(Arena *a) {
                                 r_state.preTransform
                                     = capabilities.currentTransform;
 
-                                arena_reset(scratch);
+                                arena_pop_at(scratch, resetPos);
                                 return;
                         }
                 }
@@ -868,7 +863,8 @@ static void r_recreate_swapchain(void) {
         vkDeviceWaitIdle(r_state.device);
         r_destroy_swapchain();
 
-        Arena *a = r_get_scratch();
+        Arena *a = r_get_arena();
+        u64 resetPos = arena_pos(a);
         VkSurfaceCapabilitiesKHR capabilities;
         VkSurfaceFormatKHR *formats;
         u32 formatsCount;
@@ -882,16 +878,15 @@ static void r_recreate_swapchain(void) {
         r_choose_swapchain_image_count(capabilities);
         r_choose_swapchain_extent(capabilities);
         r_state.preTransform = capabilities.currentTransform;
-        arena_reset(a);
+        arena_pop_at(a, resetPos);
 
         r_create_swapchain();
         r_create_framebuffers();
 }
 
 static void r_init_backend(const char *name, u32 width, u32 height) {
-        r_state.arena = make_arena(0xFF00);
-        r_state.scratch = make_arena(0xFF00);
-        r_state.swapchainArena = make_arena(0xFF00);
+        r_state.arena = make_arena(kb(6));
+        r_state.swapchainArena = make_arena(kb(6));
         Arena *arena = r_get_arena();
 
         glfwInit();

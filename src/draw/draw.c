@@ -31,8 +31,10 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
         String8 s = string8_lit(" ");
         f32 lineLen = rng.x1 - rng.x0;
         f32 remaining = lineLen;
-        Rng2f32 cRng
-            = r2f32(rng.min, v2f32(rng.min.x + size, rng.min.y + size));
+        Vec2f32 scale = f_content_scale();
+        Vec2f32 scaledSize = { .x = scale.x * size, .y = scale.y * size };
+        f32 spaceWidth = scaledSize.x / 2.0f;
+        Rng2f32 cRng = r2f32(rng.min, add_v2f32(rng.min, scaledSize));
         text = string8_skip_whitespace(text);
         for (b32 done = 0; done == 0;) {
                 u64 space = string8_find_substr(text, s);
@@ -54,7 +56,8 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                                          &src);
 
                         f32 shift = pos.x1;
-                        pos = shift_r2f32(pos, v2f32(cRng.x0, cRng.y0 + size));
+                        pos = shift_r2f32(
+                            pos, v2f32(cRng.x0, cRng.y0 + scaledSize.y));
 
                         dr_img(pos, color, &f->tex, src, 0, 0);
 
@@ -64,22 +67,22 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                 text = string8_skip(text, space);
 
                 while (string8_at(text, 0) == ' ') {
-                        if (remaining < size) {
+                        if (remaining < scaledSize.x) {
                                 goto next_line;
                         } else {
-                                remaining -= size;
+                                remaining -= spaceWidth;
                                 cRng = shift_r2f32(cRng,
-                                                   v2f32(size / 2.0f, 0.0f));
+                                                   v2f32(spaceWidth, 0.0f));
                         }
                         text = string8_skip(text, 1);
                 }
                 continue;
 
         next_line:
-                if (cRng.max.y + size < rng.y1) {
+                if (cRng.max.y + scaledSize.y < rng.y1) {
                         cRng.min.x = rng.min.x;
-                        cRng.max.x = rng.min.x + size;
-                        cRng = shift_r2f32(cRng, v2f32(0.0f, size));
+                        cRng.max.x = rng.min.x + scaledSize.x;
+                        cRng = shift_r2f32(cRng, v2f32(0.0f, scaledSize.y));
                         remaining = lineLen;
                         text = string8_skip_whitespace(text);
                 } else {

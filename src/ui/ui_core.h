@@ -156,7 +156,12 @@ static Arena *ui_build_arena(void);
 
 static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
                                      f32 strictness);
+static f32 ui_scale_value(f32 value, UI_AXIS2D scaledBy);
 #define uiPixels(p, s) uiSemanticSize(UI_SIZEKIND_Pixels, p, s)
+#define uiPixelsX(p, s)                                                        \
+        uiSemanticSize(UI_SIZEKIND_Pixels, ui_scale_value(p, UI_AXIS2D_X), s)
+#define uiPixelsY(p, s)                                                        \
+        uiSemanticSize(UI_SIZEKIND_Pixels, ui_scale_value(p, UI_AXIS2D_Y), s)
 #define uiPct(p, s) uiSemanticSize(UI_SIZEKIND_PercentOfParent, p, s)
 #define uiSizeSumOfChildren(s) uiSemanticSize(UI_SIZEKIND_SumOfChildren, 0, s)
 #define uiSizeTextContent(s) uiSemanticSize(UI_SIZEKIND_TextContent, 0, s)

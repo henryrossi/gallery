@@ -45,7 +45,7 @@ static UISignal ui_buttonf(char *fmt, ...) {
 }
 
 static UISignal ui_slider(f32 *val, String8 text) {
-        f32 SLIDER_HEIGHT = ui_top_text_size();
+        f32 SLIDER_HEIGHT = ui_scale_value(ui_top_text_size(), UI_AXIS2D_Y);
         f32 SLIDER_WIDTH = SLIDER_HEIGHT * 5.0f;
         f32 HALF_SLIDER_HEIGHT = SLIDER_HEIGHT / 2.0f;
         String8 nstr = { 0 };
@@ -65,7 +65,9 @@ static UISignal ui_slider(f32 *val, String8 text) {
                 ui_spacer(uiPct(25, 0));
 
                 bar = ui_build_element_from_string(
-                    UI_ELEMENTFLAG_DrawBackground, nstr);
+                    UI_ELEMENTFLAG_DrawBackground,
+                    string8_concat(ui_state.strArena, text,
+                                   string8_lit("bar")));
                 bar->size[UI_AXIS2D_Y] = uiPct(50, 0);
                 bar->cornerRadius = HALF_SLIDER_HEIGHT / 2.0f;
         }
