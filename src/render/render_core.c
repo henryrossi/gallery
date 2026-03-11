@@ -1,8 +1,7 @@
 static void r_assert(b32 flag, char *msg) {
         if (!flag) {
                 printf("ASSERT: %s\n", msg);
-                u32 *bomb = 0;
-                *bomb = 1;
+                os_abort(1);
         }
 }
 

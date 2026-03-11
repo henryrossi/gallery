@@ -6,15 +6,15 @@
 #define TTF_BUFFER_SIZE 1 << 18
 #define ATLAS_WIDTH 512
 
-Arena a;
+Arena *a;
 
 static FFont *f_init_font(String8 filename) {
         a = make_arena(1 << 26);
 
-        unsigned char *ttf_buffer = arena_alloc(&a, TTF_BUFFER_SIZE);
-        unsigned char *bitmap = arena_alloc(&a, ATLAS_WIDTH * ATLAS_WIDTH);
+        unsigned char *ttf_buffer = arena_alloc(a, TTF_BUFFER_SIZE);
+        unsigned char *bitmap = arena_alloc(a, ATLAS_WIDTH * ATLAS_WIDTH);
 
-        String8 cstr = string8_allocate(&a, filename.length + 1);
+        String8 cstr = string8_allocate(a, filename.length + 1);
         memcpy(cstr.data, filename.data, filename.length);
         cstr.data[filename.length] = '\0';
 
@@ -25,7 +25,7 @@ static FFont *f_init_font(String8 filename) {
                 return 0;
         fread(ttf_buffer, 1, TTF_BUFFER_SIZE, fp);
 
-        FFont *font = arena_alloc(&a, sizeof(*font));
+        FFont *font = arena_alloc(a, sizeof(*font));
 
         font->bakedSize = 32.0f;
         stbtt_BakeFontBitmap(ttf_buffer, 0, font->bakedSize, bitmap,
@@ -39,7 +39,7 @@ static FFont *f_init_font(String8 filename) {
         f32 scale = stbtt_ScaleForPixelHeight(&fontinfo, font->bakedSize);
         font->baseline = ascent * scale;
 
-        u8 *atlas_tex = arena_alloc(&a, ATLAS_WIDTH * ATLAS_WIDTH * 4);
+        u8 *atlas_tex = arena_alloc(a, ATLAS_WIDTH * ATLAS_WIDTH * 4);
         for (u32 i = 0; i < ATLAS_WIDTH * ATLAS_WIDTH; i++) {
                 atlas_tex[i * 4] = 255;
                 atlas_tex[i * 4 + 1] = 255;
@@ -52,10 +52,21 @@ static FFont *f_init_font(String8 filename) {
         return font;
 }
 
+static Vec2f32 f_content_scale(void) {
+        Vec2f32 res = { .x = 1, .y = 1 };
+        glfwGetWindowContentScale(r_state.window, &res.x, &res.y);
+        return res;
+}
+
+static void f_destroy_font(FFont *font) {
+        r_destroy_texture(&font->tex);
+}
+
 static f32 f_text_length(FFont *font, f32 size, String8 str) {
         f32 res = 0.0f;
         f32 x = 0.0f;
         f32 y = 0.0f;
+        Vec2f32 scale = f_content_scale();
         f32 sizeR = size / font->bakedSize;
         stbtt_aligned_quad q = { 0 };
 
@@ -70,13 +81,14 @@ static f32 f_text_length(FFont *font, f32 size, String8 str) {
                 }
         }
 
-        return res;
+        return res * scale.x;
 }
 
 static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
                              Rng2f32 *src) {
         f32 x = 0.0f;
         f32 y = 0.0f;
+        Vec2f32 scale = f_content_scale();
         f32 sizeR = size / font->bakedSize;
         f32 shift = font->bakedSize - font->baseline;
         stbtt_aligned_quad q = { 0 };
@@ -90,6 +102,6 @@ static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
 
         Vec2f32 p2 = { .x = q.x0 * sizeR, .y = (q.y0 - shift) * sizeR };
         Vec2f32 p3 = { .x = q.x1 * sizeR, .y = (q.y1 - shift) * sizeR };
-        pos->min = p2;
-        pos->max = p3;
+        pos->min = mul_v2f32(p2, scale);
+        pos->max = mul_v2f32(p3, scale);
 }

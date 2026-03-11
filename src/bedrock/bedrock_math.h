@@ -26,6 +26,17 @@ union Vec3f32 {
 };
 
 // 4 Vectors
+typedef union Vec4u8 Vec4u8;
+union Vec4u8 {
+        struct {
+                u8 x;
+                u8 y;
+                u8 z;
+                u8 w;
+        };
+        u8 v[4];
+};
+
 typedef union Vec4f32 Vec4f32;
 union Vec4f32 {
         struct {
@@ -76,6 +87,9 @@ static b32 equal_v2f32(Vec2f32 a, Vec2f32 b);
 
 #define v3f32(x, y, z) vec3f32(x, y, z)
 static Vec3f32 vec3f32(f32 x, f32 y, f32 z);
+
+#define v4u8(x, y, z, w) vec4u8(x, y, z, w)
+static Vec4u8 vec4u8(u8 x, u8 y, u8 z, u8 w);
 
 #define v4f32(x, y, z, w) vec4f32(x, y, z, w)
 static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w);

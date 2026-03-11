@@ -1,5 +1,7 @@
 #!/bin/sh
 
+for arg in "$@"; do declare $arg='1'; done
+
 VULKAN_SDK="/Users/hrossi/dev/gallery/VulkanSDK/1.4.309.0/macOS"
 export VULKAN_SDK
 PATH="$PATH:$VULKAN_SDK/bin"
@@ -11,7 +13,5 @@ export VK_ICD_FILENAMES
 VK_LAYER_PATH="$VULKAN_SDK/share/vulkan/explicit_layer.d"
 export VK_LAYER_PATH
 
-./VulkanSDK/1.4.309.0/macOS/bin/glslc src/render/vulkan/rect.vert -o src/render/vulkan/vert.spv
-./VulkanSDK/1.4.309.0/macOS/bin/glslc src/render/vulkan/rect.frag -o src/render/vulkan/frag.spv
-
-./$1 $2 $3 $4 $5
+if [ -n "${glyph+x}" ]; then ./build/glyph $2 $3 $4 $5; fi
+if [ -n "${grove+x}" ]; then ./build/grove; fi

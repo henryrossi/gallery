@@ -40,7 +40,7 @@ __thread UIState ui_state;
 UIStackFuncImpl()
 
 static Arena *ui_build_arena(void) {
-        Arena *res = &ui_state.arena;
+        Arena *res = ui_state.arena;
         return res;
 }
 // clang-format on
@@ -56,7 +56,7 @@ static Vec2f32 ui_mouse_pos(void) {
         f64 ypos = 0;
         glfwGetCursorPos(r_state.window, &xpos, &ypos);
 
-        Vec2f32 res = v2f32(xpos, ypos);
+        Vec2f32 res = mul_v2f32(v2f32(xpos, ypos), ui_content_scale());
         return res;
 }
 
@@ -139,9 +139,16 @@ static UISemanticSize uiSemanticSize(UI_SIZEKIND kind, f32 value,
         return res;
 }
 
+static f32 ui_scale_value(f32 value, UI_AXIS2D scaledBy) {
+        Vec2f32 scale = ui_content_scale();
+        return scaledBy == UI_AXIS2D_X   ? value * scale.x
+               : scaledBy == UI_AXIS2D_Y ? value * scale.y
+                                         : value;
+}
+
 static void setup_ui_state() {
-        ui_state.arena = make_arena(0xF0000);
-        ui_state.strArena = make_arena(0xF0000);
+        ui_state.arena = make_arena(mb(1));
+        ui_state.strArena = make_arena(1);
 
         ui_state.defaultFont
             = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
@@ -151,7 +158,7 @@ static void setup_ui_state() {
 
         ui_state.bucketCount = 0xF00;
         ui_state.buckets
-            = arena_alloc(&ui_state.arena, elementSize * ui_state.bucketCount);
+            = arena_alloc(ui_state.arena, elementSize * ui_state.bucketCount);
         ui_state.eFree = 0;
 
         for (u32 i = 0; i < UI_BUTTON_Count; i++) {
@@ -159,7 +166,7 @@ static void setup_ui_state() {
                 ui_state.pressedElementKey[i] = 0;
         }
 
-        UIElement *root = arena_alloc(&ui_state.arena, sizeof(UIElement));
+        UIElement *root = arena_alloc(ui_state.arena, sizeof(UIElement));
         root->parent = 0;
         root->next = 0;
         root->prev = 0;
@@ -262,7 +269,7 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
                         res = ui_state.eFree;
                         ui_state.eFree = res->hashNext;
                 } else {
-                        res = arena_alloc(&ui_state.arena, sizeof(UIElement));
+                        res = arena_alloc(ui_state.arena, sizeof(UIElement));
                 }
                 res->key = key;
                 ui_cache_add(res);
@@ -300,6 +307,7 @@ static UIElement *ui_build_element_from_key(UI_ELEMENTFLAGS flags, u64 key) {
         res->borderSize = ui_top_border_size();
         res->cornerRadius = ui_top_corner_radius();
         res->padding = ui_top_padding();
+        res->texture = 0;
         return res;
 }
 
@@ -316,7 +324,7 @@ static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
                                                 char *fmt, ...) {
         va_list args;
         va_start(args, fmt);
-        String8 str = string8fv(&ui_state.strArena, fmt, args);
+        String8 str = string8fv(ui_state.strArena, fmt, args);
         UIElement *res = ui_build_element_from_string(flags, str);
         va_end(args);
         return res;
@@ -324,7 +332,7 @@ static UIElement *ui_build_element_from_stringf(UI_ELEMENTFLAGS flags,
 
 static UIElement *ui_build_element_from_stringfv(UI_ELEMENTFLAGS flags,
                                                  char *fmt, va_list args) {
-        String8 str = string8fv(&ui_state.strArena, fmt, args);
+        String8 str = string8fv(ui_state.strArena, fmt, args);
         UIElement *res = ui_build_element_from_string(flags, str);
         return res;
 }
@@ -350,7 +358,7 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                         // TODO: hr: we need an algorithm that can
                         // compute how many lines of text a paragraph is
                         // given it's width.
-                        computedSize = e->textSize;
+                        computedSize = e->textSize * ui_content_scale().y;
                         computedSize += (e->padding.y + e->padding.w);
                         computedSize += (2 * e->borderSize);
                 }
@@ -424,7 +432,8 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
 }
 
 static void ui_element_autolayout(void) {
-        Arena scratch = make_arena(OS_PAGESIZE);
+        Arena *scratch = ui_build_arena();
+        u64 resetPos = arena_pos(scratch);
         Vec2f32 screenExtent = r_get_window_size();
         UIElement *root = ui_state.root;
         Vec4f32 bg = ui_state.backgroundColorStackBottom.v;
@@ -432,13 +441,14 @@ static void ui_element_autolayout(void) {
         root->backgroundColors[1] = bg;
         root->backgroundColors[2] = bg;
         root->backgroundColors[3] = bg;
+        // TODO: hr: hacky! need to fix
         root->size[UI_AXIS2D_X].kind = UI_SIZEKIND_Pixels;
         root->size[UI_AXIS2D_X].value = screenExtent.x;
         root->size[UI_AXIS2D_Y].kind = UI_SIZEKIND_Pixels;
         root->size[UI_AXIS2D_Y].value = screenExtent.y;
 
         UIElementList queue = { 0 };
-        ui_element_list_append(&scratch, &queue, root);
+        ui_element_list_append(scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
                 UIElement *e = ui_element_list_pop_first(&queue);
                 UIElement *child = e->firstChild;
@@ -447,7 +457,7 @@ static void ui_element_autolayout(void) {
                 ui_autolayout_calc_preorder(e, UI_AXIS2D_Y);
 
                 while (child) {
-                        ui_element_list_append(&scratch, &queue, child);
+                        ui_element_list_append(scratch, &queue, child);
                         child = child->next;
                 }
         }
@@ -463,16 +473,16 @@ static void ui_element_autolayout(void) {
         root->screenCoords.p1 = root->computedSize;
         u64 frame = r_get_frame_count();
 
-        arena_reset(&scratch);
+        arena_pop_at(scratch, resetPos);
         queue.first = 0;
         queue.last = 0;
-        ui_element_list_append(&scratch, &queue, root);
+        ui_element_list_append(scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
                 UIElement *cur = ui_element_list_pop_first(&queue);
                 cur->lastFrameTouched = frame;
                 for (UIElement *child = cur->firstChild; child;
                      child = child->next) {
-                        ui_element_list_append(&scratch, &queue, child);
+                        ui_element_list_append(scratch, &queue, child);
                         UIElement *prev = child->prev;
                         UIElement *parent = child->parent;
                         if (!child->prev
@@ -495,34 +505,35 @@ static void ui_element_autolayout(void) {
                             child->computedSize, child->screenCoords.p0);
                 }
         }
+
+        arena_pop_at(scratch, resetPos);
 }
 
 static void ui_draw_element_rec(UIElement *e) {
-        Vec2f32 scale = ui_content_scale();
         f32 border = e->borderSize;
-        Rng2f32 pos = {
-                .min = mul_v2f32(e->screenCoords.min, scale),
-                .max = mul_v2f32(e->screenCoords.max, scale),
-        };
+        Rng2f32 pos = e->screenCoords;
         if (e->flags & UI_ELEMENTFLAG_DrawBorder) {
                 Vec4f32 bc[4] = { e->borderColor, e->borderColor,
                                   e->borderColor, e->borderColor };
                 dr_rect(pos, bc, 0, 0);
-                pos.min = add_v2f32(pos.min,
-                                    mul_v2f32(v2f32(border, border), scale));
-                pos.max = add_v2f32(pos.max,
-                                    mul_v2f32(v2f32(-border, -border), scale));
+                pos.min = add_v2f32(pos.min, v2f32(border, border));
+                pos.max = add_v2f32(pos.max, v2f32(-border, -border));
         }
         if (e->flags & UI_ELEMENTFLAG_DrawBackground) {
-                dr_rect(pos, e->backgroundColors, e->cornerRadius * scale.x, 0);
+                if (e->texture) {
+                        Rng2f32 src = r2f32p(0, 0, 1, 1);
+                        dr_img(pos, e->backgroundColors[0], e->texture, src,
+                               e->cornerRadius, 0);
+                } else {
+                        dr_rect(pos, e->backgroundColors, e->cornerRadius, 0);
+                }
         }
         if (e->flags & UI_ELEMENTFLAG_DrawText) {
                 Vec4f32 p = e->padding;
-                pos.min = add_v2f32(pos.min, mul_v2f32(v2f32(p.x, p.y), scale));
-                pos.max
-                    = add_v2f32(pos.max, mul_v2f32(v2f32(-p.z, -p.w), scale));
-                dr_text(ui_state.defaultFont, e->textSize * scale.x, e->text,
-                        pos, e->textColor);
+                pos.min = add_v2f32(pos.min, v2f32(p.x, p.y));
+                pos.max = add_v2f32(pos.max, v2f32(-p.z, -p.w));
+                dr_text(ui_state.defaultFont, e->textSize, e->text, pos,
+                        e->textColor);
         }
 
         for (UIElement *child = e->firstChild; child; child = child->next) {
@@ -570,10 +581,17 @@ static void ui_draw_elements(void) {
         ui_state.prevMouseState[1] = middle;
         ui_state.prevMouseState[2] = right;
         ui_state.prevMousePos = ui_mouse_pos();
+
+        // TODO: hr: where should this go?
+        arena_reset(ui_state.strArena);
 }
 
 static void ui_element_add_display_string(UIElement *e, String8 str) {
         e->text = str;
+}
+
+static void ui_element_attach_texture(UIElement *e, RTexture *tex) {
+        e->texture = tex;
 }
 
 static void ui_element_add_child_layout_axis(UIElement *e, UI_AXIS2D axis) {

@@ -1,8 +1,7 @@
 /* Vulkan validation layer and debug extension */
+static u32 r_validation_layers_enabled = 1;
 #ifdef NDEBUG
 static u32 r_validation_layers_enabled = 0;
-#else
-static u32 r_validation_layers_enabled = 1;
 #endif
 
 static const char *r_validation_layers[] = {
@@ -84,8 +83,7 @@ static RState r_state = { 0 };
 static void r_check_vkresult(VkResult res, char *msg) {
         if (res != VK_SUCCESS) {
                 printf("ASSERT: %s %s\n", msg, string_VkResult(res));
-                u32 *bomb = 0;
-                *bomb = 1;
+                os_abort(1);
         }
 }
 
@@ -103,12 +101,7 @@ static u64 r_get_frame_count(void) {
 }
 
 static Arena *r_get_arena(void) {
-        Arena *res = &r_state.arena;
-        return res;
-}
-
-static Arena *r_get_scratch(void) {
-        Arena *res = &r_state.scratch;
+        Arena *res = r_state.arena;
         return res;
 }
 
@@ -292,7 +285,8 @@ static void r_pick_physical_device(Arena *a) {
                 b32 supportsExtensions
                     = r_device_supports_extensions(a, device);
 
-                Arena *scratch = r_get_scratch();
+                Arena *scratch = r_get_arena();
+                u64 resetPos = arena_pos(scratch);
                 VkSurfaceCapabilitiesKHR capabilities;
                 VkSurfaceFormatKHR *formats;
                 u32 formatsCount;
@@ -334,7 +328,7 @@ static void r_pick_physical_device(Arena *a) {
                                 r_state.preTransform
                                     = capabilities.currentTransform;
 
-                                arena_reset(scratch);
+                                arena_pop_at(scratch, resetPos);
                                 return;
                         }
                 }
@@ -507,6 +501,35 @@ static void r_create_image(RTexture *texture, VkFormat format,
         vkBindImageMemory(r_state.device, texture->image, texture->memory, 0);
 }
 
+static void r_copy_to_image(void *pixels, u32 imageSize, VkBuffer buffer,
+                            VkDeviceMemory stagingMem, RTexture *tex) {
+        VkCommandBufferBeginInfo beginInfo = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        };
+        vkBeginCommandBuffer(r_state.setupCmdBuffer, &beginInfo);
+
+        void *data;
+        vkMapMemory(r_state.device, stagingMem, 0, imageSize, 0, &data);
+        memcpy(data, pixels, imageSize);
+        vkUnmapMemory(r_state.device, stagingMem);
+
+        r_transition_image_layout(tex->image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        r_copy_buffer_to_image(buffer, tex);
+        r_transition_image_layout(tex->image,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        vkEndCommandBuffer(r_state.setupCmdBuffer);
+        VkSubmitInfo submitInfo = {
+                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                .commandBufferCount = 1,
+                .pCommandBuffers = &r_state.setupCmdBuffer,
+        };
+        vkQueueSubmit(r_state.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(r_state.graphicsQueue);
+}
+
 static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels,
                              RTexture *texture) {
         VkDevice device = r_state.device;
@@ -521,42 +544,19 @@ static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels,
                 imageSize = width * height;
         }
 
-        VkCommandBufferBeginInfo beginInfo = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        };
-        vkBeginCommandBuffer(r_state.setupCmdBuffer, &beginInfo);
-
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
         r_create_buffer(&stagingBuffer, &stagingBufferMemory, imageSize,
                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
                             | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        void *data;
-        vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-        memcpy(data, pixels, imageSize);
-        vkUnmapMemory(device, stagingBufferMemory);
-
         r_create_image(texture, format, VK_IMAGE_TILING_LINEAR,
                        VK_IMAGE_USAGE_TRANSFER_DST_BIT
                            | VK_IMAGE_USAGE_SAMPLED_BIT,
                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-        r_transition_image_layout(texture->image, VK_IMAGE_LAYOUT_UNDEFINED,
-                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        r_copy_buffer_to_image(stagingBuffer, texture);
-        r_transition_image_layout(texture->image,
-                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        vkEndCommandBuffer(r_state.setupCmdBuffer);
-        VkSubmitInfo submitInfo = {
-                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                .commandBufferCount = 1,
-                .pCommandBuffers = &r_state.setupCmdBuffer,
-        };
-        vkQueueSubmit(r_state.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        r_copy_to_image(pixels, imageSize, stagingBuffer, stagingBufferMemory,
+                        texture);
 
         VkImageViewCreateInfo viewCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -573,15 +573,54 @@ static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels,
                                          &texture->view);
         r_check_vkresult(res, "Failed to create image view)");
 
-        vkQueueWaitIdle(r_state.graphicsQueue);
         vkDestroyBuffer(device, stagingBuffer, 0);
         vkFreeMemory(device, stagingBufferMemory, 0);
+}
+
+static void r_create_dynamic_texture(Arena *a, u32 width, u32 height,
+                                     RDynamicTexture *dTex) {
+        r_assert(dTex != 0, "Passed null pointer to r_create_dynamic_texture");
+
+        u32 frames = r_state.maxFramesInFlight;
+        dTex->data = arena_alloc(a, sizeof(Vec4u8) * width * height);
+        dTex->stagingBuffers = arena_alloc(a, sizeof(VkBuffer) * frames);
+        dTex->stagingMemory = arena_alloc(a, sizeof(VkDeviceMemory) * frames);
+        dTex->textures = arena_alloc(a, sizeof(RTexture) * frames);
+
+        for (u32 i = 0; i < frames; i++) {
+                r_create_buffer(&dTex->stagingBuffers[i],
+                                &dTex->stagingMemory[i], width * height * 4,
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                    | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                // NOTE: hr: this function call allocates unnecessary
+                // staging buffers
+                r_create_texture((u8 *)dTex->data, width, height, 4,
+                                 &dTex->textures[i]);
+        }
+}
+
+static RTexture *r_prep_dynamic_texture(RDynamicTexture *dTex) {
+        u64 frame = r_get_frame_count() % r_state.maxFramesInFlight;
+        RTexture *tex = &dTex->textures[frame];
+        r_copy_to_image(dTex->data, tex->width * tex->height * 4,
+                        dTex->stagingBuffers[frame], dTex->stagingMemory[frame],
+                        tex);
+        return tex;
+}
+
+static void r_destroy_dynamic_texture(RDynamicTexture *dTex) {
+        for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
+                vkDestroyBuffer(r_state.device, dTex->stagingBuffers[i], 0);
+                vkFreeMemory(r_state.device, dTex->stagingMemory[i], 0);
+                r_destroy_texture(&dTex->textures[i]);
+        }
 }
 
 static VkShaderModule r_create_shader_module(const char *filename) {
         VkShaderModule shader = VK_NULL_HANDLE;
 
-        String8 code = r_alloc_shader_buffer(&r_state.arena, filename);
+        String8 code = r_alloc_shader_buffer(r_state.arena, filename);
         code = r_read_shader_file(filename, code);
         VkShaderModuleCreateInfo createInfo = {
                 .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -715,7 +754,7 @@ r_create_graphics_pipeline(RGraphicsPipelineCreateInfo *createInfo) {
 }
 
 static void r_create_swapchain(void) {
-        Arena *arena = &r_state.swapchainArena;
+        Arena *arena = r_state.swapchainArena;
         VkSwapchainCreateInfoKHR swapchainCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
                 .surface = r_state.surface,
@@ -775,7 +814,7 @@ static void r_create_swapchain(void) {
 }
 
 static void r_create_framebuffers(void) {
-        Arena *arena = &r_state.swapchainArena;
+        Arena *arena = r_state.swapchainArena;
         r_state.swapchainFramebuffers
             = arena_alloc(arena, sizeof(VkFramebuffer) * r_state.imageCount);
 
@@ -810,7 +849,7 @@ static void r_destroy_swapchain(void) {
         }
         vkDestroySwapchainKHR(r_state.device, r_state.swapchain, 0);
 
-        arena_reset(&r_state.swapchainArena);
+        arena_reset(r_state.swapchainArena);
 }
 
 static void r_recreate_swapchain(void) {
@@ -824,7 +863,8 @@ static void r_recreate_swapchain(void) {
         vkDeviceWaitIdle(r_state.device);
         r_destroy_swapchain();
 
-        Arena *a = r_get_scratch();
+        Arena *a = r_get_arena();
+        u64 resetPos = arena_pos(a);
         VkSurfaceCapabilitiesKHR capabilities;
         VkSurfaceFormatKHR *formats;
         u32 formatsCount;
@@ -838,16 +878,15 @@ static void r_recreate_swapchain(void) {
         r_choose_swapchain_image_count(capabilities);
         r_choose_swapchain_extent(capabilities);
         r_state.preTransform = capabilities.currentTransform;
-        arena_reset(a);
+        arena_pop_at(a, resetPos);
 
         r_create_swapchain();
         r_create_framebuffers();
 }
 
 static void r_init_backend(const char *name, u32 width, u32 height) {
-        r_state.arena = make_arena(0xFF00);
-        r_state.scratch = make_arena(0xFF00);
-        r_state.swapchainArena = make_arena(0xFF00);
+        r_state.arena = make_arena(kb(6));
+        r_state.swapchainArena = make_arena(kb(6));
         Arena *arena = r_get_arena();
 
         glfwInit();
@@ -1201,11 +1240,11 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         };
 
         r_state.imageAvailableSemaphore = arena_alloc(
-            &r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
+            r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
         r_state.renderFinishedSemaphore = arena_alloc(
-            &r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
+            r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
         r_state.inflightFence = arena_alloc(
-            &r_state.arena, sizeof(VkFence) * r_state.maxFramesInFlight);
+            r_state.arena, sizeof(VkFence) * r_state.maxFramesInFlight);
 
         for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
                 res = vkCreateSemaphore(r_state.device, &semaphoreInfo, 0,
@@ -1290,11 +1329,11 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
 
         VkSamplerCreateInfo samplerCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-                .magFilter = VK_FILTER_LINEAR,
-                .minFilter = VK_FILTER_LINEAR,
-                .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                .magFilter = 0,
+                .minFilter = 0,
+                .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                 .anisotropyEnable = VK_TRUE,
                 .maxAnisotropy
                 = r_state.physicalDeviceProps.limits.maxSamplerAnisotropy,

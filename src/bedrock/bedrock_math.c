@@ -1,5 +1,3 @@
-#include <math.h>
-
 static b32 nequal_f32(f32 a, f32 b, f32 epsilon) {
         f32 d = fabs(a - b);
         if (d == 0) {
@@ -36,6 +34,11 @@ static b32 equal_v2f32(Vec2f32 a, Vec2f32 b) {
 
 static Vec3f32 vec3f32(f32 x, f32 y, f32 z) {
         Vec3f32 res = { .x = x, .y = y, .z = z };
+        return res;
+}
+
+static Vec4u8 vec4u8(u8 x, u8 y, u8 z, u8 w) {
+        Vec4u8 res = { .x = x, .y = y, .z = z, .w = w };
         return res;
 }
 
