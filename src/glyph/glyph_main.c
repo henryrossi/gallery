@@ -14,6 +14,14 @@
 #include "ui/ui_inc.c"
 // clang-format on
 
+typedef struct {
+        char *filename;
+        u8 *pixels;
+        u32 width;
+        u32 height;
+        u32 channels;
+} GLFImageView;
+
 #define GLF_COLOR_HISTORY_LEN 16
 typedef struct {
         const char *filename;
@@ -49,10 +57,9 @@ static int glf_save_canvas_to_png(void) {
 }
 
 static u8 *glf_read_canvas_input_file(const char *filename, u32 *width,
-                                      u32 *height) {
-        u32 n = 0;
+                                      u32 *height, u32 *n) {
         u8 *data
-            = stbi_load(filename, (int *)height, (int *)width, (int *)&n, 0);
+            = stbi_load(filename, (int *)width, (int *)height, (int *)n, 0);
         if (!data) {
                 fprintf(stderr, "Failed to read input file: %s\n", filename);
                 return 0;
@@ -110,10 +117,13 @@ static s32 glf_canvas_pixel_at_pos(Rng2f32 extent) {
 
 static void glf_color_history_ui(void) {
         String8 str = string8_lit("dafhiofadnscaifadsgfdfhjflfdjfdafldasf");
+        ui_push_width(uiPct(100, 0));
         ui_push_height(uiSizeSumOfChildren(0));
         UIElement *e = ui_build_element_from_string(0, string8_empty());
         ui_push_parent(e);
 
+        ui_push_border_color(v4f32(0, 0, 0, 0));
+        ui_push_border_size(4);
         for (u32 r = 0; r < 2; r++) {
                 e = ui_build_element_from_string(0, string8_empty());
                 e->layoutDirection = UI_AXIS2D_X;
@@ -121,13 +131,14 @@ static void glf_color_history_ui(void) {
 
                 u32 rlen = GLF_COLOR_HISTORY_LEN / 2;
                 ui_push_width(uiPct(100.0f / (f32)rlen, 0));
-                ui_push_height(uiPixelsY(80, 0));
+                ui_push_height(uiRatio(1, 0));
                 for (u32 c = 0; c < rlen; c++) {
                         u32 i = r * rlen + c;
                         ui_push_background_color(glf_state.colorHistory[i]);
                         String8 strc = string8_skip(str, i);
                         e = ui_build_element_from_string(
-                            UI_ELEMENTFLAG_DrawBackground
+                            UI_ELEMENTFLAG_DrawBorder
+                                | UI_ELEMENTFLAG_DrawBackground
                                 | UI_ELEMENTFLAG_Clickable,
                             strc);
                         UISignal sig = ui_signal_from_element(e);
@@ -141,9 +152,33 @@ static void glf_color_history_ui(void) {
 
                 ui_pop_parent();
         }
+        ui_pop_border_color();
+        ui_pop_border_size();
 
         ui_pop_height();
         ui_pop_parent();
+}
+
+static void glf_copy_image(u8 *src, u8 *dst, u32 width, u32 height, u32 srcN,
+                           u32 dstN) {
+        if (srcN < 3 || dstN < 3) {
+                os_abort(1);
+        }
+
+        for (u32 y = 0; y < height; y++) {
+                for (u32 x = 0; x < width; x++) {
+                        u32 si = (y * width + x) * srcN;
+                        u32 di = (y * width + x) * dstN;
+                        dst[di] = src[si];
+                        dst[di + 1] = src[si + 1];
+                        dst[di + 2] = src[si + 2];
+                        if (srcN == 3 && dstN == 4) {
+                                dst[di + 3] = 255;
+                        } else if (srcN == 4 && dstN == 4) {
+                                dst[di + 3] = src[si + 3];
+                        }
+                }
+        }
 }
 
 int main(int argc, char *argv[]) {
@@ -160,18 +195,19 @@ int main(int argc, char *argv[]) {
         glf_state.height = args.height;
 
         if (glf_state.width == 0) {
-                u8 *data = glf_read_canvas_input_file(
-                    glf_state.filename, &glf_state.width, &glf_state.height);
+                u32 n = 0;
+                u8 *data = glf_read_canvas_input_file(glf_state.filename,
+                                                      &glf_state.width,
+                                                      &glf_state.height, &n);
                 if (!data) {
                         return 1;
                 }
                 r_create_dynamic_texture(glf_state.arena, glf_state.width,
                                          glf_state.height, &glf_state.canvas);
-                memcpy(glf_state.canvas.data, data,
-                       glf_state.width * glf_state.height * 4);
+                glf_copy_image(data, (u8 *)glf_state.canvas.data,
+                               glf_state.width, glf_state.height, n, 4);
                 stbi_image_free(data);
         } else {
-                printf("%d by %d file\n", glf_state.width, glf_state.height);
                 r_create_dynamic_texture(glf_state.arena, glf_state.width,
                                          glf_state.height, &glf_state.canvas);
                 for (u32 i = 0; i < glf_state.width * glf_state.height; i++) {
@@ -225,7 +261,7 @@ int main(int argc, char *argv[]) {
 
                 String8 colorStr = string8_lit("current color");
                 ui_push_width(uiPct(100, 0));
-                ui_push_height(uiPixelsY(200, 0));
+                ui_push_height(uiRatio(1, 0));
                 ui_push_background_color(glf_state.currentColor);
                 e = ui_build_element_from_string(UI_ELEMENTFLAG_DrawBackground,
                                                  colorStr);

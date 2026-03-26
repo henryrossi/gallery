@@ -1,12 +1,12 @@
 Task List
-  [ ] Pixelize large image at smaller scale
+  [ ] ui_widget label
+  [ ] generic 'make element' codepath
   [ ] Implement delta-based state mutation
   [ ] Fix framebuffer resize bug:
       Validation Layer: vkAcquireNextImageKHR(): Semaphore must not be currently signaled.
   [ ] write tests for each module
   [ ] start working on menu bar for glyph
   [ ] resize elements using strictness 
-  [ ] read UI, part 7
   [ ] port onto windows
 
 For when validation layers cannot be found:
@@ -18,6 +18,10 @@ export VK_ICD_FILENAMES=$VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json
 export VK_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d   
 
 Task History
+March 25, 2026:
+  [x] specify width/height as aspect ratio
+March 16, 2026:
+  [x] Pixelize large image at smaller scale
 March 10, 2026:
   [x] Size text based on content scale
   [x] how to handle discrepancy in sizes with retina displays 

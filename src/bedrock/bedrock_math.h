@@ -5,6 +5,15 @@
 //           their functions and scalar functions
 
 // 2 Vectors
+typedef union Vec2u32 Vec2u32;
+union Vec2u32 {
+        struct {
+                u32 x;
+                u32 y;
+        };
+        u32 v[2];
+};
+
 typedef union Vec2f32 Vec2f32;
 union Vec2f32 {
         struct {
@@ -57,6 +66,25 @@ typedef struct {
 } Mat4;
 
 // 2 Ranges (Rectangles)
+typedef union Rng2u32 Rng2u32;
+union Rng2u32 {
+        struct {
+                Vec2u32 min;
+                Vec2u32 max;
+        };
+        struct {
+                Vec2u32 p0;
+                Vec2u32 p1;
+        };
+        struct {
+                u32 x0;
+                u32 y0;
+                u32 x1;
+                u32 y1;
+        };
+        Vec2u32 v[2];
+};
+
 typedef union Rng2f32 Rng2f32;
 union Rng2f32 {
         struct {
@@ -77,6 +105,8 @@ union Rng2f32 {
 };
 
 // hr: Vector Ops
+#define v2u32(x, y) vec2u32(x, y)
+static Vec2u32 vec2u32(u32 x, u32 y);
 
 #define v2f32(x, y) vec2f32(x, y)
 static Vec2f32 vec2f32(f32 x, f32 y);
@@ -93,8 +123,13 @@ static Vec4u8 vec4u8(u8 x, u8 y, u8 z, u8 w);
 
 #define v4f32(x, y, z, w) vec4f32(x, y, z, w)
 static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w);
+static Vec4f32 add_v4f32(Vec4f32 a, Vec4f32 b);
 
 // hr: Range Ops
+#define r2u32(a, b) rng2u32(a, b)
+#define r2u32p(x0, y0, x1, y1) rng2u32(v2u32(x0, y0), v2u32(x1, y1))
+static Rng2u32 rng2u32(Vec2u32 a, Vec2u32 b);
+
 #define r2f32(a, b) rng2f32(a, b)
 #define r2f32p(x0, y0, x1, y1) rng2f32(v2f32(x0, y0), v2f32(x1, y1))
 static Rng2f32 rng2f32(Vec2f32 a, Vec2f32 b);

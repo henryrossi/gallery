@@ -16,6 +16,7 @@ typedef enum {
         UI_SIZEKIND_TextContent,
         UI_SIZEKIND_PercentOfParent,
         UI_SIZEKIND_SumOfChildren,
+        UI_SIZEKIND_OtherAxisRatio,
 } UI_SIZEKIND;
 
 typedef struct {
@@ -163,6 +164,7 @@ static f32 ui_scale_value(f32 value, UI_AXIS2D scaledBy);
 #define uiPixelsY(p, s)                                                        \
         uiSemanticSize(UI_SIZEKIND_Pixels, ui_scale_value(p, UI_AXIS2D_Y), s)
 #define uiPct(p, s) uiSemanticSize(UI_SIZEKIND_PercentOfParent, p, s)
+#define uiRatio(r, s) uiSemanticSize(UI_SIZEKIND_OtherAxisRatio, r, s)
 #define uiSizeSumOfChildren(s) uiSemanticSize(UI_SIZEKIND_SumOfChildren, 0, s)
 #define uiSizeTextContent(s) uiSemanticSize(UI_SIZEKIND_TextContent, 0, s)
 

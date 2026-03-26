@@ -6,6 +6,11 @@ static b32 nequal_f32(f32 a, f32 b, f32 epsilon) {
         return d < epsilon * (fabs(a) + fabs(b));
 }
 
+static Vec2u32 vec2u32(u32 x, u32 y) {
+        Vec2u32 res = { .x = x, .y = y };
+        return res;
+}
+
 static Vec2f32 vec2f32(f32 x, f32 y) {
         Vec2f32 res = { .x = x, .y = y };
         return res;
@@ -44,6 +49,21 @@ static Vec4u8 vec4u8(u8 x, u8 y, u8 z, u8 w) {
 
 static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w) {
         Vec4f32 res = { .x = x, .y = y, .z = z, .w = w };
+        return res;
+}
+
+static Vec4f32 add_v4f32(Vec4f32 a, Vec4f32 b) {
+        Vec4f32 res = {
+                .x = a.x + b.x,
+                .y = a.y + b.y,
+                .z = a.z + b.z,
+                .w = a.w + b.w,
+        };
+        return res;
+}
+
+static Rng2u32 rng2u32(Vec2u32 a, Vec2u32 b) {
+        Rng2u32 res = { .min = a, .max = b };
         return res;
 }
 

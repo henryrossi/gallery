@@ -369,6 +369,7 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_AXIS2D axis) {
                 computedSize = parentSize * size.value * 0.01f;
                 break;
         case UI_SIZEKIND_SumOfChildren:
+        case UI_SIZEKIND_OtherAxisRatio:
         case UI_SIZEKIND_Null:
                 return;
         }
@@ -400,7 +401,9 @@ static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
                         }
                 }
 
-                computedSize += (2 * e->borderSize);
+                if (e->flags & UI_ELEMENTFLAG_DrawBorder) {
+                        computedSize += (2 * e->borderSize);
+                }
                 if (axis == UI_AXIS2D_X) {
                         computedSize += (e->padding.x + e->padding.z);
                         e->computedSize.x = computedSize;
@@ -409,7 +412,21 @@ static void ui_autolayout_calc_postorder(UIElement *e, UI_AXIS2D axis) {
                         e->computedSize.y = computedSize;
                 }
                 break;
-
+        case UI_SIZEKIND_OtherAxisRatio:
+                if (axis == UI_AXIS2D_X) {
+                        computedSize = e->computedSize.y;
+                        computedSize -= (e->padding.y + e->padding.w);
+                        computedSize *= size.value;
+                        computedSize += (e->padding.x + e->padding.z);
+                        e->computedSize.x = computedSize;
+                } else {
+                        computedSize = e->computedSize.x;
+                        computedSize -= (e->padding.x + e->padding.z);
+                        computedSize *= size.value;
+                        computedSize += (e->padding.y + e->padding.w);
+                        e->computedSize.y = computedSize;
+                }
+                break;
         case UI_SIZEKIND_Pixels:
         case UI_SIZEKIND_TextContent:
         case UI_SIZEKIND_PercentOfParent:
