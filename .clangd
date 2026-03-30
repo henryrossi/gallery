@@ -1,0 +1,4 @@
+CompileFlags:
+  Add: [-DCLANGD]
+Diagnostics:
+  Suppress: [-Wundefined-internal, -Wunused-includes]

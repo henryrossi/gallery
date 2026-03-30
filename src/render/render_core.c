@@ -1,3 +1,6 @@
+#include "render/render_core.h"
+#include "os/os.h"
+
 static void r_assert(b32 flag, char *msg) {
         if (!flag) {
                 printf("ASSERT: %s\n", msg);
@@ -39,6 +42,3 @@ static String8 r_alloc_shader_buffer(Arena *a, const char *filename) {
         res = string8_allocate(a, info.size);
         return res;
 }
-
-// hr: choose backend
-#include "render/vulkan/vulkan_render.c"

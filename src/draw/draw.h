@@ -1,11 +1,15 @@
 #ifndef DRAW_H
 #define DRAW_H
 
+#include "bedrock/bedrock_inc.h"
+#include "font/font.h"
+#include "render/render_inc.h"
+
 static void dr_rect(Rng2f32 rng, Vec4f32 *colors, f32 cornerRadius,
                     f32 edgeSoftness);
 
-static void dr_img(Rng2f32 rng, Vec4f32 colors, RTexture *tex, Rng2f32 srcRngf32,
-                   f32 cornerRadius, f32 edgeSoftness);
+static void dr_img(Rng2f32 rng, Vec4f32 colors, RTexture *tex,
+                   Rng2f32 srcRngf32, f32 cornerRadius, f32 edgeSoftness);
 
 static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                     Vec4f32 color);

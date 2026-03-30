@@ -1,18 +1,8 @@
 #ifndef RENDER_CORE_H
 #define RENDER_CORE_H
 
-typedef struct {
-        Rng2f32 pos;
-        Rng2f32 src;
-        Vec4f32 colors[4];
-        u32 texID;
-        f32 cornerRadius;
-        f32 edgeSoftness;
-} RRectInstanceData;
+#include "bedrock/bedrock_inc.h"
 
-// choose backend
-#define GLFW_INCLUDE_VULKAN
-#include "thirdparty/GLFW/glfw3.h"
 #include "vulkan/vulkan_render.h"
 
 static void r_init_backend(const char *name, u32 width, u32 height);
@@ -36,5 +26,10 @@ static void r_create_dynamic_texture(Arena *a, u32 width, u32 height,
                                      RDynamicTexture *tex);
 static RTexture *r_prep_dynamic_texture(RDynamicTexture *tex);
 static void r_destroy_dynamic_texture(RDynamicTexture *dTex);
+
+static void r_assert(b32 flag, char *msg);
+
+static String8 r_read_shader_file(const char *filename, String8 buf);
+static String8 r_alloc_shader_buffer(Arena *a, const char *filename);
 
 #endif // RENDER_CORE_H

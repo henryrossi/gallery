@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
                 ui_push_text_size(16.0f);
 
                 ui_button(str1);
-                if (ui_button(str3).flags & UI_INTERACTIONFLAG_LeftClicked) {
+                if (ui_clicked(ui_button(str3))) {
                         glfwSetWindowShouldClose(r_state.window, GLFW_TRUE);
                 }
                 ui_button(str0);

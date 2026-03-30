@@ -1,3 +1,5 @@
+#include "bedrock/bedrock_string.h"
+
 static String8 string8(u8 *str, u64 length) {
         String8 res = { .data = str, .length = length };
         return res;
@@ -9,6 +11,11 @@ static String8 string8_allocate(Arena *arena, u64 length) {
         return str;
 }
 
+#ifndef STB_SPRINTF_IMPLEMENTATION
+#define STB_SPRINTF_IMPLEMENTATION
+#define STB_SPRINTF_STATIC
+#include "thirdparty/stb/stb_sprintf.h"
+#endif
 static String8 string8fv(Arena *arena, char *fmt, va_list args) {
         va_list args2;
         va_copy(args2, args);

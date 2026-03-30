@@ -1,0 +1,15 @@
+[
+  {
+    "directory": "/Users/hrossi/dev/gallery",
+    "file": "src/glyph_main.c",
+    "arguments": [
+      "clang",
+      "-Isrc",
+      "-IVulkanSDK/1.4.309.0/macOS/include",
+      "-DDEBUG",
+      "-Wall",
+      "-Wno-unused-function",
+      "src/glyph_main.c"
+    ]
+  }
+]

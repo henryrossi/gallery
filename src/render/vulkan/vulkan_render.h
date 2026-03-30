@@ -1,9 +1,23 @@
 #ifndef RENDER_VULKAN_VULKAN_RENDER_H
 #define RENDER_VULKAN_VULKAN_RENDER_H
 
+#include "bedrock/bedrock_inc.h"
+
+#define GLFW_INCLUDE_VULKAN
+#include "thirdparty/GLFW/glfw3.h"
+
 #include "vulkan/vulkan.h"
 // #include "vulkan/vk_platform.h"
 #include "vulkan/vk_enum_string_helper.h"
+
+typedef struct {
+        Rng2f32 pos;
+        Rng2f32 src;
+        Vec4f32 colors[4];
+        u32 texID;
+        f32 cornerRadius;
+        f32 edgeSoftness;
+} RRectInstanceData;
 
 typedef struct {
         u64 key;

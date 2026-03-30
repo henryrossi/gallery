@@ -1,14 +1,17 @@
 #ifndef BEDROCK_STRING_H
 #define BEDROCK_STRING_H
 
+#include "bedrock/bedrock_arena.h"
+#include "bedrock/bedrock_core.h"
+
 typedef struct string {
-  u8 *data;
-  u64 length;
+        u8 *data;
+        u64 length;
 } String8;
 
 #define string8_lit(cstr) string8((u8 *)cstr, sizeof(cstr) - 1)
 
-static String8 string8(u8 *str, u64 length); 
+static String8 string8(u8 *str, u64 length);
 static String8 string8_allocate(Arena *arena, u64 length);
 static String8 string8fv(Arena *arena, char *fmt, va_list args);
 static String8 string8f(Arena *arena, char *fmt, ...);
@@ -28,4 +31,3 @@ static u64 string8_hashkey_from_seed(u64 seed, String8 str);
 static u64 string8_hashkey(String8 str);
 
 #endif // BEDROCK_STRING_H
-

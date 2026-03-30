@@ -3,6 +3,8 @@
 
 #define ARENA_HEADER_SIZE 56
 
+#include "bedrock/bedrock_core.h"
+
 typedef struct ArenaParams ArenaParams;
 struct ArenaParams {
         u64 blockSize;

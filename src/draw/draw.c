@@ -1,3 +1,5 @@
+#include "draw/draw.h"
+
 static void dr_rect(Rng2f32 rng, Vec4f32 *colors, f32 cornerRadius,
                     f32 edgeSoftness) {
         RRectInstanceData rect = {
@@ -33,8 +35,9 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
         f32 remaining = lineLen;
         Vec2f32 scale = f_content_scale();
         Vec2f32 scaledSize = { .x = scale.x * size, .y = scale.y * size };
-        f32 spaceWidth = scaledSize.x / 2.0f;
+        f32 spaceWidth = f_space_width(f, size);
         Rng2f32 cRng = r2f32(rng.min, add_v2f32(rng.min, scaledSize));
+
         text = string8_skip_whitespace(text);
         for (b32 done = 0; done == 0;) {
                 u64 space = string8_find_substr(text, s);

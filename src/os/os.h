@@ -1,7 +1,7 @@
 #ifndef OS_INC_H
 #define OS_INC_H
 
-#include <stdlib.h>
+#include "bedrock/bedrock_core.h"
 
 typedef struct {
         u64 size;

@@ -1,11 +1,12 @@
 Task List
   [ ] ui_widget label
+  [ ] start working on menu bar for glyph
+  [ ] isolate glfw functions
   [ ] generic 'make element' codepath
   [ ] Implement delta-based state mutation
   [ ] Fix framebuffer resize bug:
       Validation Layer: vkAcquireNextImageKHR(): Semaphore must not be currently signaled.
   [ ] write tests for each module
-  [ ] start working on menu bar for glyph
   [ ] resize elements using strictness 
   [ ] port onto windows
 

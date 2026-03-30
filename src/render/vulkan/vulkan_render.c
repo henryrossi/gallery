@@ -1,3 +1,8 @@
+#include "render/vulkan/vulkan_render.h"
+#include "render/render_core.h"
+
+#include "os/os.h"
+
 /* Vulkan validation layer and debug extension */
 static u32 r_validation_layers_enabled = 1;
 #ifdef NDEBUG
@@ -1075,13 +1080,12 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                 0,
         };
         VkDescriptorSetLayoutBindingFlagsCreateInfo
-            descriptorSetLayoutBindingFlags
-            = {
-                      .sType
-                      = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                      .bindingCount = 2,
-                      .pBindingFlags = descriptorBindingFlags,
-              };
+            descriptorSetLayoutBindingFlags = {
+                    .sType
+                    = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                    .bindingCount = 2,
+                    .pBindingFlags = descriptorBindingFlags,
+            };
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .pNext = &descriptorSetLayoutBindingFlags,

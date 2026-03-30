@@ -1,3 +1,7 @@
+#include "os/os.h"
+
+#include <stdlib.h>
+
 #if __MACH__
 #include "mach/os_mach.c"
 #elif _WIN32

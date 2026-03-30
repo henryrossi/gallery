@@ -1,3 +1,6 @@
+#include "bedrock/bedrock_arena.h"
+#include "os/os.h"
+
 static u64 arena_default_block_size = mb(8);
 
 static Arena *make_arena_(ArenaParams *p) {

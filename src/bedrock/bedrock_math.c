@@ -1,3 +1,5 @@
+#include "bedrock/bedrock_math.h"
+
 static b32 nequal_f32(f32 a, f32 b, f32 epsilon) {
         f32 d = fabs(a - b);
         if (d == 0) {

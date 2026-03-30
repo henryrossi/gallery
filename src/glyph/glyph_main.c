@@ -4,6 +4,7 @@
 #include "render/render_inc.h"
 #include "font/font.h"
 #include "draw/draw.h"
+#include "ui/ui_core.h"
 #include "ui/ui_inc.h"
 
 #include "bedrock/bedrock_inc.c"
@@ -117,6 +118,7 @@ static s32 glf_canvas_pixel_at_pos(Rng2f32 extent) {
 
 static void glf_color_history_ui(void) {
         String8 str = string8_lit("dafhiofadnscaifadsgfdfhjflfdjfdafldasf");
+
         ui_push_width(uiPct(100, 0));
         ui_push_height(uiSizeSumOfChildren(0));
         UIElement *e = ui_build_element_from_string(0, string8_empty());
@@ -126,7 +128,7 @@ static void glf_color_history_ui(void) {
         ui_push_border_size(4);
         for (u32 r = 0; r < 2; r++) {
                 e = ui_build_element_from_string(0, string8_empty());
-                e->layoutDirection = UI_AXIS2D_X;
+                e->layoutDirection = UI_Axis2d_X;
                 ui_push_parent(e);
 
                 u32 rlen = GLF_COLOR_HISTORY_LEN / 2;
@@ -136,15 +138,18 @@ static void glf_color_history_ui(void) {
                         u32 i = r * rlen + c;
                         ui_push_background_color(glf_state.colorHistory[i]);
                         String8 strc = string8_skip(str, i);
+
                         e = ui_build_element_from_string(
-                            UI_ELEMENTFLAG_DrawBorder
-                                | UI_ELEMENTFLAG_DrawBackground
-                                | UI_ELEMENTFLAG_Clickable,
+                            UI_ElementFlag_DrawBorder
+                                | UI_ElementFlag_DrawBackground
+                                | UI_ElementFlag_Clickable,
                             strc);
+
                         UISignal sig = ui_signal_from_element(e);
-                        if (sig.flags & UI_INTERACTIONFLAG_LeftClicked) {
+                        if (ui_clicked(sig)) {
                                 glf_pick_current_color_from_history(i);
                         }
+
                         ui_pop_background_color();
                 }
                 ui_pop_width();
@@ -218,10 +223,15 @@ int main(int argc, char *argv[]) {
         glf_load_control_panel_colors();
 
         setup_ui_state();
-        ui_state.root->layoutDirection = UI_AXIS2D_X;
+        ui_state.root->layoutDirection = UI_Axis2d_X;
 
         String8 c = string8_lit("canvas texture");
         String8 cp = string8_lit("control panel");
+
+        Vec4f32 greybg = v4f32(0.22, 0.22, 0.22, 1);
+        Vec4f32 darkbg = v4f32(0.16, 0.16, 0.16, 1);
+        Vec4f32 greybd = v4f32(0.43, 0.43, 0.43, 1);
+        Vec4f32 white = v4f32(1, 1, 1, 1);
 
         while (!glfwWindowShouldClose(r_state.window)) {
                 // TODO: hr: loop management
@@ -229,15 +239,62 @@ int main(int argc, char *argv[]) {
                 if (res) {
                         continue;
                 }
-                ui_state.root->layoutDirection = UI_AXIS2D_X;
+                ui_state.root->layoutDirection = UI_Axis2d_Y;
+                ui_push_width(uiPct(100, 1));
+                ui_push_height(uiPct(100, 1));
+                ui_push_background_color(greybg);
+                ui_push_border_color(greybd);
+                ui_push_text_color(white);
+
+                ui_push_height(uiSizeSumOfChildren(1));
+                ui_push_background_color(darkbg);
+                f32 padx = uiPixelsX(ui_top_text_size(), 0).value * 0.25f;
+                f32 pady = uiPixelsY(ui_top_text_size(), 0).value * 0.25f;
+                ui_push_padding(v4f32(padx, pady, padx, pady));
+                UIElement *e = ui_build_element_from_string(
+                    UI_ElementFlag_DrawBackground, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
+                ui_push_parent(e);
+                ui_pop_background_color();
+                ui_pop_padding();
+
+                UISignal sig = ui_button(string8_lit("File"));
+                if (ui_clicked(sig)) {
+                        sig.element->textColor = v4f32(1, 0, 0, 1);
+                }
+                sig = ui_button(string8_lit("Edit"));
+                sig = ui_button(string8_lit("View"));
+                ui_spacer(uiPct(100, 0));
+                sig = ui_button(string8_lit("Help"));
+
+                ui_pop_height();
+                ui_pop_parent();
 
                 ui_push_height(uiPct(100, 0));
-                ui_push_width(uiPct(75, 0));
+                e = ui_build_element_from_string(0, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
+                ui_push_parent(e);
+                ui_pop_height();
 
+                ui_push_width(uiPct(20, 1));
+                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
+                                                 string8_empty());
+                ui_pop_width();
+
+                ui_push_background_color(darkbg);
+                ui_push_width(uiPixelsX(ui_pop_text_size() * 0.5, 1));
+                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
+                                                 string8_empty());
+                ui_pop_background_color();
+                ui_pop_width();
+
+                ui_push_width(uiPct(60, 0));
+
+                ui_push_background_color(white);
                 UIElement *canvas = ui_build_element_from_string(
-                    UI_ELEMENTFLAG_DrawBackground, c);
+                    UI_ElementFlag_DrawBackground, c);
                 UISignal canvasSig = ui_signal_from_element(canvas);
-                if (canvasSig.flags & UI_INTERACTIONFLAG_LeftDragging) {
+                if (ui_dragging(canvasSig)) {
                         s32 i = glf_canvas_pixel_at_pos(canvas->screenCoords);
                         if (i > 0) {
                                 Vec4f32 c = glf_state.currentColor;
@@ -249,13 +306,21 @@ int main(int argc, char *argv[]) {
                     = r_prep_dynamic_texture(&glf_state.canvas);
                 ui_element_attach_texture(canvas, canvas_tex);
 
+                ui_pop_background_color();
                 ui_pop_width();
 
-                ui_push_background_color(v4f32(0.4, 0.4, 0.45, 1));
-                ui_push_width(uiPct(25, 0));
-                UIElement *e = ui_build_element_from_string(
-                    UI_ELEMENTFLAG_DrawBackground, cp);
-                e->layoutDirection = UI_AXIS2D_Y;
+                ui_push_background_color(darkbg);
+                ui_push_width(uiPixelsX(ui_pop_text_size() * 0.5, 1));
+                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
+                                                 string8_empty());
+                ui_pop_background_color();
+                ui_pop_width();
+
+                ui_push_background_color(greybg);
+                ui_push_width(uiPct(20, 1));
+                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
+                                                 cp);
+                e->layoutDirection = UI_Axis2d_Y;
 
                 ui_push_parent(e);
 
@@ -263,24 +328,22 @@ int main(int argc, char *argv[]) {
                 ui_push_width(uiPct(100, 0));
                 ui_push_height(uiRatio(1, 0));
                 ui_push_background_color(glf_state.currentColor);
-                e = ui_build_element_from_string(UI_ELEMENTFLAG_DrawBackground,
+                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
                                                  colorStr);
                 ui_pop_background_color();
 
                 glf_color_history_ui();
 
-                ui_spacer(uiPixelsY(20, 0));
+                ui_spacer(uiPixelsY(20, 1));
                 ui_push_background_color(glf_state.colorPicker);
                 ui_push_width(uiPixelsX(100, 0));
                 ui_push_height(uiPixelsY(100, 0));
-                e = ui_build_element_from_string(UI_ELEMENTFLAG_DrawBackground,
+                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
                                                  string8_lit("preview"));
                 ui_pop_background_color();
                 ui_pop_width();
                 ui_pop_height();
 
-                ui_push_background_color(v4f32(0.7, 0.7, 0.75, 1));
-                ui_push_text_size(16.0f);
                 ui_spacer(uiPixelsY(10, 0));
                 ui_slider(&glf_state.colorPicker.x, string8_lit("preview red"));
                 ui_spacer(uiPixelsY(10, 0));
@@ -293,15 +356,15 @@ int main(int argc, char *argv[]) {
                 ui_slider(&glf_state.colorPicker.w,
                           string8_lit("preview alpha"));
 
-                ui_spacer(uiPixelsY(10, 0));
-                UISignal sig = ui_button(string8_lit("Pick color"));
-                if (sig.flags & UI_INTERACTIONFLAG_LeftClicked) {
+                ui_spacer(uiPixelsY(10, 1));
+                sig = ui_button(string8_lit("Pick color"));
+                if (ui_clicked(sig)) {
                         glf_set_current_color(glf_state.colorPicker);
                 }
 
-                ui_spacer(uiPixelsY(20, 0));
+                ui_spacer(uiPixelsY(20, 1));
                 sig = ui_button(string8_lit("Save image"));
-                if (sig.flags & UI_INTERACTIONFLAG_LeftClicked) {
+                if (ui_clicked(sig)) {
                         glf_save_canvas_to_png();
                 }
 
@@ -319,8 +382,7 @@ int main(int argc, char *argv[]) {
 
                 if (glfwGetKey(r_state.window, GLFW_KEY_P) == GLFW_PRESS) {
                         glf_state.pressedPick = 1;
-                } else if (canvasSig.flags & UI_INTERACTIONFLAG_MouseOver
-                           && glf_state.pressedPick) {
+                } else if (ui_mouse_over(canvasSig) && glf_state.pressedPick) {
                         s32 i = glf_canvas_pixel_at_pos(canvas->screenCoords);
                         if (i > 0) {
                                 Vec4u8 pixel = glf_state.canvas.data[i];

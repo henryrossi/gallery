@@ -1,5 +1,6 @@
 #ifndef STB_TRUETYPE_IMPLEMENTATION
 #define STB_TRUETYPE_IMPLEMENTATION
+#include "font/font.h"
 #include "thirdparty/stb/stb_truetype.h"
 #endif
 
@@ -63,25 +64,22 @@ static void f_destroy_font(FFont *font) {
 }
 
 static f32 f_text_length(FFont *font, f32 size, String8 str) {
-        f32 res = 0.0f;
         f32 x = 0.0f;
         f32 y = 0.0f;
-        Vec2f32 scale = f_content_scale();
-        f32 sizeR = size / font->bakedSize;
+        f32 scale = size * f_content_scale().x / font->bakedSize;
         stbtt_aligned_quad q = { 0 };
 
         for (u32 i = 0; i < str.length; i++) {
                 u8 c = string8_at(str, i);
                 if (c == ' ') {
-                        res += size;
+                        x += f_space_width(font, size);
                 } else {
                         stbtt_GetBakedQuad(font->cdata, ATLAS_WIDTH,
                                            ATLAS_WIDTH, c - 32, &x, &y, &q, 1);
-                        res += (q.x1 - q.x0) * sizeR;
                 }
         }
 
-        return res * scale.x;
+        return q.x1 * scale;
 }
 
 static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
@@ -104,4 +102,9 @@ static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
         Vec2f32 p3 = { .x = q.x1 * sizeR, .y = (q.y1 - shift) * sizeR };
         pos->min = mul_v2f32(p2, scale);
         pos->max = mul_v2f32(p3, scale);
+}
+
+static f32 f_space_width(FFont *font, f32 size) {
+        Vec2f32 scale = f_content_scale();
+        return size / scale.x;
 }

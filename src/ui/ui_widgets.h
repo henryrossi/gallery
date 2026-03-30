@@ -1,6 +1,8 @@
 #ifndef UI_WIDGETS_H
 #define UI_WIDGETS_H
 
+#include "ui/ui_core.h"
+
 static void ui_spacer(UISemanticSize size);
 static UISignal ui_button(String8 text);
 static UISignal ui_buttonf(char *fmt, ...);

@@ -1,6 +1,8 @@
 #ifndef BEDROCK_MATH_H
 #define BEDROCK_MATH_H
 
+#include "bedrock/bedrock_core.h"
+
 // TODO: hr: fill out remaining vector, matrix, and range types, as well as
 //           their functions and scalar functions
 
