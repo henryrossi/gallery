@@ -4,6 +4,7 @@
 #include "os/os.h"
 
 #include "ui/generated/ui.c"
+#include <assert.h>
 
 // NOTE: hr: for dropdowns, I think they should be removed from the main root
 // tree, but still have a parent. They can be held in a seperate list and
@@ -207,9 +208,9 @@ static void setup_ui_state() {
         ui_state.cornerRadiusStackBottom.v = 0;
         ui_state.paddingStackBottom.v = v4f32(0, 0, 0, 0);
         ui_state.widthStackBottom.v
-            = uiSemanticSize(UI_SizeKind_PercentOfParent, 100, 0);
+            = uiSemanticSize(UI_SizeKind_PercentOfParent, 100, 1);
         ui_state.heightStackBottom.v
-            = uiSemanticSize(UI_SizeKind_PercentOfParent, 100, 0);
+            = uiSemanticSize(UI_SizeKind_PercentOfParent, 100, 1);
 
         ui_state.parentStack.top = &ui_state.parentStackBottom;
         ui_state.textSizeStack.top = &ui_state.textSizeStackBottom;
@@ -339,7 +340,7 @@ static UIElement *ui_build_element_from_key(UI_ElementFlags flags, u64 key) {
         //         ui_pop_width();
         //         ui_state.widthStack.autoPop = 0;
         // }
-        // if (ui_state.widthStack.autoPop) {
+        // if (ui_state.heightStack.autoPop) {
         //         ui_pop_height();
         //         ui_state.heightStack.autoPop = 0;
         // }
@@ -506,19 +507,30 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
         ui_autolayout_calc_postorder(e, UI_Axis2d_Y);
 }
 
+// WARN: hr: I'm seeing some weird behavior on elements with seemingly plenty of
+// space that have a strcitness of 0.
 static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
         f32 pad = axis == UI_Axis2d_X ? e->padding.x + e->padding.z
                                       : e->padding.y + e->padding.w;
         f32 cap = e->computedSize.v[axis] - pad;
-        f32 sum = 0.0f;
-        for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-                sum += ch->computedSize.v[axis];
-        }
-        f32 discp = sum - cap;
-        if (discp > 0) {
+        assert(cap >= 0 && "Bomb! element has negative size");
+
+        if (e->layoutDirection == axis) {
+                f32 sum = 0.0f;
+                for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                        sum += ch->computedSize.v[axis];
+                }
+                f32 discp = sum - cap;
+                if (discp > 0) {
+                        for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                                ch->computedSize.v[axis]
+                                    -= discp * (1 - ch->size[axis].strictness);
+                        }
+                }
+        } else {
                 for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
                         ch->computedSize.v[axis]
-                            -= discp * (1 - ch->size[axis].strictness);
+                            = min(ch->computedSize.v[axis], cap);
                 }
         }
 }
@@ -574,10 +586,11 @@ static void ui_element_autolayout(void) {
                 cur->lastFrameTouched = frame;
 
                 // hr: solve violations
-                ui_solve_violations_on_axis(cur, UI_Axis2d_X);
-                ui_solve_violations_on_axis(cur, UI_Axis2d_Y);
+                // ui_solve_violations_on_axis(cur, UI_Axis2d_X);
+                // ui_solve_violations_on_axis(cur, UI_Axis2d_Y);
 
-                // hr: calculate relative positions and screen coordinates
+                // hr: calculate relative positions and screen
+                // coordinates
                 for (UIElement *child = cur->firstChild; child;
                      child = child->next) {
                         ui_element_list_append(scratch, &queue, child);
@@ -663,9 +676,27 @@ static void ui_draw_elements(void) {
         while (ui_state.textColorStack.top != &ui_state.textColorStackBottom) {
                 ui_pop_text_color();
         }
+        while (ui_state.textSizeStack.top != &ui_state.textSizeStackBottom) {
+                ui_pop_text_size();
+        }
         while (ui_state.backgroundColorStack.top
                != &ui_state.backgroundColorStackBottom) {
                 ui_pop_background_color();
+        }
+        while (ui_state.borderSizeStack.top
+               != &ui_state.borderSizeStackBottom) {
+                ui_pop_border_size();
+        }
+        while (ui_state.borderColorStack.top
+               != &ui_state.borderColorStackBottom) {
+                ui_pop_border_color();
+        }
+        while (ui_state.paddingStack.top != &ui_state.paddingStackBottom) {
+                ui_pop_padding();
+        }
+        while (ui_state.cornerRadiusStack.top
+               != &ui_state.cornerRadiusStackBottom) {
+                ui_pop_corner_radius();
         }
 
         // TODO: hr: these probably need to be moved into a function and

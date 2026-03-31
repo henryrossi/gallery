@@ -8,6 +8,7 @@ static UISignal ui_button(String8 text);
 static UISignal ui_buttonf(char *fmt, ...);
 static UISignal ui_slider(f32 *val, String8 text);
 static UISignal ui_sliderf(f32 *val, char *fmt, ...);
-static UISignal ui_checkbox();
+static UISignal ui_checkbox(void);
+static UISignal ui_hsv_color_picker(String8 text);
 
 #endif // UI_WIDGETS_H
