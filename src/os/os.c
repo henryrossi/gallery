@@ -1,7 +1,7 @@
 #if __MACH__
 #include "mach/os_mach.c"
 #elif _WIN32
-#error OS core layer not implemented for Windows.
+#include "windows/os_windows.c"
 #elif __linux__
 #error OS core layer not implemented for Linux.
 #else

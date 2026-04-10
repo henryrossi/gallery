@@ -10,7 +10,7 @@ typedef struct {
         f32 edgeSoftness;
 } RRectInstanceData;
 
-// choose backend
+// NOTE: hr: choose backend here
 #define GLFW_INCLUDE_VULKAN
 #include "thirdparty/GLFW/glfw3.h"
 #include "vulkan/vulkan_render.h"
