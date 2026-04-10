@@ -3,9 +3,6 @@
 
 #include "bedrock/bedrock_inc.h"
 
-// NOTE: hr: choose backend here
-#define GLFW_INCLUDE_VULKAN
-#include "thirdparty/GLFW/glfw3.h"
 #include "vulkan/vulkan_render.h"
 
 static void r_init_backend(const char *name, u32 width, u32 height);
