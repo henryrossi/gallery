@@ -1,8 +1,7 @@
-#include <fileapi.h>
-#include <memoryapi.h>
+#include <windows.h>
 
 static void *os_reserve(u64 size) {
-        void *res = VirtualAlloc2(0, 0, size, MEM_COMMIT, PAGE_READWRITE, 0, 0);
+        void *res = VirtualAlloc(0, size, MEM_COMMIT, PAGE_READWRITE);
         if (!res) {
                 u32 err = GetLastError();
                 // NOTE: hr: use FormatMessage() to get error string
