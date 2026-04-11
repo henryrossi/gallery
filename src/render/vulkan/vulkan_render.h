@@ -6,9 +6,9 @@
 #define GLFW_INCLUDE_VULKAN
 #include "thirdparty/GLFW/glfw3.h"
 
-#include "vulkan/vulkan.h"
+#include "thirdparty/vulkan/vulkan.h"
 // #include "vulkan/vk_platform.h"
-#include "vulkan/vk_enum_string_helper.h"
+#include "thirdparty/vulkan/vk_enum_string_helper.h"
 
 typedef struct {
         Rng2f32 pos;

@@ -1,6 +1,6 @@
 #include <windows.h>
 
-static void *os_reserve(u64 size) {
+static void *os_commit(u64 size) {
         void *res = VirtualAlloc(0, size, MEM_COMMIT, PAGE_READWRITE);
         if (!res) {
                 u32 err = GetLastError();
