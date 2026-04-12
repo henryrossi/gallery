@@ -4,8 +4,9 @@
 #include "os/os.h"
 
 /* Vulkan validation layer and debug extension */
+#ifdef VALIDATION_LAYERS
 static u32 r_validation_layers_enabled = 1;
-#ifdef NDEBUG
+#else
 static u32 r_validation_layers_enabled = 0;
 #endif
 
