@@ -1,6 +1,7 @@
+#include "font/font.h"
+
 #ifndef STB_TRUETYPE_IMPLEMENTATION
 #define STB_TRUETYPE_IMPLEMENTATION
-#include "font/font.h"
 #include "thirdparty/stb/stb_truetype.h"
 #endif
 

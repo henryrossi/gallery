@@ -1,6 +1,6 @@
 [
   {
-    "directory": "~/dev/gallery",
+    "directory": "/~/dev/gallery",
     "file": "src/glyph_main.c",
     "arguments": [
       "clang",
