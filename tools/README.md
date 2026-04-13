@@ -1,0 +1,1 @@
+Found in this directory are some files and allow clangd to index this project which is built as a single compilation unit. Copy the files into the parent directory, and update paths to point to this project on your machine.
