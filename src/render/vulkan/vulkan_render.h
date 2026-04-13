@@ -56,7 +56,8 @@ typedef struct {
         GLFWwindow *window;
         VkSurfaceKHR surface;
         VkPhysicalDevice physicalDevice;
-        VkPhysicalDeviceProperties physicalDeviceProps;
+        VkPhysicalDeviceProperties2 physicalDeviceProps;
+        VkPhysicalDeviceDescriptorIndexingProperties deviceIndexingProps;
         VkQueue graphicsQueue;
         u32 graphicsQueueIdx;
         VkQueue presentQueue;

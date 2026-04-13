@@ -1,3 +1,5 @@
+#include "os/os.h"
+
 #include <windows.h>
 
 static void *os_commit(u64 size) {
@@ -18,7 +20,9 @@ static OSFileInfo os_file_info(const char *filename) {
         OSFileInfo info = { 0 };
         HANDLE hFile = CreateFileA(filename, GENERIC_READ, 0, 0, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL, 0);
-
+        if (hFile == INVALID_HANDLE_VALUE) {
+                return info;
+        }
         info.size = GetFileSize(hFile, 0);
         CloseHandle(hFile);
         return info;

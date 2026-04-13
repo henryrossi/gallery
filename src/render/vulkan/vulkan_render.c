@@ -133,11 +133,11 @@ static const char **r_get_required_extensions(Arena *a, u32 *extCount) {
                 extNames[count - 3] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
         }
         // hr: macOs extensions
-        extNames[count - 2] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
-        extNames[count - 1]
-            = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
-
-        *extCount = count;
+        // extNames[count - 2] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+        // extNames[count - 1]
+        //     = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+        //
+        *extCount = count - 2;
         return extNames;
 }
 
@@ -170,7 +170,7 @@ static b32 r_check_validation_layer_support(Arena *a) {
 
 static const char *r_device_exts[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        "VK_KHR_portability_subset", // hr: macOs device extensions
+        // "VK_KHR_portability_subset", // hr: macOs device extensions
         "VK_KHR_maintenance3",
         "VK_EXT_descriptor_indexing",
 };
@@ -285,8 +285,15 @@ static void r_pick_physical_device(Arena *a) {
         for (u32 i = 0; i < deviceCount; i++) {
                 VkPhysicalDevice device = devices[i];
 
-                VkPhysicalDeviceProperties props;
-                vkGetPhysicalDeviceProperties(device, &props);
+                VkPhysicalDeviceDescriptorIndexingProperties indexingProps = {
+                        .sType
+                        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES,
+                };
+                VkPhysicalDeviceProperties2 props = {
+                        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+                        .pNext = &indexingProps,
+                };
+                vkGetPhysicalDeviceProperties2(device, &props);
 
                 b32 supportsExtensions
                     = r_device_supports_extensions(a, device);
@@ -323,6 +330,7 @@ static void r_pick_physical_device(Arena *a) {
                             && supportsExtensions && swapchainAdequate) {
                                 r_state.physicalDevice = device;
                                 r_state.physicalDeviceProps = props;
+                                r_state.deviceIndexingProps = indexingProps;
                                 r_state.graphicsQueueIdx = j;
                                 r_state.presentQueueIdx = j;
 
@@ -891,8 +899,8 @@ static void r_recreate_swapchain(void) {
 }
 
 static void r_init_backend(const char *name, u32 width, u32 height) {
-        r_state.arena = make_arena(kb(6));
-        r_state.swapchainArena = make_arena(kb(6));
+        r_state.arena = make_arena(mb(6));
+        r_state.swapchainArena = make_arena(mb(6));
         Arena *arena = r_get_arena();
 
         glfwInit();
@@ -1059,8 +1067,23 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                                        &r_state.setupCmdBuffer);
         r_check_vkresult(res, "Failed to allocate setup command buffer");
 
-        r_state.maxTextures = r_state.physicalDeviceProps.limits
-                                  .maxPerStageDescriptorSampledImages;
+        // NOTE: hr: on some devices that support descriptor indexing will
+        // report no limit (MAX_INT) for  maxPerStageDescriptorSampledImages.
+        // Better limits are  found in DeviceDescriptorIndexProps (which can
+        // also return MAX_INT or "no limit").
+        //
+        // r_state.maxTextures = r_state.physicalDeviceProps.properties.limits
+        //                           .maxPerStageDescriptorSampledImages;
+
+        r_state.maxTextures
+            = min(r_state.deviceIndexingProps
+                      .maxPerStageDescriptorUpdateAfterBindSampledImages,
+                  r_state.deviceIndexingProps
+                          .maxDescriptorSetUpdateAfterBindSampledImages
+                      / r_state.maxFramesInFlight);
+        if (r_state.maxTextures > 1024) {
+                r_state.maxTextures = 1024;
+        }
         VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[2] = {
                 {
                         .binding = 0,
@@ -1223,8 +1246,15 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         RGraphicsPipelineCreateInfo pipelineInfo = {
                 .renderPass = r_state.renderPass,
                 .pipelineLayout = r_state.pipelineLayout,
-                .vertFile = "src/render/vulkan/vert.spv",
-                .fragFile = "src/render/vulkan/frag.spv",
+                // WARN: hr: need better way to specify platform specific path
+                // rules
+                // #ifdef _WIN32
+                .vertFile = "src\\render\\vulkan\\vert.spv",
+                .fragFile = "src\\render\\vulkan\\frag.spv",
+                // #else
+                //                 .vertFile = "src/render/vulkan/vert.spv",
+                //                 .fragFile = "src/rende/vulkan/frag.spv",
+                // #endif
                 .vertexInputInfo = &vertexInputInfo,
                 .blendAttachmentStatesCount = 1,
                 .blendAttachmentStates = &colorBlendAttachment,
@@ -1306,6 +1336,9 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                         .descriptorCount = r_state.maxFramesInFlight,
                 },
         };
+        // WARN: hr: this fails on my pc using what device is chosen  (probably
+        // integrated graphics not my card). Need to query if this is supported.
+        // Also  probably need basic version of add_to_batch and draw_batch.
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
                 .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
@@ -1315,7 +1348,7 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         };
         res = vkCreateDescriptorPool(r_state.device, &descriptorPoolCreateInfo,
                                      0, &r_state.descriptorPool);
-        r_check_vkresult(res, "Failed to create descirptor pool");
+        r_check_vkresult(res, "Failed to create descriptor pool");
 
         r_state.descriptorSets = arena_alloc(
             arena, sizeof(VkDescriptorSet) * r_state.maxFramesInFlight);
@@ -1340,8 +1373,8 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                 .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                 .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                 .anisotropyEnable = VK_TRUE,
-                .maxAnisotropy
-                = r_state.physicalDeviceProps.limits.maxSamplerAnisotropy,
+                .maxAnisotropy = r_state.physicalDeviceProps.properties.limits
+                                     .maxSamplerAnisotropy,
                 .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
                 .unnormalizedCoordinates = VK_FALSE,
                 .compareEnable = VK_FALSE,
