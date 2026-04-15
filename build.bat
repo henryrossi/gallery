@@ -6,7 +6,7 @@ if not "%release%"=="1" set debug=1
 if "%debug%"=="1"   set release=0 && echo [debug mode]
 if "%release%"=="1" set debug=0 && echo [release mode]
 
-set clang_common= -Wall -Wno-unused-function -I../src -I../src/thirdparty -L../thirdparty_lib
+set clang_common= -Wall -Wno-deprecated-declarations -Wno-unused-function -I../src -I../src/thirdparty -L../thirdparty_lib
 
 set link_render= -lglfw3dll -lvulkan-1"
 

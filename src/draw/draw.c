@@ -70,7 +70,7 @@ static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                 text = string8_skip(text, space);
 
                 while (string8_at(text, 0) == ' ') {
-                        if (remaining < scaledSize.x) {
+                        if (remaining < spaceWidth) {
                                 goto next_line;
                         } else {
                                 remaining -= spaceWidth;
