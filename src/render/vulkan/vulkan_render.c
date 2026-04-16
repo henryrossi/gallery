@@ -1246,15 +1246,14 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         RGraphicsPipelineCreateInfo pipelineInfo = {
                 .renderPass = r_state.renderPass,
                 .pipelineLayout = r_state.pipelineLayout,
-                // WARN: hr: need better way to specify platform specific path
-                // rules
-                // #ifdef _WIN32
-                .vertFile = "src\\render\\vulkan\\vert.spv",
-                .fragFile = "src\\render\\vulkan\\frag.spv",
-                // #else
-                //                 .vertFile = "src/render/vulkan/vert.spv",
-                //                 .fragFile = "src/rende/vulkan/frag.spv",
-                // #endif
+                .vertFile
+                = (char *)os_path(arena,
+                                  string8_lit("src/render/vulkan/vert.spv"))
+                      .data,
+                .fragFile
+                = (char *)os_path(arena,
+                                  string8_lit("src/render/vulkan/frag.spv"))
+                      .data,
                 .vertexInputInfo = &vertexInputInfo,
                 .blendAttachmentStatesCount = 1,
                 .blendAttachmentStates = &colorBlendAttachment,

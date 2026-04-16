@@ -1,7 +1,7 @@
 #ifndef OS_INC_H
 #define OS_INC_H
 
-#include "bedrock/bedrock_core.h"
+#include "bedrock/bedrock_inc.h"
 
 typedef struct {
         u64 size;
@@ -11,6 +11,8 @@ static void os_abort(s32 exitCode);
 
 static void *os_commit(u64 size);
 static void os_release(void *ptr, u64 size);
+
+static String8 os_path(Arena *a, String8 path);
 
 // NOTE: hr: it'll probably be better to use a fd rather than a filepath
 static OSFileInfo os_file_info(const char *filename);

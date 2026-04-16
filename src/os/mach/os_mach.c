@@ -16,6 +16,11 @@ static void os_release(void *ptr, u64 size) {
         munmap(ptr, size);
 }
 
+static String8 os_path(Arena *a, String8 path) {
+        String8 res = path;
+        return res;
+}
+
 static OSFileInfo os_file_info(const char *filename) {
         OSFileInfo info = { 0 };
         struct stat s;
