@@ -4,5 +4,7 @@ build
 
 .clangd
 compile_commands.json
+!tools/.clangd
+!tools/compile_commands.json
 
 .DS_Store
