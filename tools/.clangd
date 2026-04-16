@@ -1,0 +1,2 @@
+Diagnostics:
+  Suppress: [-Wundefined-internal, -Wunused-includes]
