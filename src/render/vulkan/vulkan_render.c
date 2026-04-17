@@ -121,8 +121,13 @@ static const char **r_get_required_extensions(Arena *a, u32 *extCount) {
         const char **glfwExts
             = glfwGetRequiredInstanceExtensions(&glfwExtCount);
 
+        u32 platExtCount = 0;
+#ifdef __MACH__
+        platExtCount += 1;
+#endif
+
         u32 count
-            = r_validation_layers_enabled ? glfwExtCount + 3 : glfwExtCount + 2;
+            = r_validation_layers_enabled + glfwExtCount + platExtCount + 1;
         const char **extNames = arena_alloc(a, sizeof(char *) * count);
 
         for (int i = 0; i < glfwExtCount; i++) {
@@ -130,14 +135,18 @@ static const char **r_get_required_extensions(Arena *a, u32 *extCount) {
         }
 
         if (r_validation_layers_enabled) {
-                extNames[count - 3] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+                extNames[glfwExtCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
         }
-        // hr: macOs extensions
-        // extNames[count - 2] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
-        // extNames[count - 1]
-        //     = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
-        //
-        *extCount = count - 2;
+
+#ifdef __MACH__
+        extNames[glfwExtCount + r_validation_layers_enabled]
+            = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+#endif
+
+        extNames[count - 1]
+            = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+
+        *extCount = count;
         return extNames;
 }
 
@@ -167,10 +176,11 @@ static b32 r_check_validation_layer_support(Arena *a) {
 
         return 1;
 }
-
 static const char *r_device_exts[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        // "VK_KHR_portability_subset", // hr: macOs device extensions
+#ifdef __MACH__
+        "VK_KHR_portability_subset", // hr: macOs device extensions
+#endif
         "VK_KHR_maintenance3",
         "VK_EXT_descriptor_indexing",
 };
