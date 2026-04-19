@@ -1,8 +1,4 @@
 Task List
- ![ ] ui is FUCKED because of the autopop implementation;
-      gonna need to sand box in simple grove environment to play around
-      and solve the bugs
- ![ ] fix code generation for stacks to inlcude autopop and pop all stacks
   [ ] ui_widget label
   [ ] start working on menu bar for glyph
   [ ] isolate glfw functions

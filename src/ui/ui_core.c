@@ -5,6 +5,7 @@
 
 #include "ui/generated/ui.c"
 #include <assert.h>
+#include <stdio.h>
 
 // NOTE: hr: for dropdowns, I think they should be removed from the main root
 // tree, but still have a parent. They can be held in a seperate list and
@@ -332,46 +333,46 @@ static UIElement *ui_build_element_from_key(UI_ElementFlags flags, u64 key) {
         res->texture = 0;
 
         // hr: auto pop stacks
-        // if (ui_state.parentStack.autoPop) {
-        //         ui_pop_parent();
-        //         ui_state.parentStack.autoPop = 0;
-        // }
-        // if (ui_state.widthStack.autoPop) {
-        //         ui_pop_width();
-        //         ui_state.widthStack.autoPop = 0;
-        // }
-        // if (ui_state.heightStack.autoPop) {
-        //         ui_pop_height();
-        //         ui_state.heightStack.autoPop = 0;
-        // }
-        // if (ui_state.textSizeStack.autoPop) {
-        //         ui_pop_text_size();
-        //         ui_state.textSizeStack.autoPop = 0;
-        // }
-        // if (ui_state.textColorStack.autoPop) {
-        //         ui_pop_text_color();
-        //         ui_state.textColorStack.autoPop = 0;
-        // }
-        // if (ui_state.backgroundColorStack.autoPop) {
-        //         ui_pop_background_color();
-        //         ui_state.backgroundColorStack.autoPop = 0;
-        // }
-        // if (ui_state.borderColorStack.autoPop) {
-        //         ui_pop_border_color();
-        //         ui_state.borderColorStack.autoPop = 0;
-        // }
-        // if (ui_state.borderSizeStack.autoPop) {
-        //         ui_pop_border_size();
-        //         ui_state.borderSizeStack.autoPop = 0;
-        // }
-        // if (ui_state.cornerRadiusStack.autoPop) {
-        //         ui_pop_corner_radius();
-        //         ui_state.cornerRadiusStack.autoPop = 0;
-        // }
-        // if (ui_state.paddingStack.autoPop) {
-        //         ui_pop_padding();
-        //         ui_state.paddingStack.autoPop = 0;
-        // }
+        if (ui_state.parentStack.autoPop) {
+                ui_pop_parent();
+                ui_state.parentStack.autoPop = 0;
+        }
+        if (ui_state.widthStack.autoPop) {
+                ui_pop_width();
+                ui_state.widthStack.autoPop = 0;
+        }
+        if (ui_state.heightStack.autoPop) {
+                ui_pop_height();
+                ui_state.heightStack.autoPop = 0;
+        }
+        if (ui_state.textSizeStack.autoPop) {
+                ui_pop_text_size();
+                ui_state.textSizeStack.autoPop = 0;
+        }
+        if (ui_state.textColorStack.autoPop) {
+                ui_pop_text_color();
+                ui_state.textColorStack.autoPop = 0;
+        }
+        if (ui_state.backgroundColorStack.autoPop) {
+                ui_pop_background_color();
+                ui_state.backgroundColorStack.autoPop = 0;
+        }
+        if (ui_state.borderColorStack.autoPop) {
+                ui_pop_border_color();
+                ui_state.borderColorStack.autoPop = 0;
+        }
+        if (ui_state.borderSizeStack.autoPop) {
+                ui_pop_border_size();
+                ui_state.borderSizeStack.autoPop = 0;
+        }
+        if (ui_state.cornerRadiusStack.autoPop) {
+                ui_pop_corner_radius();
+                ui_state.cornerRadiusStack.autoPop = 0;
+        }
+        if (ui_state.paddingStack.autoPop) {
+                ui_pop_padding();
+                ui_state.paddingStack.autoPop = 0;
+        }
 
         return res;
 }
@@ -513,18 +514,20 @@ static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
         f32 pad = axis == UI_Axis2d_X ? e->padding.x + e->padding.z
                                       : e->padding.y + e->padding.w;
         f32 cap = e->computedSize.v[axis] - pad;
-        assert(cap >= 0 && "Bomb! element has negative size");
 
         if (e->layoutDirection == axis) {
                 f32 sum = 0.0f;
+                f32 strictnessTotal = 0.0f;
                 for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
                         sum += ch->computedSize.v[axis];
+                        strictnessTotal += (1 - ch->size[axis].strictness);
                 }
                 f32 discp = sum - cap;
                 if (discp > 0) {
+                        f32 f = discp / strictnessTotal;
                         for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-                                ch->computedSize.v[axis]
-                                    -= discp * (1 - ch->size[axis].strictness);
+                                f32 r = f * (1 - ch->size[axis].strictness);
+                                ch->computedSize.v[axis] -= r;
                         }
                 }
         } else {
@@ -586,8 +589,8 @@ static void ui_element_autolayout(void) {
                 cur->lastFrameTouched = frame;
 
                 // hr: solve violations
-                // ui_solve_violations_on_axis(cur, UI_Axis2d_X);
-                // ui_solve_violations_on_axis(cur, UI_Axis2d_Y);
+                ui_solve_violations_on_axis(cur, UI_Axis2d_X);
+                ui_solve_violations_on_axis(cur, UI_Axis2d_Y);
 
                 // hr: calculate relative positions and screen
                 // coordinates
@@ -601,7 +604,9 @@ static void ui_element_autolayout(void) {
                         } else if (cur->layoutDirection == UI_Axis2d_X) {
                                 child->relPosition.x = prev->relPosition.x
                                                        + prev->computedSize.x;
+                                child->relPosition.y = 0.0f;
                         } else if (cur->layoutDirection == UI_Axis2d_Y) {
+                                child->relPosition.x = 0.0f;
                                 child->relPosition.y = prev->relPosition.y
                                                        + prev->computedSize.y;
                         }
