@@ -20,7 +20,7 @@ static FFont *f_init_font(String8 filename) {
 
         String8 cstr = string8_allocate(a, filename.length + 1);
         memcpy(cstr.data, filename.data, filename.length);
-        cstr.data[filename.length] = '\0';
+        string8_set(cstr, filename.length, '\0');
 
         // TODO: hr: implement os reads and writes as well as file size querying
         //           and filename handling
