@@ -1,3 +1,6 @@
+#define STRING8F
+#define STRING8_HASH
+
 // clang-format off
 #include "bedrock/bedrock_inc.h"
 #include "os/os.h"

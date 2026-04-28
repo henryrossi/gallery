@@ -33,6 +33,7 @@ cd build
 if [ -n "${glyph+x}" ]; then built=1 && $compile ../src/glyph/glyph_main.c -o glyph $link_os_graphics $link_render; fi
 if [ -n "${grove+x}" ]; then built=1 && $compile ../src/grove/grove_main.c -o grove $link_os_graphics $link_render; fi
 if [ -n "${minze+x}" ]; then built=1 && $compile ../src/minze/minze_main.c -o minze; fi
+if [ -n "${test+x}" ]; then built=1 && $compile ../src/testing/test.c -o test; fi
 
 mkdir -p vulkan/icd.d
 if [ ! -f "vulkan/icd.d/MoltenVK_icd.json" ]; then 

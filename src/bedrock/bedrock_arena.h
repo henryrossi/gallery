@@ -5,6 +5,8 @@
 
 #include "bedrock/bedrock_core.h"
 
+// TODO: hr: allow for disabling of chaining arena blocks
+
 typedef struct ArenaParams ArenaParams;
 struct ArenaParams {
         u64 blockSize;
@@ -36,9 +38,13 @@ static Arena *make_arena_(ArenaParams *params);
 
 static void *arena_alloc(Arena *a, u64 size);
 static u64 arena_pos(Arena *a);
-static void arena_pop_at(Arena *a, u64 pos);
+static b32 arena_pop_at(Arena *a, u64 pos);
+
+static b32 arena_contains_mem(Arena *a, void *ptr);
 
 static void arena_reset(Arena *a);
 static void arena_pop(Arena *a, u64 amt);
+
+static void destroy_arena(Arena *a);
 
 #endif // BEDROCK_ARENA_H

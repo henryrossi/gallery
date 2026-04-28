@@ -11,6 +11,12 @@ static String8 string8_allocate(Arena *arena, u64 length) {
         return str;
 }
 
+static String8 string8_empty(void) {
+        String8 res = { 0 };
+        return res;
+}
+
+#ifdef STRING8F
 #ifndef STB_SPRINTF_IMPLEMENTATION
 #define STB_SPRINTF_IMPLEMENTATION
 #define STB_SPRINTF_STATIC
@@ -33,17 +39,25 @@ static String8 string8f(Arena *arena, char *fmt, ...) {
         va_end(args);
         return res;
 }
+#endif
 
-static String8 string8_empty(void) {
-        String8 res = { 0 };
-        return res;
-}
-
-static u8 string8_at(String8 string, u64 index) {
-        if (index < string.length) {
-                return string.data[index];
+static u8 string8_at(String8 str, u64 index) {
+        if (index < str.length) {
+                return str.data[index];
         }
         return 0;
+}
+
+static b32 string8_set(String8 str, u64 index, u8 c) {
+        if (str.length <= index) {
+                return 0;
+        }
+        str.data[index] = c;
+        return 1;
+}
+
+static b32 string8_is_null_term(String8 str) {
+        return string8_at(str, str.length - 1) == '\0';
 }
 
 static void print_string8(String8 string) {
@@ -118,6 +132,7 @@ static u64 string8_find_substr(String8 str, String8 substr) {
         return UINT64_MAX;
 }
 
+#ifdef STRING8_HASH
 #ifndef XXH_IMPLEMENTATION
 #define XXH_IMPLEMENTATION
 #include "thirdparty/xxHash/xxh3.h"
@@ -135,3 +150,4 @@ static u64 string8_hashkey(String8 str) {
         u64 res = string8_hashkey_from_seed(0x5381, str);
         return res;
 }
+#endif
