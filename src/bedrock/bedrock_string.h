@@ -11,6 +11,7 @@ typedef struct string {
 
 #define string8_lit(cstr) string8((u8 *)cstr, sizeof(cstr) - 1)
 #define cstring8_lit(cstr) string8((u8 *)cstr, sizeof(cstr))
+#define ccstring8_lit(cstr) { .data = (u8 *)cstr, .length = sizeof(cstr) - 1 }
 
 static String8 string8(u8 *str, u64 length);
 static String8 string8_allocate(Arena *arena, u64 length);

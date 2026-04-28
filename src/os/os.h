@@ -4,6 +4,11 @@
 #include "bedrock/bedrock_inc.h"
 
 typedef struct {
+        u64 pageFaults;
+        u64 memUsed;
+} OSRUsage;
+
+typedef struct {
         u64 handle;
 } OSFile;
 
@@ -11,6 +16,7 @@ typedef enum {
         OS_FileAccess_Read = 1 << 0,
         OS_FileAccess_Write = 1 << 1,
         OS_FileAccess_ReadWrite = OS_FileAccess_Read | OS_FileAccess_Write,
+        OS_FileAccess_Create = 1 << 2,
 } OS_FileAccess;
 
 typedef struct {
@@ -32,6 +38,8 @@ static void os_abort(s32 exitCode);
 
 static void *os_commit(u64 size);
 static void os_release(void *ptr, u64 size);
+
+static b32 os_rusage(OSRUsage *usage);
 
 //  NOTE: hr: returns a c style, null terminated string
 static String8 os_path(Arena *a, String8 path);

@@ -11,7 +11,8 @@ static Arena *make_arena_(ArenaParams *p) {
         if (!res) {
                 printf("ERROR: Arena at %s:%d\n", p->createdFile,
                        p->createdLine);
-                os_abort(1);
+                return 0;
+                // os_abort(1); // hr: remove for test, come back to this
         }
 
         res->prev = 0;
@@ -27,6 +28,7 @@ static Arena *make_arena_(ArenaParams *p) {
 
 static void *arena_alloc(Arena *a, u64 size) {
         Arena *top = a->top;
+
         if (top->pos + size > top->size - ARENA_HEADER_SIZE) {
                 ArenaParams params = {
                         .blockSize = size,
@@ -34,6 +36,10 @@ static void *arena_alloc(Arena *a, u64 size) {
                         .createdLine = top->createdLine,
                 };
                 Arena *new = make_arena_(&params);
+                if (!new) {
+                        fprintf(stderr, "Error comes from arena allocation\n");
+                        return 0;
+                }
 
                 new->prev = top;
                 top = new;
@@ -56,19 +62,22 @@ static u64 arena_pos(Arena *a) {
         return res;
 }
 
-static void arena_pop_at(Arena *a, u64 pos) {
+static b32 arena_pop_at(Arena *a, u64 pos) {
         Arena *top = a->top;
-        if (pos >= top->base + top->size - ARENA_HEADER_SIZE) {
-                printf("ERROR: Arena at %s:%d - popped beyond allocation\n",
-                       a->createdFile, a->createdLine);
-                os_abort(1);
+        if (pos > top->base + top->pos) {
+                fprintf(stderr,
+                        "ERROR: Arena at %s:%d - popped beyond allocation "
+                        "(%llu -> %llu)\n",
+                        a->createdFile, a->createdLine, top->base + top->size,
+                        pos);
+                return 0;
         }
 
-        while (pos < top->base) {
+        while (pos <= top->base && top != a) {
                 Arena *rel = top;
                 top = top->prev;
                 os_release(rel, rel->size);
-                // NOTE: hr: may improve performance to hold released
+                // NOTE: hr: to improve performance, hold released
                 // arenas in a free list for later use
         }
         top->pos = pos - top->base;
@@ -76,6 +85,18 @@ static void arena_pop_at(Arena *a, u64 pos) {
         for (Arena *arena = top; arena; arena = arena->prev) {
                 arena->top = top;
         }
+
+        return 1;
+}
+
+static b32 arena_contains_mem(Arena *a, void *ptr) {
+        for (Arena *cur = a->top; cur; cur = cur->prev) {
+                void *aMem = cur;
+                if (aMem < ptr && aMem + cur->size > ptr) {
+                        return 1;
+                }
+        }
+        return 0;
 }
 
 static void arena_reset(Arena *a) {
@@ -91,5 +112,13 @@ static void arena_pop(Arena *a, u64 amt) {
                        "larger than the arena\n",
                        a->createdFile, a->createdLine);
                 os_abort(1);
+        }
+}
+
+static void destroy_arena(Arena *a) {
+        for (Arena *cur = a->top; cur;) {
+                Arena *rel = cur;
+                cur = cur->prev;
+                os_release(rel, rel->size);
         }
 }

@@ -1,15 +1,31 @@
 #include "bedrock/bedrock_string.h"
 #include "os/os.h"
 
-#include <errhandlingapi.h>
 #include <windows.h>
-#include <winnt.h>
+
+#include <psapi.h>
 
 static void *os_commit(u64 size) {
         void *res = VirtualAlloc(0, size, MEM_COMMIT, PAGE_READWRITE);
         if (!res) {
+                // NOTE: hr: messy :/
                 u32 err = GetLastError();
-                // NOTE: hr: use FormatMessage() to get error string
+                LPSTR messageBuffer = 0;
+
+                size_t size = FormatMessageA(
+                    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
+                        | FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                    (LPSTR)&messageBuffer, 0, NULL);
+
+                String8 str = { .data = (u8 *)messageBuffer, .length = size };
+                print_string8(str);
+
+                LocalFree(messageBuffer);
+
+                OSRUsage use = { 0 };
+                os_rusage(&use);
+                printf("Total process memory used: %llu\n", use.memUsed);
         }
         return res;
 }
@@ -18,6 +34,28 @@ static void os_release(void *ptr, u64 size) {
         // NOTE: hr: There are a couple scenarios when free might fail. Is ptr
         //           valid?
         VirtualFree(ptr, size, MEM_DECOMMIT);
+}
+
+static b32 os_rusage(OSRUsage *usage) {
+        HANDLE hProcess;
+        PROCESS_MEMORY_COUNTERS pmc;
+
+        u64 pid = GetCurrentProcessId();
+        hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+                               FALSE, pid);
+        if (!hProcess) {
+                return 0;
+        }
+
+        if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
+                usage->pageFaults = pmc.PageFaultCount;
+                usage->memUsed = pmc.WorkingSetSize;
+                CloseHandle(hProcess);
+                return 1;
+        }
+
+        CloseHandle(hProcess);
+        return 0;
 }
 
 static String8 os_path(Arena *a, String8 path) {
@@ -55,6 +93,7 @@ static OS_FileCode os_open_file(String8 path, OSFile *file, OS_FileAccess acc) {
         }
 
         u32 access = 0;
+        u32 creation = OPEN_EXISTING;
         switch (acc) {
         case OS_FileAccess_Read:
                 access = GENERIC_READ;
@@ -65,10 +104,14 @@ static OS_FileCode os_open_file(String8 path, OSFile *file, OS_FileAccess acc) {
         case OS_FileAccess_ReadWrite:
                 access = GENERIC_READ | GENERIC_WRITE;
                 break;
+        case OS_FileAccess_Create:
+                access = GENERIC_READ | GENERIC_WRITE;
+                creation = CREATE_ALWAYS;
+                break;
         }
 
-        HANDLE hFile = CreateFileA((char *)path.data, access, 0, 0,
-                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+        HANDLE hFile = CreateFileA((char *)path.data, access, 0, 0, creation,
+                                   FILE_ATTRIBUTE_NORMAL, 0);
         if (hFile == INVALID_HANDLE_VALUE) {
                 u32 err = GetLastError();
                 switch (err) {

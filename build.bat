@@ -23,6 +23,7 @@ pushd build
 if "%glyph%"=="1" set built=1 && %compile% ../src/glyph/glyph_main.c -o glyph.exe  %link_render%
 if "%grove%"=="1" set built=1 && %compile% ../src/grove/grove_main.c -o grove.exe  %link_render%
 if "%minze%"=="1" set built=1 && %compile% ../src/minze/minze_main.c -o minze.exe  %link_render%
+if "%test%"=="1" set built=1 && %compile% ../src/testing/test.c -o test.exe
 :: hr: need warning about this failing
 if not exist glfw3.dll copy "..\thirdparty_lib\glfw3.dll" "glfw3.dll"
 popd
