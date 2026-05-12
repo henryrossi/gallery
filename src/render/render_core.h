@@ -29,7 +29,6 @@ static void r_destroy_dynamic_texture(RDynamicTexture *dTex);
 
 static void r_assert(b32 flag, char *msg);
 
-static String8 r_read_shader_file(const char *filename, String8 buf);
-static String8 r_alloc_shader_buffer(Arena *a, const char *filename);
+static String8 r_read_shader_file(Arena *a, String8 filename);
 
 #endif // RENDER_CORE_H

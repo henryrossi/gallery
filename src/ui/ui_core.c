@@ -408,6 +408,7 @@ static UIElement *ui_build_element_from_stringfv(UI_ElementFlags flags,
 static void ui_autolayout_calc_preorder(UIElement *e, UI_Axis2d axis) {
         UISemanticSize size = e->size[axis];
         f32 computedSize = 0.0f;
+        f32 parentSize = e->parent ? e->parent->computedSize.v[axis] : 0.0f;
 
         switch (size.kind) {
         case UI_SizeKind_Pixels:
@@ -429,8 +430,13 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_Axis2d axis) {
                 }
                 break;
         case UI_SizeKind_PercentOfParent:
-                computedSize
-                    = e->parent->computedSize.v[axis] * size.value * 0.01f;
+                if (axis == UI_Axis2d_X) {
+                        parentSize -= e->padding.x + e->padding.z;
+                        computedSize = parentSize * size.value * 0.01f;
+                } else {
+                        parentSize -= e->padding.y + e->padding.w;
+                        computedSize = parentSize * size.value * 0.01f;
+                }
                 break;
         case UI_SizeKind_SumOfChildren:
         case UI_SizeKind_OtherAxisRatio:
@@ -523,8 +529,8 @@ static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
                         strictnessTotal += (1 - ch->size[axis].strictness);
                 }
                 f32 discp = sum - cap;
-                if (discp > 0) {
-                        f32 f = discp / strictnessTotal;
+                if (discp > 0 && strictnessTotal != 0.0f) {
+                        f32 f = discp / strictnessTotal; // WARN: hr: careful!
                         for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
                                 f32 r = f * (1 - ch->size[axis].strictness);
                                 ch->computedSize.v[axis] -= r;

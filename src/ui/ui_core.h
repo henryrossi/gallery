@@ -205,35 +205,64 @@ static UIElement *ui_build_element_from_stringfv(UI_ElementFlags flags,
                                                  char *fmt, va_list args);
 
 static void ui_element_add_display_string(UIElement *e, String8 str);
+static void ui_element_attach_texture(UIElement *e, RTexture *tex);
 static void ui_element_add_child_layout_axis(UIElement *e, UI_Axis2d axis);
 static void ui_element_bg_colors(UIElement *e, Vec4f32 *colors);
 
 static UISignal ui_signal_from_element(UIElement *e);
 
+static Vec2f32 ui_mouse_pos(void);
+
 #define ui_stack_scope(begin, end)                                             \
         for (int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
 
 static void ui_push_parent(UIElement *v);
+static void ui_next_parent(UIElement *v);
 static UIElement *ui_top_parent(void);
 static UIElement *ui_pop_parent(void);
 
 static void ui_push_text_size(f32 v);
-static Vec4f32 ui_top_size_color(void);
-static Vec4f32 ui_pop_text_color(void);
+static void ui_next_text_size(f32 v);
+static f32 ui_top_text_size(void);
+static f32 ui_pop_text_size(void);
 
 static void ui_push_text_color(Vec4f32 v);
+static void ui_next_text_color(Vec4f32 v);
 static Vec4f32 ui_top_text_color(void);
 static Vec4f32 ui_pop_text_color(void);
 
+static void ui_push_border_size(f32 v);
+static void ui_next_border_size(f32 v);
+static f32 ui_top_border_size(void);
+static f32 ui_pop_border_size(void);
+
+static void ui_push_border_color(Vec4f32 v);
+static void ui_next_border_color(Vec4f32 v);
+static Vec4f32 ui_top_border_color(void);
+static Vec4f32 ui_pop_border_color(void);
+
 static void ui_push_background_color(Vec4f32 v);
+static void ui_next_background_color(Vec4f32 v);
 static Vec4f32 ui_top_background_color(void);
 static Vec4f32 ui_pop_background_color(void);
 
+static void ui_push_corner_radius(f32 v);
+static void ui_next_corner_radius(f32 v);
+static f32 ui_top_corner_radius(void);
+static f32 ui_pop_corner_radius(void);
+
+static void ui_push_padding(Vec4f32 v);
+static void ui_next_padding(Vec4f32 v);
+static Vec4f32 ui_top_padding(void);
+static Vec4f32 ui_pop_padding(void);
+
 static void ui_push_width(UISemanticSize v);
+static void ui_next_width(UISemanticSize v);
 static UISemanticSize ui_top_width(void);
 static UISemanticSize ui_pop_width(void);
 
 static void ui_push_height(UISemanticSize v);
+static void ui_next_height(UISemanticSize v);
 static UISemanticSize ui_top_height(void);
 static UISemanticSize ui_pop_height(void);
 

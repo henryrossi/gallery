@@ -22,23 +22,19 @@ static void r_load_texture(const char *filename, RTexture *texture) {
         stbi_image_free(pixels);
 }
 
-// TODO: hr: the whole shader section needs to be updated to be os independent
-// #include <sys/stat.h>
+static String8 r_read_shader_file(Arena *a, String8 filename) {
+        String8 path = os_path(a, filename);
 
-static String8 r_read_shader_file(const char *filename, String8 buf) {
-        FILE *fp = fopen(filename, "rb");
-        r_assert(fp != NULL, "Failed to open shader file");
+        OSFile file = { 0 };
+        OS_FileCode code = os_open_file(path, &file, OS_FileAccess_Read);
+        r_assert(code == OS_FileCode_Success, "Failed to open shader file");
 
-        size_t res = fread(buf.data, 1, buf.length, fp);
-        fclose(fp);
-        r_assert(res > 0, "Failed to read in shader file");
+        OSFileInfo info = os_file_info(file);
+        String8 buf = string8_allocate(a, info.size);
+
+        code = os_read_file(file, buf.data, buf.length);
+        os_close_file(file);
+        r_assert(code == OS_FileCode_Success, "Failed to read in shader file");
 
         return buf;
-}
-
-static String8 r_alloc_shader_buffer(Arena *a, const char *filename) {
-        String8 res;
-        OSFileInfo info = os_file_info(filename);
-        res = string8_allocate(a, info.size);
-        return res;
 }

@@ -240,6 +240,9 @@ int main(int argc, char *argv[]) {
         Vec4f32 greybd = v4f32(0.43, 0.43, 0.43, 1);
         Vec4f32 white = v4f32(1, 1, 1, 1);
 
+        Vec4f32 colorpicker = v4f32(1, 0.0, 0.6, 1);
+        Vec4f32 colorpicker2 = v4f32(1, 0.0, 0.6, 1);
+
         while (!glfwWindowShouldClose(r_state.window)) {
                 // TODO: hr: loop management
                 b32 res = r_begin_frame();
@@ -333,7 +336,9 @@ int main(int argc, char *argv[]) {
                 //         glf_set_current_color(glf_state.colorPicker);
                 // }
 
-                ui_hsv_color_picker(string8_lit("hey"));
+                ui_hsv_color_picker(&colorpicker, string8_lit("hey"));
+                ui_hsv_color_picker(&colorpicker2,
+                                    string8_lit("colorpicker22"));
 
                 ui_spacer(uiPixelsY(20, 1));
                 sig = ui_button(string8_lit("Save image"));

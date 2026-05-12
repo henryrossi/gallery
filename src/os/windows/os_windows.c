@@ -148,7 +148,7 @@ static OS_FileCode os_move_file_pos(OSFile file, s64 offset) {
         return 1;
 }
 
-static OS_FileCode os_file_read(OSFile file, void *ptr, u64 size) {
+static OS_FileCode os_read_file(OSFile file, void *ptr, u64 size) {
         if (!ptr) {
                 return OS_FileCode_NullArgument;
         }
@@ -164,7 +164,7 @@ static OS_FileCode os_file_read(OSFile file, void *ptr, u64 size) {
         return OS_FileCode_Success;
 }
 
-static OS_FileCode os_file_write(OSFile file, void *ptr, u64 size) {
+static OS_FileCode os_write_file(OSFile file, void *ptr, u64 size) {
         if (!ptr) {
                 return OS_FileCode_NullArgument;
         }

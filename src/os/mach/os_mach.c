@@ -1,6 +1,8 @@
 #include "bedrock/bedrock_string.h"
 #include "os/os.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -51,19 +53,24 @@ static OS_FileCode os_open_file(String8 path, OSFile *file, OS_FileAccess acc) {
         case OS_FileAccess_ReadWrite:
                 flags = O_RDWR;
                 break;
+        case OS_FileAccess_Create:
+                flags = O_CREAT | O_RDWR;
+                break;
         }
-        file->handle = open(path.data, flags);
+        file->handle = open((char *)path.data, flags);
 
+        OS_FileCode res = OS_FileCode_Success;
         if (file->handle == -1) {
                 switch (errno) {
                 default:
-                        return OS_FileCode_UnknownError;
+                        res = OS_FileCode_UnknownError;
                 case ENOENT:
-                        return OS_FileCode_DoesNotExist;
+                        res = OS_FileCode_DoesNotExist;
                 case EACCES:
-                        return OS_FileCode_AccessDenied;
+                        res = OS_FileCode_AccessDenied;
                 }
         }
+        return res;
 }
 
 static OSFileInfo os_file_info(OSFile file) {
@@ -89,7 +96,7 @@ static OS_FileCode os_move_file_pos(OSFile file, s64 offset) {
         return OS_FileCode_Success;
 }
 
-static OS_FileCode os_file_read(OSFile file, void *ptr, u64 size) {
+static OS_FileCode os_read_file(OSFile file, void *ptr, u64 size) {
         if (!ptr) {
                 return OS_FileCode_NullArgument;
         }
@@ -106,7 +113,7 @@ static OS_FileCode os_file_read(OSFile file, void *ptr, u64 size) {
         return OS_FileCode_Success;
 }
 
-static OS_FileCode os_file_write(OSFile file, void *ptr, u64 size) {
+static OS_FileCode os_write_file(OSFile file, void *ptr, u64 size) {
         if (!ptr) {
                 return OS_FileCode_NullArgument;
         }

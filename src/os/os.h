@@ -48,8 +48,8 @@ static String8 os_path(Arena *a, String8 path);
 static OS_FileCode os_open_file(String8 path, OSFile *file, OS_FileAccess acc);
 static OSFileInfo os_file_info(OSFile file);
 static OS_FileCode os_move_file_pos(OSFile file, s64 offset);
-static OS_FileCode os_file_read(OSFile file, void *ptr, u64 size);
-static OS_FileCode os_file_write(OSFile file, void *ptr, u64 size);
+static OS_FileCode os_read_file(OSFile file, void *ptr, u64 size);
+static OS_FileCode os_write_file(OSFile file, void *ptr, u64 size);
 static void os_close_file(OSFile file);
 
 #if __MACH__

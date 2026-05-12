@@ -641,11 +641,10 @@ static void r_destroy_dynamic_texture(RDynamicTexture *dTex) {
         }
 }
 
-static VkShaderModule r_create_shader_module(const char *filename) {
+static VkShaderModule r_create_shader_module(String8 filename) {
         VkShaderModule shader = VK_NULL_HANDLE;
 
-        String8 code = r_alloc_shader_buffer(r_state.arena, filename);
-        code = r_read_shader_file(filename, code);
+        String8 code = r_read_shader_file(r_state.arena, filename);
         VkShaderModuleCreateInfo createInfo = {
                 .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                 .codeSize = code.length,
@@ -660,8 +659,8 @@ static VkShaderModule r_create_shader_module(const char *filename) {
 }
 
 typedef struct {
-        const char *vertFile;
-        const char *fragFile;
+        String8 vertFile;
+        String8 fragFile;
         VkPipelineVertexInputStateCreateInfo *vertexInputInfo;
         VkPrimitiveTopology primativeTopology;
         VkPolygonMode polygonMode;
@@ -678,7 +677,7 @@ static VkPipeline
 r_create_graphics_pipeline(RGraphicsPipelineCreateInfo *createInfo) {
         VkDevice device = r_state.device;
 
-        r_assert(createInfo->vertFile && createInfo->fragFile,
+        r_assert(createInfo->vertFile.length && createInfo->fragFile.length,
                  "No filename given for shader");
 
         VkShaderModule vert = r_create_shader_module(createInfo->vertFile);
@@ -1257,13 +1256,9 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                 .renderPass = r_state.renderPass,
                 .pipelineLayout = r_state.pipelineLayout,
                 .vertFile
-                = (char *)os_path(arena,
-                                  string8_lit("src/render/vulkan/vert.spv"))
-                      .data,
+                = os_path(arena, string8_lit("src/render/vulkan/vert.spv")),
                 .fragFile
-                = (char *)os_path(arena,
-                                  string8_lit("src/render/vulkan/frag.spv"))
-                      .data,
+                = os_path(arena, string8_lit("src/render/vulkan/frag.spv")),
                 .vertexInputInfo = &vertexInputInfo,
                 .blendAttachmentStatesCount = 1,
                 .blendAttachmentStates = &colorBlendAttachment,
