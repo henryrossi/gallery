@@ -528,9 +528,9 @@ static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
                         sum += ch->computedSize.v[axis];
                         strictnessTotal += (1 - ch->size[axis].strictness);
                 }
-                f32 discp = sum - cap;
-                if (discp > 0 && strictnessTotal != 0.0f) {
-                        f32 f = discp / strictnessTotal; // WARN: hr: careful!
+                f32 discrp = sum - cap;
+                if (discrp > 0 && strictnessTotal != 0.0f) {
+                        f32 f = discrp / strictnessTotal;
                         for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
                                 f32 r = f * (1 - ch->size[axis].strictness);
                                 ch->computedSize.v[axis] -= r;

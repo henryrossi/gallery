@@ -64,6 +64,10 @@ static Vec4f32 add_v4f32(Vec4f32 a, Vec4f32 b) {
         return res;
 }
 
+static b32 equal_v4f32(Vec4f32 a, Vec4f32 b) {
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
+}
+
 static Rng2u32 rng2u32(Vec2u32 a, Vec2u32 b) {
         Rng2u32 res = { .min = a, .max = b };
         return res;

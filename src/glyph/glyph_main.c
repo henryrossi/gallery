@@ -10,6 +10,9 @@
 #include "ui/ui_core.h"
 #include "ui/ui_inc.h"
 
+#define PERF_IMPLEMENTATION
+#include "perf/perf.h"
+
 #include "bedrock/bedrock_inc.c"
 #include "os/os.c"
 #include "render/render_inc.c"
@@ -194,6 +197,7 @@ static void glf_copy_image(u8 *src, u8 *dst, u32 width, u32 height, u32 srcN,
 }
 
 int main(int argc, char *argv[]) {
+
         GLFArgs args = glf_parse_command_line_args(argc, argv);
         if (!args.valid) {
                 return 1;
@@ -240,10 +244,8 @@ int main(int argc, char *argv[]) {
         Vec4f32 greybd = v4f32(0.43, 0.43, 0.43, 1);
         Vec4f32 white = v4f32(1, 1, 1, 1);
 
-        Vec4f32 colorpicker = v4f32(1, 0.0, 0.6, 1);
-        Vec4f32 colorpicker2 = v4f32(1, 0.0, 0.6, 1);
-
         while (!glfwWindowShouldClose(r_state.window)) {
+
                 // TODO: hr: loop management
                 b32 res = r_begin_frame();
                 if (res) {
@@ -292,6 +294,35 @@ int main(int argc, char *argv[]) {
                                                  string8_empty());
 
                 ui_next_width(uiPct(60, 0));
+                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
+                                                 string8_lit("Canvas Area"));
+                ui_push_parent(e);
+
+                // TODO: hr: hold canvas aspect ratio, center, and allow zooming
+
+                f32 availAspRatio = e->computedSize.x / e->computedSize.y;
+                f32 imageAspRatio
+                    = (f32)glf_state.width / (f32)glf_state.height;
+                if (availAspRatio < imageAspRatio) {
+                        e->layoutDirection = UI_Axis2d_Y;
+                        ui_spacer(uiPct(50, 0.5));
+                        ui_next_width(uiPct(100, 1));
+                        ui_next_height(
+                            uiPixels(e->computedSize.x / imageAspRatio, 1));
+                        // NOTE: hr: approximating a pixel amount rather than
+                        // using uiRatio helps in the case when there is very
+                        // little spacing. In the later the canvas would be
+                        // bigger than it's parent because it's parent gets
+                        // sized down. If the canvas has strictness 1, then it
+                        // extends beyond it's parent's bounds.
+                } else {
+                        e->layoutDirection = UI_Axis2d_X;
+                        ui_spacer(uiPct(50, 0.5));
+                        ui_next_width(
+                            uiPixels(e->computedSize.y * imageAspRatio, 1));
+                        ui_next_height(uiPct(100, 1));
+                }
+
                 ui_next_background_color(white);
                 UIElement *canvas = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground, c);
@@ -307,6 +338,10 @@ int main(int argc, char *argv[]) {
                 RTexture *canvas_tex
                     = r_prep_dynamic_texture(&glf_state.canvas);
                 ui_element_attach_texture(canvas, canvas_tex);
+
+                ui_spacer(uiPct(50, 0.5));
+
+                ui_pop_parent();
 
                 ui_next_background_color(darkbg);
                 ui_next_width(uiPixelsX(ui_pop_text_size() * 0.5, 1));
@@ -330,15 +365,23 @@ int main(int argc, char *argv[]) {
 
                 glf_color_history_ui();
 
-                // ui_spacer(uiPixelsY(10, 1));
-                // sig = ui_button(string8_lit("Pick color"));
-                // if (ui_clicked(sig)) {
-                //         glf_set_current_color(glf_state.colorPicker);
-                // }
+                ui_hsv_color_picker(&glf_state.colorPicker, string8_lit("hey"));
 
-                ui_hsv_color_picker(&colorpicker, string8_lit("hey"));
-                ui_hsv_color_picker(&colorpicker2,
-                                    string8_lit("colorpicker22"));
+                ui_spacer(uiPixelsY(10, 1));
+
+                sig = ui_button(string8_lit("Pick color"));
+                if (ui_clicked(sig)
+                    && !equal_v4f32(glf_state.colorPicker,
+                                    glf_state.currentColor)) {
+                        glf_set_current_color(glf_state.colorPicker);
+                }
+
+                ui_spacer(uiPixelsY(10, 1));
+
+                sig = ui_button(string8_lit("Adjust current color"));
+                if (ui_clicked(sig)) {
+                        glf_state.colorPicker = glf_state.currentColor;
+                }
 
                 ui_spacer(uiPixelsY(20, 1));
                 sig = ui_button(string8_lit("Save image"));
@@ -362,6 +405,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 ui_element_autolayout();
+
                 ui_draw_elements();
 
                 // TODO: hr: more loop management

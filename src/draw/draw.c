@@ -26,6 +26,7 @@ static void dr_img(Rng2f32 rng, Vec4f32 color, RTexture *tex, Rng2f32 srcRng,
 
 static void dr_text(FFont *f, f32 size, String8 text, Rng2f32 rng,
                     Vec4f32 color) {
+
         if (!f || text.length == 0) {
                 return;
         }

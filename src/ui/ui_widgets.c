@@ -19,7 +19,7 @@ static void ui_text(String8 text) {
 static UISignal ui_button(String8 text) {
         ui_push_width(uiSizeTextContent(1));
         ui_push_height(uiSizeTextContent(1));
-        // this needs to be based on text size
+        // TODO: hr: this needs to be based on text size
         ui_push_padding(v4f32(8, 4, 8, 4));
 
         UIElement *e = ui_build_element_from_string(
@@ -29,9 +29,10 @@ static UISignal ui_button(String8 text) {
         UISignal sig = ui_signal_from_element(e);
 
         // ui_element_emboss_from_solid(e);
-        // if (sig.flags & UI_SignalFlag_LeftPressed) {
-        //         ui_element_flip_embossment(e);
-        // }
+        if (sig.flags & UI_SignalFlag_LeftPressed) {
+                ui_element_emboss_from_solid(e);
+                // ui_element_flip_embossment(e);
+        }
 
         ui_pop_width();
         ui_pop_height();
@@ -262,7 +263,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
                     string8_concat(ui_state.strArena, text,
                                    string8_lit(".dot")));
                 UISignal s = ui_signal_from_element(wheel);
-                if (ui_pressed(s)) {
+                if (ui_clicked(s) || ui_dragging(s)) {
                         Vec2f32 mousePos = ui_mouse_pos();
                         f32 r = wheel->computedSize.x * 0.5f;
                         Vec2f32 origin
@@ -305,7 +306,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
                     string8_concat(ui_state.strArena, text,
                                    string8_lit(".slide")));
                 UISignal s = ui_signal_from_element(bar);
-                if (ui_pressed(s)) {
+                if (ui_clicked(s) || ui_dragging(s)) {
                         Rng2f32 box = bar->screenCoords;
                         Vec2f32 mousePos = ui_mouse_pos();
                         f32 v = (mousePos.y - box.min.y)

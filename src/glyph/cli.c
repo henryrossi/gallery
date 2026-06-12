@@ -1,5 +1,4 @@
-#include <stdio.h>
-#include <string.h>
+#include "bedrock/bedrock_inc.h"
 
 static inline void glf_print_create_usage() {
         fprintf(stdout, "Usage for creating new image:\n"
