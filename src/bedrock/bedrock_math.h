@@ -16,6 +16,21 @@ union Vec2u32 {
         u32 v[2];
 };
 
+typedef union Vec2s32 Vec2s32;
+union Vec2s32 {
+        struct {
+                s32 x;
+                s32 y;
+        };
+        s32 v[2];
+};
+
+typedef struct Vec2s32Node Vec2s32Node;
+struct Vec2s32Node {
+        Vec2s32Node *n;
+        Vec2s32 v;
+};
+
 typedef union Vec2f32 Vec2f32;
 union Vec2f32 {
         struct {
@@ -23,6 +38,12 @@ union Vec2f32 {
                 f32 y;
         };
         f32 v[2];
+};
+
+typedef struct Vec2f32Node Vec2f32Node;
+struct Vec2f32Node {
+        Vec2f32Node *n;
+        Vec2f32 v;
 };
 
 // 3 Vectors
@@ -109,6 +130,11 @@ union Rng2f32 {
 // hr: Vector Ops
 #define v2u32(x, y) vec2u32(x, y)
 static Vec2u32 vec2u32(u32 x, u32 y);
+
+#define v2s32(x, y) vec2s32(x, y)
+static Vec2s32 vec2s32(s32 x, s32 y);
+static Vec2s32 add_v2s32(Vec2s32 a, Vec2s32 b);
+static b32 equal_v2s32(Vec2s32 a, Vec2s32 b);
 
 #define v2f32(x, y) vec2f32(x, y)
 static Vec2f32 vec2f32(f32 x, f32 y);

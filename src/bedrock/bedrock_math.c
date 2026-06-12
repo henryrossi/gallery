@@ -13,6 +13,20 @@ static Vec2u32 vec2u32(u32 x, u32 y) {
         return res;
 }
 
+static Vec2s32 vec2s32(s32 x, s32 y) {
+        Vec2s32 res = { .x = x, .y = y };
+        return res;
+}
+
+static Vec2s32 add_v2s32(Vec2s32 a, Vec2s32 b) {
+        Vec2s32 res = { .x = a.x + b.x, .y = a.y + b.y };
+        return res;
+}
+
+static b32 equal_v2s32(Vec2s32 a, Vec2s32 b) {
+        return a.x == b.x && a.y == b.y;
+}
+
 static Vec2f32 vec2f32(f32 x, f32 y) {
         Vec2f32 res = { .x = x, .y = y };
         return res;

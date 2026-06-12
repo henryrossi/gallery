@@ -52,7 +52,7 @@ static UISignal ui_buttonf(char *fmt, ...) {
         return sig;
 }
 
-static UISignal ui_slider(f32 *val, String8 text) {
+static UISignal ui_slider(f32 *val, Vec4f32 bgColor, String8 text) {
         f32 SLIDER_HEIGHT = ui_scale_value(ui_top_text_size(), UI_Axis2d_Y);
         f32 SLIDER_WIDTH = SLIDER_HEIGHT * 5.0f;
         f32 HALF_SLIDER_HEIGHT = SLIDER_HEIGHT / 2.0f;
@@ -72,6 +72,7 @@ static UISignal ui_slider(f32 *val, String8 text) {
         ui_parent(b) {
                 ui_spacer(uiPct(25, 1));
 
+                ui_next_background_color(bgColor);
                 bar = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground,
                     string8_concat(ui_state.strArena, text,
@@ -86,13 +87,12 @@ static UISignal ui_slider(f32 *val, String8 text) {
         ui_parent(c) {
                 ui_spacer(uiPixels(v * (SLIDER_WIDTH - SLIDER_HEIGHT), 1));
 
-                ui_push_background_color(ui_top_text_color());
+                ui_next_background_color(ui_top_text_color());
                 UIElement *nob = ui_build_element_from_string(
                     UI_ElementFlag_Clickable | UI_ElementFlag_DrawBackground,
                     text);
                 nob->size[UI_Axis2d_X] = uiPixels(SLIDER_HEIGHT, 1);
                 nob->cornerRadius = HALF_SLIDER_HEIGHT;
-                ui_pop_background_color();
 
                 sig = ui_signal_from_element(nob);
                 if (ui_dragging(sig)) {

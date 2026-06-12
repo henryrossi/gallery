@@ -34,7 +34,8 @@ typedef struct {
         const char *filename;
         u32 width;
         u32 height;
-        Arena *arena;
+        Arena *permArena;
+        Arena *perFrameArena;
 
         RDynamicTexture canvas;
         b32 pressedPick;
@@ -42,6 +43,8 @@ typedef struct {
         Vec4f32 currentColor;
         Vec4f32 colorHistory[GLF_COLOR_HISTORY_LEN];
         Vec4f32 colorPicker;
+
+        f32 penSizeFactor;
 } GLFState;
 
 GLFState glf_state = { 0 };
@@ -75,6 +78,18 @@ static u8 *glf_read_canvas_input_file(const char *filename, u32 *width,
         return data;
 }
 
+static Vec4u8 glf_color_f32_to_u8(Vec4f32 color) {
+        Vec4u8 res
+            = v4u8(color.x * 255, color.y * 255, color.z * 255, color.w * 255);
+        return res;
+}
+
+static Vec4f32 glf_color_u8_to_f32(Vec4u8 color) {
+        Vec4f32 res = v4f32((f32)color.x / 255.0f, (f32)color.y / 255.0f,
+                            (f32)color.z / 255.0f, (f32)color.w / 255.0f);
+        return res;
+}
+
 static void glf_set_current_color(Vec4f32 color) {
         for (u32 i = GLF_COLOR_HISTORY_LEN - 1; i > 0; i--) {
                 glf_state.colorHistory[i] = glf_state.colorHistory[i - 1];
@@ -106,20 +121,21 @@ static void glf_load_control_panel_colors(void) {
         glf_state.colorPicker = v4f32(1, 1, 1, 1);
 }
 
-static s32 glf_canvas_pixel_at_pos(Rng2f32 extent) {
-        Vec2f32 mouse = ui_mouse_pos();
-        if (contains_r2f32(extent, mouse)) {
-                Vec2f32 canvas = add_v2f32(extent.max,
-                                           v2f32(-extent.min.x, -extent.min.y));
-                Vec2f32 mouseRel
-                    = add_v2f32(mouse, v2f32(-extent.min.x, -extent.min.y));
+static Vec2s32 glf_canvas_pixel_at_screen_pos(Rng2f32 canvasArea,
+                                              Vec2f32 screenPos) {
+        if (contains_r2f32(canvasArea, screenPos)) {
+                Vec2f32 canvas
+                    = add_v2f32(canvasArea.max,
+                                v2f32(-canvasArea.min.x, -canvasArea.min.y));
+                Vec2f32 mouseRel = add_v2f32(
+                    screenPos, v2f32(-canvasArea.min.x, -canvasArea.min.y));
                 f32 xf = clamp(0, mouseRel.x / canvas.x, 1);
                 f32 yf = clamp(0, mouseRel.y / canvas.y, 1);
-                u32 x = xf * glf_state.width;
-                u32 y = yf * glf_state.height;
-                return y * glf_state.width + x;
+                s32 x = xf * glf_state.width;
+                s32 y = yf * glf_state.height;
+                return v2s32(x, y);
         }
-        return -1;
+        return v2s32(-1, -1);
 }
 
 static void glf_color_history_ui(void) {
@@ -196,6 +212,84 @@ static void glf_copy_image(u8 *src, u8 *dst, u32 width, u32 height, u32 srcN,
         }
 }
 
+// Searches a list of visited canvas pixels. Returns 1 if pixel has been visited
+// and 0 if not.
+static b32 glf_visited_pixel(Vec2s32Node *visited, Vec2s32 pixel) {
+        b32 res = 0;
+        while (visited) {
+                if (equal_v2s32(visited->v, pixel)) {
+                        res = 1;
+                        break;
+                }
+                visited = visited->n;
+        }
+        return res;
+}
+
+static void glf_fill_canvas_within_radius(Vec2f32 pos, f32 radius,
+                                          UIElement *canvas, Vec4f32 color) {
+        if (!canvas) {
+                return;
+        }
+        Vec2s32 pi = glf_canvas_pixel_at_screen_pos(canvas->screenCoords, pos);
+        if (pi.x == -1) {
+                return;
+        }
+
+        Arena *a = glf_state.perFrameArena;
+        u64 resetPos = arena_pos(a);
+        Vec2s32Node *q = arena_alloc(a, sizeof(*q));
+        Vec2s32Node *visited = 0;
+
+        q->v = pi;
+        Vec2f32 origin = sub_v2f32(pos, canvas->screenCoords.min);
+        origin = v2f32(origin.x / canvas->computedSize.x * glf_state.width,
+                       origin.y / canvas->computedSize.y * glf_state.height);
+
+        while (q) {
+                Vec2s32Node *cur = q;
+                q = q->n;
+
+                // hr: check if center of pixel is < radius away from origin
+                Vec2f32 c = v2f32((f32)cur->v.x + 0.5f, (f32)cur->v.y + 0.5f);
+                f32 xd = c.x - origin.x;
+                f32 yd = c.y - origin.y;
+                f32 dist = sqrtf(xd * xd + yd * yd);
+                if (dist < radius) {
+                        // hr: fill canvas pixel
+                        glf_state.canvas
+                            .data[cur->v.y * glf_state.width + cur->v.x]
+                            = glf_color_f32_to_u8(color);
+
+                        cur->n = visited;
+                        visited = cur;
+
+                        // hr: add unvisted neighbors to the queue
+                        Vec2s32 offsets[] = {
+                                { { -1, 0 } },
+                                { { 0, -1 } },
+                                { { 1, 0 } },
+                                { { 0, 1 } },
+                        };
+                        for (u32 i = 0; i < array_count(offsets); i++) {
+                                Vec2s32 n = add_v2s32(cur->v, offsets[i]);
+                                b32 withinBounds
+                                    = n.x >= 0 && n.x < glf_state.width
+                                      && n.y >= 0 && n.y < glf_state.height;
+                                if (withinBounds
+                                    && !glf_visited_pixel(visited, n)) {
+                                        Vec2s32Node *node
+                                            = arena_alloc(a, sizeof(*node));
+                                        node->v = n;
+                                        node->n = q;
+                                        q = node;
+                                }
+                        }
+                }
+        }
+        arena_pop_at(a, resetPos);
+}
+
 int main(int argc, char *argv[]) {
 
         GLFArgs args = glf_parse_command_line_args(argc, argv);
@@ -205,7 +299,8 @@ int main(int argc, char *argv[]) {
 
         r_init_backend("glyph", 1000, 800);
 
-        glf_state.arena = make_arena(gb(1));
+        glf_state.permArena = make_arena(gb(1));
+        glf_state.perFrameArena = make_arena(mb(48));
         glf_state.filename = args.filename;
         glf_state.width = args.width;
         glf_state.height = args.height;
@@ -218,13 +313,13 @@ int main(int argc, char *argv[]) {
                 if (!data) {
                         return 1;
                 }
-                r_create_dynamic_texture(glf_state.arena, glf_state.width,
+                r_create_dynamic_texture(glf_state.permArena, glf_state.width,
                                          glf_state.height, &glf_state.canvas);
                 glf_copy_image(data, (u8 *)glf_state.canvas.data,
                                glf_state.width, glf_state.height, n, 4);
                 stbi_image_free(data);
         } else {
-                r_create_dynamic_texture(glf_state.arena, glf_state.width,
+                r_create_dynamic_texture(glf_state.permArena, glf_state.width,
                                          glf_state.height, &glf_state.canvas);
                 for (u32 i = 0; i < glf_state.width * glf_state.height; i++) {
                         glf_state.canvas.data[i] = v4u8(255, 255, 255, 255);
@@ -327,13 +422,14 @@ int main(int argc, char *argv[]) {
                 UIElement *canvas = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground, c);
                 UISignal canvasSig = ui_signal_from_element(canvas);
+
+                f32 penSize = 0.5f
+                              + glf_state.penSizeFactor * 0.05f
+                                    * min(glf_state.width, glf_state.height);
                 if (ui_dragging(canvasSig)) {
-                        s32 i = glf_canvas_pixel_at_pos(canvas->screenCoords);
-                        if (i > 0) {
-                                Vec4f32 c = glf_state.currentColor;
-                                glf_state.canvas.data[i] = v4u8(
-                                    c.x * 255, c.y * 255, c.z * 255, c.w * 255);
-                        }
+                        glf_fill_canvas_within_radius(ui_mouse_pos(), penSize,
+                                                      canvas,
+                                                      glf_state.currentColor);
                 }
                 RTexture *canvas_tex
                     = r_prep_dynamic_texture(&glf_state.canvas);
@@ -365,6 +461,20 @@ int main(int argc, char *argv[]) {
 
                 glf_color_history_ui();
 
+                ui_spacer(uiPixelsY(10, 1));
+                // NOTE: hr: might be nice to have a fast code path to make a
+                // container, size of children, that changes layout direction.
+                ui_next_height(uiSizeSumOfChildren(1));
+                ui_next_width(uiSizeSumOfChildren(1));
+                e = ui_build_element_from_string(0, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
+                ui_parent(e) {
+                        ui_text(string8_lit("Pen size:"));
+                        ui_slider(&glf_state.penSizeFactor, darkbg,
+                                  string8_lit("pensize"));
+                }
+                ui_spacer(uiPixelsY(10, 1));
+
                 ui_hsv_color_picker(&glf_state.colorPicker, string8_lit("hey"));
 
                 ui_spacer(uiPixelsY(10, 1));
@@ -392,14 +502,14 @@ int main(int argc, char *argv[]) {
                 if (glfwGetKey(r_state.window, GLFW_KEY_P) == GLFW_PRESS) {
                         glf_state.pressedPick = 1;
                 } else if (ui_mouse_over(canvasSig) && glf_state.pressedPick) {
-                        s32 i = glf_canvas_pixel_at_pos(canvas->screenCoords);
-                        if (i > 0) {
-                                Vec4u8 pixel = glf_state.canvas.data[i];
+                        Vec2s32 i = glf_canvas_pixel_at_screen_pos(
+                            canvas->screenCoords, ui_mouse_pos());
+                        if (i.x >= 0) {
+                                Vec4u8 color
+                                    = glf_state.canvas
+                                          .data[i.y * glf_state.width + i.x];
                                 glf_set_current_color(
-                                    v4f32((f32)pixel.x / 255.0f,
-                                          (f32)pixel.y / 255.0f,
-                                          (f32)pixel.z / 255.0f,
-                                          (f32)pixel.w / 255.0f));
+                                    glf_color_u8_to_f32(color));
                         }
                         glf_state.pressedPick = 0;
                 }
