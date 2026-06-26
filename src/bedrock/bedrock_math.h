@@ -148,6 +148,7 @@ static Vec3f32 vec3f32(f32 x, f32 y, f32 z);
 
 #define v4u8(x, y, z, w) vec4u8(x, y, z, w)
 static Vec4u8 vec4u8(u8 x, u8 y, u8 z, u8 w);
+static b32 equal_v4u8(Vec4u8 a, Vec4u8 b);
 
 #define v4f32(x, y, z, w) vec4f32(x, y, z, w)
 static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w);

@@ -226,8 +226,10 @@ static b32 glf_visited_pixel(Vec2s32Node *visited, Vec2s32 pixel) {
         return res;
 }
 
-static void glf_fill_canvas_within_radius(Vec2f32 pos, f32 radius,
-                                          UIElement *canvas, Vec4f32 color) {
+typedef b32 (*GLF_FillCanvasCondition)(Vec2s32 pixel, Vec2f32 origin);
+static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
+                                         UIElement *canvas,
+                                         GLF_FillCanvasCondition cond) {
         if (!canvas) {
                 return;
         }
@@ -251,11 +253,10 @@ static void glf_fill_canvas_within_radius(Vec2f32 pos, f32 radius,
                 q = q->n;
 
                 // hr: check if center of pixel is < radius away from origin
-                Vec2f32 c = v2f32((f32)cur->v.x + 0.5f, (f32)cur->v.y + 0.5f);
-                f32 xd = c.x - origin.x;
-                f32 yd = c.y - origin.y;
-                f32 dist = sqrtf(xd * xd + yd * yd);
-                if (dist < radius) {
+                // Vec2f32 c = v2f32((f32)cur->v.x + 0.5f, (f32)cur->v.y +
+                // 0.5f); f32 xd = c.x - origin.x; f32 yd = c.y - origin.y; f32
+                // dist = sqrtf(xd * xd + yd * yd); if (dist < radius) {
+                if (cond(cur->v, origin)) {
                         // hr: fill canvas pixel
                         glf_state.canvas
                             .data[cur->v.y * glf_state.width + cur->v.x]
@@ -288,6 +289,40 @@ static void glf_fill_canvas_within_radius(Vec2f32 pos, f32 radius,
                 }
         }
         arena_pop_at(a, resetPos);
+}
+
+// Returns 1 if pixel is less than current pen size away from origin position on
+// canvas, 0 otherwise.
+static b32 glf_is_pixel_within_radius(Vec2s32 pixel, Vec2f32 origin) {
+        f32 radius = 0.5f
+                     + glf_state.penSizeFactor * 0.05f
+                           * min(glf_state.width, glf_state.height);
+
+        Vec2f32 c = v2f32((f32)pixel.x + 0.5f, (f32)pixel.y + 0.5f);
+        f32 xd = c.x - origin.x;
+        f32 yd = c.y - origin.y;
+        f32 dist = sqrtf(xd * xd + yd * yd);
+
+        return dist < radius;
+}
+
+static Vec4u8 glf_flood_fill_color = { 0 };
+static b32 glf_is_pixel_flood_color(Vec2s32 pixel, Vec2f32 origin) {
+        Vec4u8 c = glf_state.canvas.data[pixel.y * glf_state.width + pixel.x];
+        return equal_v4u8(glf_flood_fill_color, c);
+}
+
+static void glf_flood_fill_canvas(Vec2f32 pos, Vec4f32 color,
+                                  UIElement *canvas) {
+        Vec2s32 i = glf_canvas_pixel_at_screen_pos(canvas->screenCoords, pos);
+        Vec4u8 curColor = glf_state.canvas.data[i.y * glf_state.width + i.x];
+
+        Vec4u8 c = glf_color_f32_to_u8(color);
+        if (!equal_v4u8(c, curColor)) {
+                glf_flood_fill_color = curColor;
+                glf_fill_canvas_on_condition(pos, glf_state.currentColor,
+                                             canvas, glf_is_pixel_flood_color);
+        }
 }
 
 int main(int argc, char *argv[]) {
@@ -393,7 +428,8 @@ int main(int argc, char *argv[]) {
                                                  string8_lit("Canvas Area"));
                 ui_push_parent(e);
 
-                // TODO: hr: hold canvas aspect ratio, center, and allow zooming
+                // TODO: hr: hold canvas aspect ratio, center, and allow
+                // zooming
 
                 f32 availAspRatio = e->computedSize.x / e->computedSize.y;
                 f32 imageAspRatio
@@ -404,12 +440,13 @@ int main(int argc, char *argv[]) {
                         ui_next_width(uiPct(100, 1));
                         ui_next_height(
                             uiPixels(e->computedSize.x / imageAspRatio, 1));
-                        // NOTE: hr: approximating a pixel amount rather than
-                        // using uiRatio helps in the case when there is very
-                        // little spacing. In the later the canvas would be
-                        // bigger than it's parent because it's parent gets
-                        // sized down. If the canvas has strictness 1, then it
-                        // extends beyond it's parent's bounds.
+                        // NOTE: hr: approximating a pixel amount rather
+                        // than using uiRatio helps in the case when
+                        // there is very little spacing. In the later
+                        // the canvas would be bigger than it's parent
+                        // because it's parent gets sized down. If the
+                        // canvas has strictness 1, then it extends
+                        // beyond it's parent's bounds.
                 } else {
                         e->layoutDirection = UI_Axis2d_X;
                         ui_spacer(uiPct(50, 0.5));
@@ -423,14 +460,21 @@ int main(int argc, char *argv[]) {
                     UI_ElementFlag_DrawBackground, c);
                 UISignal canvasSig = ui_signal_from_element(canvas);
 
-                f32 penSize = 0.5f
-                              + glf_state.penSizeFactor * 0.05f
-                                    * min(glf_state.width, glf_state.height);
                 if (ui_dragging(canvasSig)) {
-                        glf_fill_canvas_within_radius(ui_mouse_pos(), penSize,
-                                                      canvas,
-                                                      glf_state.currentColor);
+                        // WARN: hr: slow with large pen size on large
+                        // images, most likely the visited check is the
+                        // slowdown
+                        glf_fill_canvas_on_condition(
+                            ui_mouse_pos(), glf_state.currentColor, canvas,
+                            glf_is_pixel_within_radius);
                 }
+
+                if (ui_hovering(canvasSig)
+                    && glfwGetKey(r_state.window, GLFW_KEY_F) == GLFW_PRESS) {
+                        glf_flood_fill_canvas(ui_mouse_pos(),
+                                              glf_state.currentColor, canvas);
+                }
+
                 RTexture *canvas_tex
                     = r_prep_dynamic_texture(&glf_state.canvas);
                 ui_element_attach_texture(canvas, canvas_tex);
@@ -462,8 +506,9 @@ int main(int argc, char *argv[]) {
                 glf_color_history_ui();
 
                 ui_spacer(uiPixelsY(10, 1));
-                // NOTE: hr: might be nice to have a fast code path to make a
-                // container, size of children, that changes layout direction.
+                // NOTE: hr: might be nice to have a fast code path to
+                // make a container, size of children, that changes
+                // layout direction.
                 ui_next_height(uiSizeSumOfChildren(1));
                 ui_next_width(uiSizeSumOfChildren(1));
                 e = ui_build_element_from_string(0, string8_empty());

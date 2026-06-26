@@ -63,6 +63,10 @@ static Vec4u8 vec4u8(u8 x, u8 y, u8 z, u8 w) {
         return res;
 }
 
+static b32 equal_v4u8(Vec4u8 a, Vec4u8 b) {
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
+}
+
 static Vec4f32 vec4f32(f32 x, f32 y, f32 z, f32 w) {
         Vec4f32 res = { .x = x, .y = y, .z = z, .w = w };
         return res;
