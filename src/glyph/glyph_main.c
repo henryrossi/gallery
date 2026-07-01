@@ -212,17 +212,42 @@ static void glf_copy_image(u8 *src, u8 *dst, u32 width, u32 height, u32 srcN,
         }
 }
 
-// Searches a list of visited canvas pixels. Returns 1 if pixel has been visited
+static void glf_visit_pixel(Vec2s32Node **visited, u32 buckets,
+                            Vec2s32Node *pixel) {
+        u64 hash = ((u64)pixel->v.x << 32 | (u64)pixel->v.y) % buckets;
+        Vec2s32Node *bucket = visited[hash];
+
+        if (!bucket) {
+                visited[hash] = pixel;
+                pixel->n = 0;
+        } else {
+                while (bucket->n) {
+                        if (equal_v2s32(bucket->n->v, pixel->v)) {
+                                break;
+                        }
+                        bucket = bucket->n;
+                }
+                bucket->n = pixel;
+                pixel->n = 0;
+        }
+}
+
+// Searches a hashmap visited canvas pixels. Returns 1 if pixel has been visited
 // and 0 if not.
-static b32 glf_visited_pixel(Vec2s32Node *visited, Vec2s32 pixel) {
+static b32 glf_visited_pixel(Vec2s32Node **visited, u32 buckets,
+                             Vec2s32 pixel) {
         b32 res = 0;
-        while (visited) {
-                if (equal_v2s32(visited->v, pixel)) {
+        u64 hash = ((u64)pixel.x << 32 | (u64)pixel.y) % buckets;
+        Vec2s32Node *bucket = visited[hash];
+
+        while (bucket) {
+                if (equal_v2s32(bucket->v, pixel)) {
                         res = 1;
                         break;
                 }
-                visited = visited->n;
+                bucket = bucket->n;
         }
+
         return res;
 }
 
@@ -241,7 +266,9 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
         Arena *a = glf_state.perFrameArena;
         u64 resetPos = arena_pos(a);
         Vec2s32Node *q = arena_alloc(a, sizeof(*q));
-        Vec2s32Node *visited = 0;
+        // hr: guess ideal hashmap size
+        u32 buckets = glf_state.width * glf_state.height;
+        Vec2s32Node **visited = arena_alloc(a, sizeof(*visited) * buckets);
 
         q->v = pi;
         Vec2f32 origin = sub_v2f32(pos, canvas->screenCoords.min);
@@ -252,18 +279,13 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
                 Vec2s32Node *cur = q;
                 q = q->n;
 
-                // hr: check if center of pixel is < radius away from origin
-                // Vec2f32 c = v2f32((f32)cur->v.x + 0.5f, (f32)cur->v.y +
-                // 0.5f); f32 xd = c.x - origin.x; f32 yd = c.y - origin.y; f32
-                // dist = sqrtf(xd * xd + yd * yd); if (dist < radius) {
                 if (cond(cur->v, origin)) {
                         // hr: fill canvas pixel
                         glf_state.canvas
                             .data[cur->v.y * glf_state.width + cur->v.x]
                             = glf_color_f32_to_u8(color);
 
-                        cur->n = visited;
-                        visited = cur;
+                        glf_visit_pixel(visited, buckets, cur);
 
                         // hr: add unvisted neighbors to the queue
                         Vec2s32 offsets[] = {
@@ -278,7 +300,8 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
                                     = n.x >= 0 && n.x < glf_state.width
                                       && n.y >= 0 && n.y < glf_state.height;
                                 if (withinBounds
-                                    && !glf_visited_pixel(visited, n)) {
+                                    && !glf_visited_pixel(visited, buckets,
+                                                          n)) {
                                         Vec2s32Node *node
                                             = arena_alloc(a, sizeof(*node));
                                         node->v = n;
@@ -288,6 +311,7 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
                         }
                 }
         }
+
         arena_pop_at(a, resetPos);
 }
 
@@ -461,9 +485,6 @@ int main(int argc, char *argv[]) {
                 UISignal canvasSig = ui_signal_from_element(canvas);
 
                 if (ui_dragging(canvasSig)) {
-                        // WARN: hr: slow with large pen size on large
-                        // images, most likely the visited check is the
-                        // slowdown
                         glf_fill_canvas_on_condition(
                             ui_mouse_pos(), glf_state.currentColor, canvas,
                             glf_is_pixel_within_radius);
