@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
         f32 val = 0;
         while (!glfwWindowShouldClose(r_state.window)) {
                 // TODO: hr: loop management
-                b32 res = r_begin_frame();
+                b32 res = ui_begin_frame();
                 if (res) {
                         continue;
                 }
@@ -47,28 +47,34 @@ int main(int argc, char *argv[]) {
                         glfwSetWindowShouldClose(r_state.window, GLFW_TRUE);
                 }
                 ui_button(str0);
-                ui_slider(&val, str10);
+                ui_slider(&val, v4f32(1, 1, 1, 1), str10);
 
-                ui_push_background_color(v4f32(1, 0, 0, 1));
-                ui_push_width(uiPct(100, 0));
-                ui_push_height(uiPct(100, 0));
+                Vec4f32 red = v4f32(1, 0, 0, 1);
+                Vec4f32 yellow = v4f32(1, 1, 0, 1);
+                Vec4f32 blue = v4f32(0, 0, 1, 1);
+
+                ui_next_background_color(red);
+                ui_next_width(uiPixelsX(500, 1));
+                ui_next_height(uiPixelsY(500, 1));
                 UIElement *e = ui_build_element_from_string(
-                    UI_ElementFlag_DrawBackground, string8_lit("box"));
+                    UI_ElementFlag_DrawBackground | UI_ElementFlag_Clip,
+                    string8_lit("box"));
                 ui_push_parent(e);
 
-                ui_push_height(uiPct(34, 0));
-                ui_next_width(uiPct(50, 0));
-                ui_next_background_color(v4f32(1, 1, 0, 1));
+                ui_next_background_color(yellow);
+                ui_next_width(uiPixelsX(1000, 1));
+                ui_next_height(uiPixelsY(200, 1));
                 e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
                                                  string8_empty());
+                ui_element_attach_texture(e, &t);
+                ui_push_parent(e);
 
-                // ui_next_background_color(v4f32(1, 1, 1, 1));
-                ui_next_height(uiPct(60, 0));
+                ui_next_background_color(blue);
+                ui_next_width(uiPct(100, 1));
+                ui_next_height(uiPixelsY(100, 1));
                 e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
                                                  string8_empty());
-                ui_next_background_color(v4f32(0, 1, 1, 1));
-                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
-                                                 string8_empty());
+                ui_element_attach_texture(e, &t);
 
                 ui_element_autolayout();
                 ui_draw_elements();

@@ -9,12 +9,15 @@ typedef struct string {
         u64 length;
 } String8;
 
+readonly static String8 string8_nil = { (u8 *)&string8_nil, 0 };
+
 #define string8_lit(cstr) string8((u8 *)cstr, sizeof(cstr) - 1)
 #define cstring8_lit(cstr) string8((u8 *)cstr, sizeof(cstr))
 #define ccstring8_lit(cstr) { .data = (u8 *)cstr, .length = sizeof(cstr) - 1 }
 
 static String8 string8(u8 *str, u64 length);
 static String8 string8_allocate(Arena *arena, u64 length);
+static String8 string8_copy(Arena *arena, String8 str);
 static String8 string8_empty(void);
 
 #ifdef STRING8F

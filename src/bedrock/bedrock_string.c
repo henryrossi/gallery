@@ -6,9 +6,15 @@ static String8 string8(u8 *str, u64 length) {
 }
 
 static String8 string8_allocate(Arena *arena, u64 length) {
-        String8 str = { .length = length };
-        str.data = arena_alloc(arena, length);
-        return str;
+        String8 res = { .length = length };
+        res.data = arena_alloc(arena, length);
+        return res;
+}
+
+static String8 string8_copy(Arena *arena, String8 str) {
+        String8 res = string8_allocate(arena, str.length);
+        memcpy(res.data, str.data, str.length);
+        return res;
 }
 
 static String8 string8_empty(void) {

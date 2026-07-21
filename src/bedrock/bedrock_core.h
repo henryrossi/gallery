@@ -8,6 +8,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__clang__)
+#define COMPILER_CLANG 1
+#else
+#define COMPILER_CLANG 0
+#endif
+
+#if COMPILER_CLANG && __MACH__
+#define readonly __attribute__((section(".ro,data"))) // hr: mach specific?
+#else
+#define readonly const
+#endif
+
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;

@@ -154,7 +154,7 @@ static void glf_color_history_ui(void) {
                 Vec4f32 color = r > 1 ? v4f32(0, 1, 0, 1) : v4f32(0, 0, 1, 1);
                 ui_next_background_color(color);
                 e = ui_build_element_from_string(
-                    0, string8f(ui_state.strArena, "row %d", r));
+                    0, string8f(ui_frame_arena(), "row %d", r));
                 e->layoutDirection = UI_Axis2d_X;
                 ui_push_parent(e);
 
@@ -398,13 +398,14 @@ int main(int argc, char *argv[]) {
         Vec4f32 greybd = v4f32(0.43, 0.43, 0.43, 1);
         Vec4f32 white = v4f32(1, 1, 1, 1);
 
-        while (!glfwWindowShouldClose(r_state.window)) {
+        String8 textInput = string8_lit("example");
 
-                // TODO: hr: loop management
-                b32 res = r_begin_frame();
+        while (!glfwWindowShouldClose(r_state.window)) {
+                b32 res = ui_begin_frame();
                 if (res) {
                         continue;
                 }
+
                 ui_state.root->layoutDirection = UI_Axis2d_Y;
                 ui_push_width(uiPct(100, 1));
                 ui_push_height(uiPct(100, 1));
@@ -433,7 +434,9 @@ int main(int argc, char *argv[]) {
 
                 ui_pop_parent();
 
-                ui_push_height(uiPct(100, 0));
+                ui_push_height(uiPct(
+                    100, 1)); // WARN: hr: changing this strictness to 0 (which
+                              // it should be less than 1) breaks the layout
                 e = ui_build_element_from_string(0, string8_empty());
                 e->layoutDirection = UI_Axis2d_X;
                 ui_push_parent(e);
@@ -441,6 +444,13 @@ int main(int argc, char *argv[]) {
                 ui_next_width(uiPct(20, 1));
                 e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
                                                  string8_empty());
+                e->layoutDirection = UI_Axis2d_Y; // WARN: hr: this needs a
+                                                  // function or something
+                ui_push_parent(e);
+
+                ui_textfield(string8_lit("textfield"), &textInput);
+
+                ui_pop_parent();
 
                 ui_next_background_color(darkbg);
                 ui_next_width(uiPixelsX(ui_pop_text_size() * 0.5, 1));
@@ -466,9 +476,9 @@ int main(int argc, char *argv[]) {
                             uiPixels(e->computedSize.x / imageAspRatio, 1));
                         // NOTE: hr: approximating a pixel amount rather
                         // than using uiRatio helps in the case when
-                        // there is very little spacing. In the later
-                        // the canvas would be bigger than it's parent
-                        // because it's parent gets sized down. If the
+                        // there is very little spacing. Using the later,
+                        // the canvas will be bigger than its parent
+                        // because its parent gets sized down. If the
                         // canvas has strictness 1, then it extends
                         // beyond it's parent's bounds.
                 } else {

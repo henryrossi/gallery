@@ -3,6 +3,8 @@
 
 #include "bedrock/bedrock_core.h"
 
+static b32 nequal_f32(f32 a, f32 b, f32 epsilon);
+
 // TODO: hr: fill out remaining vector, matrix, and range types, as well as
 //           their functions and scalar functions
 

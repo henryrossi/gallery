@@ -1670,8 +1670,6 @@ static void r_end_frame(void) {
         r_state.frameCount++;
         r_state.currentFrame = (currentFrame + 1) % r_state.maxFramesInFlight;
         r_state.rectCount = 0;
-
-        glfwPollEvents();
 }
 
 static void r_destroy_texture(RTexture *texture) {

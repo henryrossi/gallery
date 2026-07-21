@@ -1,6 +1,14 @@
 #ifndef UI_CORE_H
 #define UI_CORE_H
 
+#ifndef STRING8_HASH
+#define STRING8_HASH
+#endif
+
+#ifndef STRING8F
+#define STRING8F
+#endif
+
 #include "bedrock/bedrock_inc.h"
 #include "font/font.h"
 #include "render/render_inc.h"
@@ -71,8 +79,15 @@ struct UIElement {
         Vec2f32 relPosition;
         Vec2f32 computedSize;
         Rng2f32 screenCoords;
+        Rng2f32 texRange;
 };
 
+readonly static UIElement ui_nil_element = {
+        &ui_nil_element, &ui_nil_element, &ui_nil_element, &ui_nil_element,
+        &ui_nil_element, &ui_nil_element, &ui_nil_element,
+};
+
+// NOTE: hr: it would be nice to be rid of this or clean it up
 typedef struct UIElementNode UIElementNode;
 struct UIElementNode {
         UIElement *element;
@@ -147,34 +162,13 @@ typedef struct {
         UI_SignalFlags flags;
 } UISignal;
 
-// clang-format off
-UIStackNodesDecl
-
-typedef struct {
-        Arena *arena;
-        Arena *strArena;
-
-        FFont *defaultFont;
-
-        UIElement *root;
-        u32 numElements;
-
-        u64 bucketCount;
-        UIElement **buckets;
-        UIElement *eFree;
-
-        Vec2f32 prevMousePos;
-        u32 prevMouseState[UI_Button_Count];
-        Vec2f32 pressOrigin[UI_Button_Count];
-        u64 pressedElementKey[UI_Button_Count];
-        u64 prevClickFrame[UI_Button_Count];
-        Vec2f32 prevClick[UI_Button_Count];
-
-        UIStacksDecl
-} UIState;
-// clang-format on
-
 static Arena *ui_build_arena(void);
+static Arena *ui_frame_arena(void);
+
+static Vec2f32 ui_mouse_pos(void);
+
+static void ui_set_focused(UIElement *e, String8 *text);
+static UIElement *ui_get_focused(void);
 
 static UISemanticSize uiSemanticSize(UI_SizeKind kind, f32 value,
                                      f32 strictness);
@@ -191,11 +185,6 @@ static f32 ui_scale_value(f32 value, UI_Axis2d scaledBy);
 
 static b32 ui_key_match(u64 a, u64 b);
 
-// read_only global UI_Box ui_nil_box = {
-//         &ui_nil_box, &ui_nil_box, &ui_nil_box, &ui_nil_box,
-//         &ui_nil_box, &ui_nil_box, &ui_nil_box,
-// };
-
 static UIElement *ui_build_element_from_key(UI_ElementFlags flags, u64 key);
 static UIElement *ui_build_element_from_string(UI_ElementFlags flags,
                                                String8 str);
@@ -210,8 +199,6 @@ static void ui_element_add_child_layout_axis(UIElement *e, UI_Axis2d axis);
 static void ui_element_bg_colors(UIElement *e, Vec4f32 *colors);
 
 static UISignal ui_signal_from_element(UIElement *e);
-
-static Vec2f32 ui_mouse_pos(void);
 
 #define ui_stack_scope(begin, end)                                             \
         for (int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))

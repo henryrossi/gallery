@@ -4,14 +4,47 @@
 #include "os/os.h"
 
 #include "ui/generated/ui.c"
-#include <assert.h>
-#include <stdio.h>
+#include <assert.h> // hr: ?
 
 // NOTE: hr: for dropdowns, I think they should be removed from the main root
 // tree, but still have a parent. They can be held in a seperate list and
 // treated as their own boxes to be laid out
 
-__thread UIState ui_state;
+// clang-format off
+UIStackNodesDecl
+
+typedef struct {
+        Arena *arena;
+        Arena *perFrameArena[2];
+
+        FFont *defaultFont;
+
+        UIElement *root;
+        u32 numElements;
+
+        u64 bucketCount;
+        UIElement **buckets;
+        UIElement *eFree;
+
+        UIElement *focused;
+        String8 *focusedText;
+
+        #define UI_CHAR_INPUT_BUF_LENGTH 120
+        String8 charInputBuf;
+
+        Vec2f32 prevMousePos;
+        u32 prevMouseState[UI_Button_Count];
+        Vec2f32 pressOrigin[UI_Button_Count];
+        u64 pressedElementKey[UI_Button_Count];
+        u64 prevClickFrame[UI_Button_Count];
+        Vec2f32 prevClick[UI_Button_Count];
+
+        UIStacksDecl
+} UIState;
+
+// clang-format on
+
+static UIState ui_state = { .focused = &ui_nil_element };
 
 #define SLLStackPop_N(head, next) ((head) = (head)->next)
 #define SLLStackPush_N(head, node, next)                                       \
@@ -65,6 +98,22 @@ static Arena *ui_build_arena(void) {
 }
 // clang-format on
 
+static Arena *ui_frame_arena(void) {
+        u64 frame = r_get_frame_count() % 2;
+        Arena *res = ui_state.perFrameArena[frame];
+        return res;
+}
+
+static Arena *ui_prev_frame_arena(void) {
+        u64 frame = (r_get_frame_count() - 1) % 2;
+        Arena *res = ui_state.perFrameArena[frame];
+        return res;
+}
+
+static b32 ui_element_is_nil(UIElement *e) {
+        return e == &ui_nil_element;
+}
+
 static Vec2f32 ui_content_scale(void) {
         Vec2f32 res = { .x = 1, .y = 1 };
         glfwGetWindowContentScale(r_state.window, &res.x, &res.y);
@@ -83,6 +132,15 @@ static Vec2f32 ui_mouse_pos(void) {
 static Vec2f32 ui_drag_delta(void) {
         Vec2f32 res = sub_v2f32(ui_mouse_pos(), ui_state.prevMousePos);
         return res;
+}
+
+static void ui_set_focused(UIElement *e, String8 *text) {
+        ui_state.focused = e;
+        ui_state.focusedText = text;
+}
+
+static UIElement *ui_get_focused(void) {
+        return ui_state.focused;
 }
 
 static inline u32 ui_element_list_is_empty(UIElementList *list) {
@@ -166,9 +224,42 @@ static f32 ui_scale_value(f32 value, UI_Axis2d scaledBy) {
                                          : value;
 }
 
-static void setup_ui_state() {
+static void ui_char_callback(GLFWwindow *window, u32 codepoint) {
+        String8 s = ui_state.charInputBuf;
+        if (ui_element_is_nil(ui_get_focused())
+            || s.length + 4 > UI_CHAR_INPUT_BUF_LENGTH) {
+                return;
+        }
+
+        if (codepoint <= 0x7F) {
+                s.length = 1;
+                string8_set(s, 0, codepoint);
+        } else if (codepoint <= 0x7FF) {
+                s.length = 2;
+                string8_set(s, 0, 0xC0 | (codepoint >> 6));
+                string8_set(s, 1, 0x80 | (codepoint & 0x3F));
+        } else if (codepoint <= 0xFFFF) {
+                s.length = 3;
+                string8_set(s, 0, 0xE0 | (codepoint >> 12));
+                string8_set(s, 1, 0x80 | ((codepoint >> 6) & 0x3F));
+                string8_set(s, 2, 0x80 | (codepoint & 0x3F));
+        } else {
+                s.length = 4;
+                string8_set(s, 0, 0xF0 | (codepoint >> 18));
+                string8_set(s, 1, 0x80 | ((codepoint >> 12) & 0x3F));
+                string8_set(s, 2, 0x80 | ((codepoint >> 6) & 0x3F));
+                string8_set(s, 3, 0x80 | (codepoint & 0x3F));
+        }
+
+        ui_state.charInputBuf = s;
+}
+
+static void setup_ui_state(void) {
+        glfwSetCharCallback(r_state.window, ui_char_callback);
+
         ui_state.arena = make_arena(mb(1));
-        ui_state.strArena = make_arena(1);
+        ui_state.perFrameArena[0] = make_arena(1);
+        ui_state.perFrameArena[1] = make_arena(1);
 
         ui_state.defaultFont
             = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
@@ -183,6 +274,9 @@ static void setup_ui_state() {
         ui_state.buckets
             = arena_alloc(ui_state.arena, elementSize * ui_state.bucketCount);
         ui_state.eFree = 0;
+
+        ui_state.charInputBuf.data
+            = arena_alloc(ui_state.arena, UI_CHAR_INPUT_BUF_LENGTH);
 
         for (u32 i = 0; i < UI_Button_Count; i++) {
                 ui_state.pressOrigin[i] = v2f32(-1.0f, -1.0f);
@@ -224,6 +318,32 @@ static void setup_ui_state() {
         ui_state.paddingStack.top = &ui_state.paddingStackBottom;
         ui_state.widthStack.top = &ui_state.widthStackBottom;
         ui_state.heightStack.top = &ui_state.heightStackBottom;
+}
+
+static b32 ui_begin_frame(void) {
+        b32 res = r_begin_frame();
+
+        glfwPollEvents();
+        // glfwWaitEvents();
+
+        if (!ui_element_is_nil(ui_get_focused())) {
+                Arena *a = ui_frame_arena();
+                String8 fText = *ui_state.focusedText;
+
+                // WARN: hr: this is all wrong. string really should be
+                // allocated with a free list strategy since they have varible
+                // allocation lengths.
+                if (ui_state.charInputBuf.length) {
+                        *ui_state.focusedText
+                            = string8_concat(a, fText, ui_state.charInputBuf);
+                } else {
+                        *ui_state.focusedText = string8_copy(a, fText);
+                }
+        }
+
+        ui_state.charInputBuf.length = 0;
+
+        return res;
 }
 
 static UIElement *ui_cache_lookup(u64 key) {
@@ -390,7 +510,7 @@ static UIElement *ui_build_element_from_stringf(UI_ElementFlags flags,
                                                 char *fmt, ...) {
         va_list args;
         va_start(args, fmt);
-        String8 str = string8fv(ui_state.strArena, fmt, args);
+        String8 str = string8fv(ui_frame_arena(), fmt, args);
         UIElement *res = ui_build_element_from_string(flags, str);
         va_end(args);
         return res;
@@ -398,7 +518,7 @@ static UIElement *ui_build_element_from_stringf(UI_ElementFlags flags,
 
 static UIElement *ui_build_element_from_stringfv(UI_ElementFlags flags,
                                                  char *fmt, va_list args) {
-        String8 str = string8fv(ui_state.strArena, fmt, args);
+        String8 str = string8fv(ui_frame_arena(), fmt, args);
         UIElement *res = ui_build_element_from_string(flags, str);
         return res;
 }
@@ -514,34 +634,36 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
         ui_autolayout_calc_postorder(e, UI_Axis2d_Y);
 }
 
-// WARN: hr: I'm seeing some weird behavior on elements with seemingly plenty of
-// space that have a strcitness of 0.
+// WARN: hr: I'm seeing some weird behavior on elements with seemingly
+// plenty of space that have a strcitness of 0.
 static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
         f32 pad = axis == UI_Axis2d_X ? e->padding.x + e->padding.z
                                       : e->padding.y + e->padding.w;
         f32 cap = e->computedSize.v[axis] - pad;
 
-        if (e->layoutDirection == axis) {
-                f32 sum = 0.0f;
-                f32 strictnessTotal = 0.0f;
+        // NOTE: hr: to ponder, why only reduce size on layout direction?
+
+        // if (e->layoutDirection == axis) {
+        f32 sum = 0.0f;
+        f32 strictnessTotal = 0.0f;
+        for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                sum += ch->computedSize.v[axis];
+                strictnessTotal += (1.0f - ch->size[axis].strictness);
+        }
+        f32 discrp = sum - cap;
+        if (discrp > 0 && !nequal_f32(strictnessTotal, 0.0f, 0.0001)) {
+                f32 f = discrp / strictnessTotal;
                 for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-                        sum += ch->computedSize.v[axis];
-                        strictnessTotal += (1 - ch->size[axis].strictness);
-                }
-                f32 discrp = sum - cap;
-                if (discrp > 0 && strictnessTotal != 0.0f) {
-                        f32 f = discrp / strictnessTotal;
-                        for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-                                f32 r = f * (1 - ch->size[axis].strictness);
-                                ch->computedSize.v[axis] -= r;
-                        }
-                }
-        } else {
-                for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-                        ch->computedSize.v[axis]
-                            = min(ch->computedSize.v[axis], cap);
+                        f32 r = f * (1 - ch->size[axis].strictness);
+                        ch->computedSize.v[axis] -= r;
                 }
         }
+        // } else {
+        //         for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+        //                 ch->computedSize.v[axis]
+        //                     = min(ch->computedSize.v[axis], cap);
+        //         }
+        // }
 }
 
 static void ui_element_autolayout(void) {
@@ -625,6 +747,57 @@ static void ui_element_autolayout(void) {
                         child->screenCoords.p1 = add_v2f32(
                             child->computedSize, child->screenCoords.p0);
                 }
+
+                cur->texRange = rng2f32(v2f32(0, 0), v2f32(1, 1));
+        }
+
+        // hr: clipping
+        ui_element_list_append(scratch, &queue, root);
+        while (!ui_element_list_is_empty(&queue)) {
+                UIElement *cur = ui_element_list_pop_first(&queue);
+
+                for (UIElement *child = cur->firstChild; child;
+                     child = child->next) {
+                        ui_element_list_append(scratch, &queue, child);
+
+                        // NOTE: hr: does this work recursively? What if child
+                        // has child that needs to be clipped? Furthurmore we
+                        // need to extend what we are doing here if we want to
+                        // clip text halfway through a character.
+
+                        if (cur->flags & UI_ElementFlag_Clip) {
+                                child->flags
+                                    = child->flags | UI_ElementFlag_Clip;
+
+                                Vec2f32 c0 = child->screenCoords.min;
+                                Vec2f32 c1 = child->screenCoords.max;
+                                Vec2f32 p0 = cur->screenCoords.min;
+                                Vec2f32 p1 = cur->screenCoords.max;
+                                if (p0.x > c0.x) {
+                                        child->texRange.min.x
+                                            = 1.0f
+                                              - ((p1.x - p0.x) / (c1.x - c0.x));
+                                        c0.x = p0.x;
+                                }
+                                if (p0.y > c0.y) {
+                                        child->texRange.min.y
+                                            = 1.0f
+                                              - ((p1.y - p0.y) / (c1.y - c0.y));
+                                        c0.y = p0.y;
+                                }
+                                if (p1.x < c1.x) {
+                                        child->texRange.max.x
+                                            = ((p1.x - p0.x) / (c1.x - c0.x));
+                                        c1.x = p1.x;
+                                }
+                                if (p1.y < c1.y) {
+                                        child->texRange.max.y
+                                            = ((p1.y - p0.y) / (c1.y - c0.y));
+                                        c1.y = p1.y;
+                                }
+                                child->screenCoords = rng2f32(c0, c1);
+                        }
+                }
         }
 
         arena_pop_at(scratch, resetPos);
@@ -642,9 +815,8 @@ static void ui_draw_element_rec(UIElement *e) {
         }
         if (e->flags & UI_ElementFlag_DrawBackground) {
                 if (e->texture) {
-                        Rng2f32 src = r2f32p(0, 0, 1, 1);
-                        dr_img(pos, e->backgroundColors[0], e->texture, src,
-                               e->cornerRadius, 0);
+                        dr_img(pos, e->backgroundColors[0], e->texture,
+                               e->texRange, e->cornerRadius, 0);
                 } else {
                         dr_rect(pos, e->backgroundColors, e->cornerRadius, 0);
                 }
@@ -716,13 +888,22 @@ static void ui_draw_elements(void) {
         u32 middle
             = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_MIDDLE);
         u32 right = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_RIGHT);
+
+        // WARN: hr: does this even work? (yes?) it's janky as hell
+        if ((left == GLFW_RELEASE
+             && ui_state.prevMouseState[UI_Button_Left] == GLFW_PRESS
+             && !contains_r2f32(ui_state.focused->screenCoords, ui_mouse_pos()))
+            || glfwGetKey(r_state.window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+                ui_set_focused(&ui_nil_element, &string8_nil);
+        }
+
         ui_state.prevMouseState[0] = left;
         ui_state.prevMouseState[1] = middle;
         ui_state.prevMouseState[2] = right;
         ui_state.prevMousePos = ui_mouse_pos();
 
         // TODO: hr: where should this go?
-        arena_reset(ui_state.strArena);
+        arena_reset(ui_prev_frame_arena());
 }
 
 static void ui_element_add_display_string(UIElement *e, String8 str) {

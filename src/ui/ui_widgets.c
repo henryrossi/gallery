@@ -52,7 +52,51 @@ static UISignal ui_buttonf(char *fmt, ...) {
         return sig;
 }
 
-static UISignal ui_slider(f32 *val, Vec4f32 bgColor, String8 text) {
+static UISignal ui_textfield(String8 tag, String8 *text) {
+        // hr: do we share focused state outside of function?
+        //     no, it probably should live in ui state
+        //
+        // NOTE: hr: I need the previous frame's text to be allocated still.
+        // I probably need to buffer two str/per frame arenas so I can maintain
+        // allocations related to last frame's state
+        Vec4f32 focusedColor = v4f32(0.23, 0.5, 1, 1);
+
+        ui_next_height(uiSizeSumOfChildren(1));
+        ui_next_width(uiPct(100, 1));
+        UIElement *e = ui_build_element_from_string(
+            UI_ElementFlag_DrawBackground | UI_ElementFlag_DrawBorder
+                | UI_ElementFlag_Clickable,
+            tag);
+
+        b32 focused = e == ui_get_focused();
+        if (focused) {
+                e->borderColor = focusedColor;
+        }
+        e->layoutDirection = UI_Axis2d_X;
+
+        ui_parent(e) {
+                ui_text(*text);
+
+                u64 frame = r_get_frame_count();
+                if (focused && frame % 60 < 30) {
+                        f32 size = ui_top_text_size();
+                        ui_next_background_color(ui_top_text_color());
+                        ui_next_height(uiPixelsY(size, 1));
+                        ui_next_width(uiPixelsX(1.0f, 1));
+                        ui_build_element_from_string(
+                            UI_ElementFlag_DrawBackground, string8_empty());
+                }
+        }
+
+        UISignal sig = ui_signal_from_element(e);
+        if (ui_clicked(sig)) {
+                ui_set_focused(e, text);
+        }
+
+        return sig;
+}
+
+static UISignal ui_slider(f32 *val, Vec4f32 bgColor, String8 tag) {
         f32 SLIDER_HEIGHT = ui_scale_value(ui_top_text_size(), UI_Axis2d_Y);
         f32 SLIDER_WIDTH = SLIDER_HEIGHT * 5.0f;
         f32 HALF_SLIDER_HEIGHT = SLIDER_HEIGHT / 2.0f;
@@ -75,8 +119,7 @@ static UISignal ui_slider(f32 *val, Vec4f32 bgColor, String8 text) {
                 ui_next_background_color(bgColor);
                 bar = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground,
-                    string8_concat(ui_state.strArena, text,
-                                   string8_lit("bar")));
+                    string8_concat(ui_frame_arena(), tag, string8_lit("bar")));
                 bar->size[UI_Axis2d_Y] = uiPct(50, 1);
                 bar->cornerRadius = HALF_SLIDER_HEIGHT / 2.0f;
         }
@@ -90,7 +133,7 @@ static UISignal ui_slider(f32 *val, Vec4f32 bgColor, String8 text) {
                 ui_next_background_color(ui_top_text_color());
                 UIElement *nob = ui_build_element_from_string(
                     UI_ElementFlag_Clickable | UI_ElementFlag_DrawBackground,
-                    text);
+                    tag);
                 nob->size[UI_Axis2d_X] = uiPixels(SLIDER_HEIGHT, 1);
                 nob->cornerRadius = HALF_SLIDER_HEIGHT;
 
@@ -210,7 +253,7 @@ static void ui_gen_hsv_color_wheel(void) {
         r_create_texture((u8 *)pixels, reso, reso, 4, &ui_hsv_color_wheel);
 }
 
-static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
+static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 tag) {
         // TODO: hr: add text to strings of child elements
         if (ui_hsv_color_wheel.width == 0) {
                 ui_gen_hsv_color_wheel();
@@ -238,7 +281,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
         ui_next_background_color(v4f32(1, 1, 1, 1));
         UIElement *wheel = ui_build_element_from_string(
             UI_ElementFlag_DrawBackground | UI_ElementFlag_Clickable,
-            string8_concat(ui_state.strArena, text, string8_lit(".wheel")));
+            string8_concat(ui_frame_arena(), tag, string8_lit(".wheel")));
         ui_element_attach_texture(wheel, &ui_hsv_color_wheel);
         ui_parent(wheel) {
                 f32 radius = 0.5f * (height - pad);
@@ -260,8 +303,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
                 ui_next_background_color(v4f32(0, 0, 0, 1));
                 e = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground | UI_ElementFlag_Clickable,
-                    string8_concat(ui_state.strArena, text,
-                                   string8_lit(".dot")));
+                    string8_concat(ui_frame_arena(), tag, string8_lit(".dot")));
                 UISignal s = ui_signal_from_element(wheel);
                 if (ui_clicked(s) || ui_dragging(s)) {
                         Vec2f32 mousePos = ui_mouse_pos();
@@ -289,7 +331,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
         ui_push_width(uiPixelsX(pad * 1.5f, 1));
         UIElement *bar = ui_build_element_from_string(
             UI_ElementFlag_DrawBackground | UI_ElementFlag_DrawBorder,
-            string8_concat(ui_state.strArena, text, string8_lit(".bar")));
+            string8_concat(ui_frame_arena(), tag, string8_lit(".bar")));
         bar->backgroundColors[0] = v4f32(1, 1, 1, 1);
         bar->backgroundColors[1] = v4f32(0, 0, 0, 1);
         bar->backgroundColors[2] = v4f32(1, 1, 1, 1);
@@ -303,7 +345,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
                 ui_next_background_color(v4f32(0, 0, 0, 1));
                 e = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground | UI_ElementFlag_Clickable,
-                    string8_concat(ui_state.strArena, text,
+                    string8_concat(ui_frame_arena(), tag,
                                    string8_lit(".slide")));
                 UISignal s = ui_signal_from_element(bar);
                 if (ui_clicked(s) || ui_dragging(s)) {
@@ -332,11 +374,11 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 text) {
                     UI_ElementFlag_DrawBackground | UI_ElementFlag_DrawBorder,
                     string8_empty());
 
-                ui_text(string8f(ui_state.strArena, "R: %d",
+                ui_text(string8f(ui_frame_arena(), "R: %d",
                                  (s32)(rgba->x * 255.0f)));
-                ui_text(string8f(ui_state.strArena, "G: %d",
+                ui_text(string8f(ui_frame_arena(), "G: %d",
                                  (s32)(rgba->y * 255.0f)));
-                ui_text(string8f(ui_state.strArena, "B: %d",
+                ui_text(string8f(ui_frame_arena(), "B: %d",
                                  (s32)(rgba->z * 255.0f)));
         }
 
