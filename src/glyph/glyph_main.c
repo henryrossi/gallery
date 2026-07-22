@@ -415,7 +415,8 @@ int main(int argc, char *argv[]) {
 
                 ui_next_height(uiSizeSumOfChildren(1));
                 ui_next_background_color(darkbg);
-                f32 padx = uiPixelsX(ui_top_text_size(), 0).value * 0.25f;
+                f32 padx = uiPixelsX(ui_top_text_size(), 0).value
+                           * 0.25f; // hr: padding is broken on this currently
                 f32 pady = uiPixelsY(ui_top_text_size(), 0).value * 0.25f;
                 ui_next_padding(v4f32(padx, pady, padx, pady));
                 UIElement *e = ui_build_element_from_string(
@@ -435,7 +436,7 @@ int main(int argc, char *argv[]) {
                 ui_pop_parent();
 
                 ui_push_height(uiPct(
-                    100, 1)); // WARN: hr: changing this strictness to 0 (which
+                    100, 0)); // WARN: hr: changing this strictness to 0 (which
                               // it should be less than 1) breaks the layout
                 e = ui_build_element_from_string(0, string8_empty());
                 e->layoutDirection = UI_Axis2d_X;

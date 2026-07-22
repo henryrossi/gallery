@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
                 ui_push_parent(e);
 
                 ui_next_background_color(blue);
-                ui_next_width(uiPct(100, 1));
+                ui_next_width(uiPixelsX(1500, 1));
                 ui_next_height(uiPixelsY(100, 1));
                 e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
                                                  string8_empty());

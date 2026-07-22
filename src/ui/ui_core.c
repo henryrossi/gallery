@@ -634,36 +634,35 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
         ui_autolayout_calc_postorder(e, UI_Axis2d_Y);
 }
 
-// WARN: hr: I'm seeing some weird behavior on elements with seemingly
-// plenty of space that have a strcitness of 0.
 static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
         f32 pad = axis == UI_Axis2d_X ? e->padding.x + e->padding.z
                                       : e->padding.y + e->padding.w;
         f32 cap = e->computedSize.v[axis] - pad;
 
-        // NOTE: hr: to ponder, why only reduce size on layout direction?
-
-        // if (e->layoutDirection == axis) {
-        f32 sum = 0.0f;
-        f32 strictnessTotal = 0.0f;
-        for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-                sum += ch->computedSize.v[axis];
-                strictnessTotal += (1.0f - ch->size[axis].strictness);
-        }
-        f32 discrp = sum - cap;
-        if (discrp > 0 && !nequal_f32(strictnessTotal, 0.0f, 0.0001)) {
-                f32 f = discrp / strictnessTotal;
+        if (e->layoutDirection == axis) {
+                f32 sum = 0.0f;
+                f32 strictnessTotal = 0.0f;
                 for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-                        f32 r = f * (1 - ch->size[axis].strictness);
-                        ch->computedSize.v[axis] -= r;
+                        sum += ch->computedSize.v[axis];
+                        strictnessTotal += (1.0f - ch->size[axis].strictness);
+                }
+                f32 discrp = sum - cap;
+                if (discrp > 0 && !nequal_f32(strictnessTotal, 0.0f, 0.0001)) {
+                        f32 f = discrp / strictnessTotal;
+                        for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                                f32 r = f * (1 - ch->size[axis].strictness);
+                                ch->computedSize.v[axis] -= r;
+                        }
+                }
+
+        } else {
+                for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                        if (ch->size[axis].strictness < 1.0f) {
+                                ch->computedSize.v[axis]
+                                    = min(ch->computedSize.v[axis], cap);
+                        }
                 }
         }
-        // } else {
-        //         for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
-        //                 ch->computedSize.v[axis]
-        //                     = min(ch->computedSize.v[axis], cap);
-        //         }
-        // }
 }
 
 static void ui_element_autolayout(void) {
