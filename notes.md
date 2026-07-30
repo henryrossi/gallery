@@ -1,3 +1,19 @@
+July 22, 2026:
+
+Let's shift focus and make a free list allocator that I can use for strings in
+the ui system.
+
+
+July 21, 2026:
+
+Clipping implemented roughly (without color vertex interpolation). I fixed a
+design mistake where we fix out of bounds children within parent on non-layout
+direction even if strictness was 1. Next, I want to brainstorm solid ways to 
+implement scroll offsets. It would be awesome once dropdowns are implemented to
+have a debug key that shows ui element information in a tooltip. Maybe pressing
+a key can show the currently displayed element's parent.
+
+
 July 20, 2026:
 
 I want to implement element clipping by adjusting out of bounds children's 
