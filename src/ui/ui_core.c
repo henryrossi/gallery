@@ -1,10 +1,8 @@
 #include "ui/ui_core.h"
-#include "bedrock/bedrock_math.h"
 #include "draw/draw.h"
 #include "os/os.h"
 
 #include "ui/generated/ui.c"
-#include <assert.h> // hr: ?
 
 // NOTE: hr: for dropdowns, I think they should be removed from the main root
 // tree, but still have a parent. They can be held in a seperate list and
@@ -15,7 +13,8 @@ UIStackNodesDecl
 
 typedef struct {
         Arena *arena;
-        Arena *perFrameArena[2];
+        Arena *perFrameArena;
+        Freelist freelist;
 
         FFont *defaultFont;
 
@@ -99,14 +98,12 @@ static Arena *ui_build_arena(void) {
 // clang-format on
 
 static Arena *ui_frame_arena(void) {
-        u64 frame = r_get_frame_count() % 2;
-        Arena *res = ui_state.perFrameArena[frame];
+        Arena *res = ui_state.perFrameArena;
         return res;
 }
 
-static Arena *ui_prev_frame_arena(void) {
-        u64 frame = (r_get_frame_count() - 1) % 2;
-        Arena *res = ui_state.perFrameArena[frame];
+static Freelist *ui_freelist(void) {
+        Freelist *res = &ui_state.freelist;
         return res;
 }
 
@@ -258,8 +255,8 @@ static void setup_ui_state(void) {
         glfwSetCharCallback(r_state.window, ui_char_callback);
 
         ui_state.arena = make_arena(mb(1));
-        ui_state.perFrameArena[0] = make_arena(1);
-        ui_state.perFrameArena[1] = make_arena(1);
+        ui_state.perFrameArena = make_arena(mb(1));
+        ui_state.freelist = make_freelist(mb(1));
 
         ui_state.defaultFont
             = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
@@ -327,17 +324,15 @@ static b32 ui_begin_frame(void) {
         // glfwWaitEvents();
 
         if (!ui_element_is_nil(ui_get_focused())) {
-                Arena *a = ui_frame_arena();
+                Freelist *fl = ui_freelist();
                 String8 fText = *ui_state.focusedText;
 
-                // WARN: hr: this is all wrong. string really should be
-                // allocated with a free list strategy since they have varible
-                // allocation lengths.
                 if (ui_state.charInputBuf.length) {
-                        *ui_state.focusedText
-                            = string8_concat(a, fText, ui_state.charInputBuf);
-                } else {
-                        *ui_state.focusedText = string8_copy(a, fText);
+                        *ui_state.focusedText = string8_concat_f(
+                            fl, fText, ui_state.charInputBuf);
+                        if (freelist_contains_mem(fl, fText.data)) {
+                                string8_destroy_f(fl, fText);
+                        }
                 }
         }
 
@@ -902,7 +897,7 @@ static void ui_draw_elements(void) {
         ui_state.prevMousePos = ui_mouse_pos();
 
         // TODO: hr: where should this go?
-        arena_reset(ui_prev_frame_arena());
+        arena_reset(ui_frame_arena());
 }
 
 static void ui_element_add_display_string(UIElement *e, String8 str) {

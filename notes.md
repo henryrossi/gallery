@@ -1,3 +1,11 @@
+July 29, 2026:
+
+Freelist allocator is implemented using a red-black tree to store free blocks.
+It needs to be tested. I haven't even run it once (yikes, get that debugger 
+ready). Next, I want to make one small improvement to reduce fragmentation:
+merging consecutive blocks, but it'll need some thought.
+
+
 July 22, 2026:
 
 Let's shift focus and make a free list allocator that I can use for strings in

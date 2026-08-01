@@ -30,7 +30,7 @@ static String8 r_read_shader_file(Arena *a, String8 filename) {
         r_assert(code == OS_FileCode_Success, "Failed to open shader file");
 
         OSFileInfo info = os_file_info(file);
-        String8 buf = string8_allocate(a, info.size);
+        String8 buf = string8_allocate_a(a, info.size);
 
         code = os_read_file(file, buf.data, buf.length);
         os_close_file(file);

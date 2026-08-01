@@ -18,7 +18,7 @@ static FFont *f_init_font(String8 filename) {
         unsigned char *ttf_buffer = arena_alloc(a, F_TTF_BUFFER_SIZE);
         unsigned char *bitmap = arena_alloc(a, F_ATLAS_WIDTH * F_ATLAS_WIDTH);
 
-        String8 cstr = string8_allocate(a, filename.length + 1);
+        String8 cstr = string8_allocate_a(a, filename.length + 1);
         memcpy(cstr.data, filename.data, filename.length);
         string8_set(cstr, filename.length, '\0');
 

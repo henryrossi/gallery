@@ -1,6 +1,5 @@
 #include "bedrock/bedrock_freelist.h"
 #include "os/os.h"
-#include <limits.h>
 
 // NOTE: hr: The freelist allocator manages it's free chunks using a red-black
 // tree. For more info see:
@@ -18,35 +17,44 @@ typedef enum {
         RBTree_Red = 1,
 } RBTree_Color;
 
+typedef struct {
+        u64 sizeAndFlags;
+} FreelistInfo;
+
 struct FreelistNode {
-        u64 colorSize; // hr: color is represented by the most significant bit
+        FreelistInfo info;
         FreelistNode *left;
         FreelistNode *right;
         FreelistNode *p;
 };
 
 typedef struct {
-        u64 size;
+        FreelistInfo info;
         u64 padding;
 } FreelistHeader;
 
-static_assert(sizeof(FreelistNode) <= FREELIST_HEADER_SIZE);
-static_assert(sizeof(FreelistHeader) <= FREELIST_HEADER_SIZE);
+compile_assert(sizeof(FreelistNode) <= FREELIST_HEADER_SIZE);
+compile_assert(sizeof(FreelistHeader) <= FREELIST_HEADER_SIZE);
 
-#define FLRBT_COLOR_BIT ((u64)RBTree_Red << 63)
-#define _flrbt_is_red(node) (!!(node->colorSize & FLRBT_COLOR_BIT))
-#define _flrbt_set_red(node) node->colorSize |= FLRBT_COLOR_BIT
-#define _flrbt_set_black(node) node->colorSize &= ~FLRBT_COLOR_BIT
+#define FLRBT_COLOR_BIT (1 << 0)
+#define _flrbt_is_red(node) (!!(node->info.sizeAndFlags & FLRBT_COLOR_BIT))
+#define _flrbt_set_red(node) node->info.sizeAndFlags |= FLRBT_COLOR_BIT
+#define _flrbt_set_black(node) node->info.sizeAndFlags &= ~FLRBT_COLOR_BIT
 #define _flrbt_assign_color(x, y)                                              \
         if (_flrbt_is_red(y)) {                                                \
                 _flrbt_set_red(x);                                             \
         } else {                                                               \
                 _flrbt_set_black(x);                                           \
         }
-#define _flrbt_size(node) (node->colorSize & ~FLRBT_COLOR_BIT)
+#define FLRBT_FREE_BIT (1 << 1)
+#define _flrbt_is_free(nh) (!!(nh->info.sizeAndFlags & FLRBT_FREE_BIT))
+#define _flrbt_set_free(node) node->info.sizeAndFlags |= FLRBT_FREE_BIT
+#define _flrbt_set_allocated(header)                                           \
+        header->info.sizeAndFlags &= ~FLRBT_FREE_BIT
+#define _flrbt_size(nh) (nh->info.sizeAndFlags & ~0x3)
 
-readonly static FreelistNode freelist_node_nil = {
-        0,
+static FreelistNode freelist_node_nil = {
+        { 0 },
         &freelist_node_nil,
         &freelist_node_nil,
         &freelist_node_nil,
@@ -83,6 +91,11 @@ static b32 _flrbt__validate(FreelistNode *x, u64 blackBalance) {
 }
 
 static b32 _flrbt_validate(Freelist *f) {
+        FreelistNode *nil = &freelist_node_nil;
+        if (_flrbt_is_red(nil)) {
+                return 0;
+        }
+
         FreelistNode *x = f->rbtree;
         u64 blackNodes = 0;
         while (!_flrbt_node_is_nil(x)) {
@@ -101,7 +114,7 @@ static void _flrbt_left_rotate(Freelist *t, FreelistNode *x) {
                 y->left->p = x;
         }
         y->p = x->p;
-        if (_flrbt_node_is_nil(x)) {
+        if (_flrbt_node_is_nil(x->p)) {
                 t->rbtree = y;
         } else if (x == x->p->left) {
                 x->p->left = y;
@@ -119,7 +132,7 @@ static void _flrbt_right_rotate(Freelist *f, FreelistNode *x) {
                 y->right->p = x;
         }
         y->p = x->p;
-        if (_flrbt_node_is_nil(x)) {
+        if (_flrbt_node_is_nil(x->p)) {
                 f->rbtree = y;
         } else if (x == x->p->left) {
                 x->p->left = y;
@@ -131,7 +144,7 @@ static void _flrbt_right_rotate(Freelist *f, FreelistNode *x) {
 }
 
 static FreelistNode *_flrbt_tree_minimun(FreelistNode *n) {
-        while (!_flrbt_node_is_nil(n)) {
+        while (!_flrbt_node_is_nil(n->left)) {
                 n = n->left;
         }
         return n;
@@ -202,7 +215,7 @@ static void _flrbt_insert(Freelist *f, FreelistNode *n) {
 }
 
 static void _flrbt_transplant(Freelist *f, FreelistNode *x, FreelistNode *y) {
-        if (_flrbt_node_is_nil(x)) {
+        if (_flrbt_node_is_nil(x->p)) {
                 f->rbtree = y;
         } else if (x == x->p->left) {
                 x->p->left = y;
@@ -214,7 +227,7 @@ static void _flrbt_transplant(Freelist *f, FreelistNode *x, FreelistNode *y) {
 
 static void _flrbt_delete_fixup(Freelist *f, FreelistNode *n) {
         while (n != f->rbtree && !_flrbt_is_red(n)) {
-                if (n == n->left->p) {
+                if (n == n->p->left) {
                         FreelistNode *x = n->p->right;
                         if (_flrbt_is_red(x)) {
                                 _flrbt_set_black(x);
@@ -307,9 +320,7 @@ static Freelist make_freelist(u64 sizeHint) {
         if (!size) {
                 size = mb(1);
         }
-        if (size > INT64_MAX) {
-                size = INT64_MAX;
-        }
+        size = align_pow2(size, 4); // hr: ensure there is room for flags
 
         res.mem = os_commit(size);
         if (!res.mem) {
@@ -319,21 +330,20 @@ static Freelist make_freelist(u64 sizeHint) {
         res.size = size;
 
         FreelistNode *n = (FreelistNode *)res.mem;
-        n->colorSize = size - FREELIST_HEADER_SIZE;
+        n->info.sizeAndFlags = size - FREELIST_HEADER_SIZE;
         n->left = &freelist_node_nil;
         n->right = &freelist_node_nil;
         n->p = &freelist_node_nil;
-
-        _flrbt_insert(&res, n);
+        _flrbt_set_black(n);
+        _flrbt_set_free(n);
+        res.rbtree = n;
 
         return res;
 }
 
 static void *freelist_alloc(Freelist *f, u64 size) {
         void *res = 0;
-        if (size > INT64_MAX) {
-                return res;
-        }
+        size = align_pow2(size, 4); // hr: ensure there is room for flags
 
         // hr: find smallest section greater than or equal to size if it exists
         FreelistNode *x = f->rbtree;
@@ -341,7 +351,7 @@ static void *freelist_alloc(Freelist *f, u64 size) {
         u64 ySize = 0;
         while (!_flrbt_node_is_nil(x)) {
                 u64 xSize = _flrbt_size(x);
-                ySize = _flrbt_size(y);
+                ySize = _flrbt_node_is_nil(y) ? UINT64_MAX : _flrbt_size(y);
                 if (xSize >= size && xSize < ySize) {
                         y = x;
                 }
@@ -357,38 +367,69 @@ static void *freelist_alloc(Freelist *f, u64 size) {
         if (_flrbt_node_is_nil(y)) {
                 return res;
         }
+        ySize = _flrbt_size(y);
 
         _flrbt_delete(f, y);
 
+        // hr: split memory block if large enough
         u64 padding = ySize - size;
         if (padding >= 2 * FREELIST_HEADER_SIZE) {
-                FreelistNode *n = ((void *)y + FREELIST_HEADER_SIZE + f->size);
-                n->colorSize = padding - FREELIST_HEADER_SIZE;
+                FreelistNode *n = ((void *)y + FREELIST_HEADER_SIZE + size);
+                n->info.sizeAndFlags = padding - FREELIST_HEADER_SIZE;
                 n->left = &freelist_node_nil;
                 n->right = &freelist_node_nil;
                 n->p = &freelist_node_nil;
+                _flrbt_set_free(n);
                 _flrbt_insert(f, n);
                 padding = 0;
         }
 
         FreelistHeader *header = (FreelistHeader *)y;
-        header->size = size;
+        header->info.sizeAndFlags = size;
         header->padding = padding;
+        _flrbt_set_allocated(header);
         res = (void *)header + FREELIST_HEADER_SIZE;
 
+        // WARN: hr: for debugging
+        if (!_flrbt_validate(f)) {
+                os_abort(1);
+        }
+
+        f->used += size;
         return res;
 }
 
 static void freelist_free(Freelist *f, void *ptr) {
         FreelistHeader *header = ((void *)ptr - FREELIST_HEADER_SIZE);
-        u64 size = header->size + header->padding;
+        f->used -= _flrbt_size(header);
+        u64 size = _flrbt_size(header) + header->padding;
 
-        // TODO: hr: merge with following block if free
+        // hr: merge with following block if it's free
+        FreelistHeader *next = ((void *)ptr + size);
+        if (_flrbt_is_free(next)) {
+                FreelistNode *y = (FreelistNode *)next;
+                _flrbt_delete(f, y);
+                size += _flrbt_size(y) + FREELIST_HEADER_SIZE;
+        }
 
         FreelistNode *n = (FreelistNode *)header;
-        n->colorSize = size;
+        n->info.sizeAndFlags = size;
         n->left = &freelist_node_nil;
         n->right = &freelist_node_nil;
         n->p = &freelist_node_nil;
+        _flrbt_set_free(n);
         _flrbt_insert(f, n);
+
+        // WARN: hr: for debugging
+        if (!_flrbt_validate(f)) {
+                os_abort(1);
+        }
+}
+
+static b32 freelist_contains_mem(Freelist *f, void *ptr) {
+        return ptr >= f->mem && ptr < f->mem + f->size;
+}
+
+static void destroy_freelist(Freelist *f) {
+        os_release(f->mem, f->size);
 }

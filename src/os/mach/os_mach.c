@@ -24,7 +24,7 @@ static String8 os_path(Arena *a, String8 path) {
         if (string8_is_null_term(path)) {
                 return path;
         }
-        String8 res = string8_allocate(a, path.length + 1);
+        String8 res = string8_allocate_a(a, path.length + 1);
 
         memcpy(res.data, path.data, path.length);
         string8_set(res, res.length - 1, '\0');

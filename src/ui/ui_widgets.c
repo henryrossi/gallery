@@ -53,12 +53,6 @@ static UISignal ui_buttonf(char *fmt, ...) {
 }
 
 static UISignal ui_textfield(String8 tag, String8 *text) {
-        // hr: do we share focused state outside of function?
-        //     no, it probably should live in ui state
-        //
-        // NOTE: hr: I need the previous frame's text to be allocated still.
-        // I probably need to buffer two str/per frame arenas so I can maintain
-        // allocations related to last frame's state
         Vec4f32 focusedColor = v4f32(0.23, 0.5, 1, 1);
 
         ui_next_height(uiSizeSumOfChildren(1));
@@ -119,7 +113,8 @@ static UISignal ui_slider(f32 *val, Vec4f32 bgColor, String8 tag) {
                 ui_next_background_color(bgColor);
                 bar = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground,
-                    string8_concat(ui_frame_arena(), tag, string8_lit("bar")));
+                    string8_concat_a(ui_frame_arena(), tag,
+                                     string8_lit("bar")));
                 bar->size[UI_Axis2d_Y] = uiPct(50, 1);
                 bar->cornerRadius = HALF_SLIDER_HEIGHT / 2.0f;
         }
@@ -281,7 +276,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 tag) {
         ui_next_background_color(v4f32(1, 1, 1, 1));
         UIElement *wheel = ui_build_element_from_string(
             UI_ElementFlag_DrawBackground | UI_ElementFlag_Clickable,
-            string8_concat(ui_frame_arena(), tag, string8_lit(".wheel")));
+            string8_concat_a(ui_frame_arena(), tag, string8_lit(".wheel")));
         ui_element_attach_texture(wheel, &ui_hsv_color_wheel);
         ui_parent(wheel) {
                 f32 radius = 0.5f * (height - pad);
@@ -303,7 +298,8 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 tag) {
                 ui_next_background_color(v4f32(0, 0, 0, 1));
                 e = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground | UI_ElementFlag_Clickable,
-                    string8_concat(ui_frame_arena(), tag, string8_lit(".dot")));
+                    string8_concat_a(ui_frame_arena(), tag,
+                                     string8_lit(".dot")));
                 UISignal s = ui_signal_from_element(wheel);
                 if (ui_clicked(s) || ui_dragging(s)) {
                         Vec2f32 mousePos = ui_mouse_pos();
@@ -331,7 +327,7 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 tag) {
         ui_push_width(uiPixelsX(pad * 1.5f, 1));
         UIElement *bar = ui_build_element_from_string(
             UI_ElementFlag_DrawBackground | UI_ElementFlag_DrawBorder,
-            string8_concat(ui_frame_arena(), tag, string8_lit(".bar")));
+            string8_concat_a(ui_frame_arena(), tag, string8_lit(".bar")));
         bar->backgroundColors[0] = v4f32(1, 1, 1, 1);
         bar->backgroundColors[1] = v4f32(0, 0, 0, 1);
         bar->backgroundColors[2] = v4f32(1, 1, 1, 1);
@@ -345,8 +341,8 @@ static UISignal ui_hsv_color_picker(Vec4f32 *rgba, String8 tag) {
                 ui_next_background_color(v4f32(0, 0, 0, 1));
                 e = ui_build_element_from_string(
                     UI_ElementFlag_DrawBackground | UI_ElementFlag_Clickable,
-                    string8_concat(ui_frame_arena(), tag,
-                                   string8_lit(".slide")));
+                    string8_concat_a(ui_frame_arena(), tag,
+                                     string8_lit(".slide")));
                 UISignal s = ui_signal_from_element(bar);
                 if (ui_clicked(s) || ui_dragging(s)) {
                         Rng2f32 box = bar->screenCoords;

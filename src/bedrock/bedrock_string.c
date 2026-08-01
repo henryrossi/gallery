@@ -5,16 +5,32 @@ static String8 string8(u8 *str, u64 length) {
         return res;
 }
 
-static String8 string8_allocate(Arena *arena, u64 length) {
+static String8 string8_allocate_a(Arena *a, u64 length) {
         String8 res = { .length = length };
-        res.data = arena_alloc(arena, length);
+        res.data = arena_alloc(a, length);
         return res;
 }
 
-static String8 string8_copy(Arena *arena, String8 str) {
-        String8 res = string8_allocate(arena, str.length);
+static String8 string8_copy_a(Arena *a, String8 str) {
+        String8 res = string8_allocate_a(a, str.length);
         memcpy(res.data, str.data, str.length);
         return res;
+}
+
+static String8 string8_allocate_f(Freelist *f, u64 length) {
+        String8 res = { .length = length };
+        res.data = freelist_alloc(f, length);
+        return res;
+}
+
+static String8 string8_copy_f(Freelist *f, String8 str) {
+        String8 res = string8_allocate_f(f, str.length);
+        memcpy(res.data, str.data, str.length);
+        return res;
+}
+
+static void string8_destroy_f(Freelist *f, String8 str) {
+        freelist_free(f, str.data);
 }
 
 static String8 string8_empty(void) {
@@ -32,7 +48,7 @@ static String8 string8fv(Arena *arena, char *fmt, va_list args) {
         va_list args2;
         va_copy(args2, args);
         u32 bytesNeeded = stbsp_vsnprintf(0, 0, fmt, args) + 1;
-        String8 str = string8_allocate(arena, bytesNeeded);
+        String8 str = string8_allocate_a(arena, bytesNeeded);
         str.length = stbsp_vsnprintf((char *)str.data, bytesNeeded, fmt, args);
         va_end(args2);
         return str;
@@ -103,8 +119,15 @@ static String8 string8_prune(String8 str, u64 pos) {
         return str;
 }
 
-static String8 string8_concat(Arena *arena, String8 str1, String8 str2) {
-        String8 res = string8_allocate(arena, str1.length + str2.length);
+static String8 string8_concat_a(Arena *a, String8 str1, String8 str2) {
+        String8 res = string8_allocate_a(a, str1.length + str2.length);
+        memcpy(res.data, str1.data, str1.length);
+        memcpy(res.data + str1.length, str2.data, str2.length);
+        return res;
+}
+
+static String8 string8_concat_f(Freelist *f, String8 str1, String8 str2) {
+        String8 res = string8_allocate_f(f, str1.length + str2.length);
         memcpy(res.data, str1.data, str1.length);
         memcpy(res.data + str1.length, str2.data, str2.length);
         return res;

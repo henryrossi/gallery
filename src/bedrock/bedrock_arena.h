@@ -26,7 +26,7 @@ struct Arena {
         int createdLine;
 };
 
-static_assert(sizeof(Arena) <= ARENA_HEADER_SIZE);
+compile_assert(sizeof(Arena) <= ARENA_HEADER_SIZE);
 
 static Arena *make_arena_(ArenaParams *params);
 #define make_arena(size)                                                       \

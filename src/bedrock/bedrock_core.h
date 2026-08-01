@@ -49,6 +49,6 @@ typedef uint32_t b32;
 
 #define align_pow2(x, b) (((x) + (b) - 1) & (~((b) - 1)))
 
-#define static_assert(e) typedef char static_assert_##__LINE__[(e) ? 1 : -1]
+#define compile_assert(e) typedef char compile_assert_##__LINE__[(e) ? 1 : -1]
 
 #endif // BEDROCK_CORE_H
