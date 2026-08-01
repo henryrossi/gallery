@@ -1,3 +1,11 @@
+August 1, 2026:
+
+Freelist allocator is in a good spot. I ironed out all the obvious bugs 
+yesterday and it's working for the textfield usecase perfectly. For now I am
+going to stop working on this project as I head into school. I leave the
+textfield implementation bare and in need of lots of work.
+
+
 July 29, 2026:
 
 Freelist allocator is implemented using a red-black tree to store free blocks.
