@@ -1,4 +1,5 @@
 #include "bedrock/bedrock_freelist.h"
+#include "bedrock/bedrock_logs.h"
 #include "os/os.h"
 
 // NOTE: hr: The freelist allocator manages it's free chunks using a red-black
@@ -53,6 +54,10 @@ compile_assert(sizeof(FreelistHeader) <= FREELIST_HEADER_SIZE);
         header->info.sizeAndFlags &= ~FLRBT_FREE_BIT
 #define _flrbt_size(nh) (nh->info.sizeAndFlags & ~0x3)
 
+// NOTE: hr: this struct is NOT read only. Several times the red-black tree
+// algorithms use the parent field as a temporary variable. All algoritms that
+// read from the parent field guarantee a valid write to the field sometime
+// beforehand.
 static FreelistNode freelist_node_nil = {
         { 0 },
         &freelist_node_nil,
@@ -64,7 +69,7 @@ static b32 _flrbt_node_is_nil(FreelistNode *x) {
         return x == &freelist_node_nil;
 }
 
-static b32 _flrbt__validate(FreelistNode *x, u64 blackBalance) {
+static b32 _flrbt_validate(FreelistNode *x, u64 blackBalance) {
         if (_flrbt_node_is_nil(x)) {
                 return blackBalance == 0;
         }
@@ -86,11 +91,11 @@ static b32 _flrbt__validate(FreelistNode *x, u64 blackBalance) {
                 return 0;
         }
 
-        return _flrbt__validate(x->left, blackBalance)
-               && _flrbt__validate(x->right, blackBalance);
+        return _flrbt_validate(x->left, blackBalance)
+               && _flrbt_validate(x->right, blackBalance);
 }
 
-static b32 _flrbt_validate(Freelist *f) {
+static b32 _flrbt_root_validate_(Freelist *f) {
         FreelistNode *nil = &freelist_node_nil;
         if (_flrbt_is_red(nil)) {
                 return 0;
@@ -104,7 +109,7 @@ static b32 _flrbt_validate(Freelist *f) {
                 }
                 x = x->left;
         }
-        return _flrbt__validate(f->rbtree, blackNodes);
+        return _flrbt_validate(f->rbtree, blackNodes);
 }
 
 static void _flrbt_left_rotate(Freelist *t, FreelistNode *x) {
@@ -222,7 +227,7 @@ static void _flrbt_transplant(Freelist *f, FreelistNode *x, FreelistNode *y) {
         } else {
                 x->p->right = y;
         }
-        y->p = x->p;
+        y->p = x->p; // hr: we write to y.p even when y is nil
 }
 
 static void _flrbt_delete_fixup(Freelist *f, FreelistNode *n) {
@@ -324,7 +329,8 @@ static Freelist make_freelist(u64 sizeHint) {
 
         res.mem = os_commit(size);
         if (!res.mem) {
-                fprintf(stderr, "Freelist - No memory on creation\n");
+                log_message(string8_lit(
+                    "Failed to retrieve memory to create freelist\n"));
                 os_abort(1);
         }
         res.size = size;
@@ -391,11 +397,14 @@ static void *freelist_alloc(Freelist *f, u64 size) {
         res = (void *)header + FREELIST_HEADER_SIZE;
 
         // WARN: hr: for debugging
-        if (!_flrbt_validate(f)) {
+        if (!_flrbt_root_validate_(f)) {
                 os_abort(1);
         }
 
         f->used += size;
+
+        mem_zero(res, size);
+
         return res;
 }
 
@@ -421,7 +430,7 @@ static void freelist_free(Freelist *f, void *ptr) {
         _flrbt_insert(f, n);
 
         // WARN: hr: for debugging
-        if (!_flrbt_validate(f)) {
+        if (!_flrbt_root_validate_(f)) {
                 os_abort(1);
         }
 }

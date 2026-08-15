@@ -5,6 +5,8 @@
 
 #include <psapi.h>
 
+// hr: for backtraces see CaptureStackBackTrace() and SymFromAddr()
+
 static void *os_commit(u64 size) {
         void *res = VirtualAlloc(0, size, MEM_COMMIT, PAGE_READWRITE);
         if (!res) {

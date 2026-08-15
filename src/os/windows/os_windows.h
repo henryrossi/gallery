@@ -1,6 +1,7 @@
 #ifndef OS_WINDOWS_WINDOWS_H
 #define OS_WINDOWS_WINDOWS_H
 
+// hr: should query this with GetSystemInfo()
 #define OS_PAGESIZE 0x1000
 
 #endif // OS_WINDOWS_WINDOWS_H

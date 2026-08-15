@@ -121,6 +121,7 @@ static void glf_load_control_panel_colors(void) {
         glf_state.colorPicker = v4f32(1, 1, 1, 1);
 }
 
+// NOTE: hr: change this to Vec2s16?
 static Vec2s32 glf_canvas_pixel_at_screen_pos(Rng2f32 canvasArea,
                                               Vec2f32 screenPos) {
         if (contains_r2f32(canvasArea, screenPos)) {
@@ -193,6 +194,8 @@ static void glf_color_history_ui(void) {
 static void glf_copy_image(u8 *src, u8 *dst, u32 width, u32 height, u32 srcN,
                            u32 dstN) {
         if (srcN < 3 || dstN < 3) {
+                log_message(
+                    string8_lit("Failed to copy image with 4 channels\n"));
                 os_abort(1);
         }
 
@@ -251,10 +254,18 @@ static b32 glf_visited_pixel(Vec2s32Node **visited, u32 buckets,
         return res;
 }
 
+// +---------------------------------------------------+
+// | Name                                         Time |
+// |---------------------------------------------------|
+// | Original Max Pen Size    7.5 ms (3.5 ms dragging) |
+// | Original Flood Fill                         44 ms |
+// | New Max Pen Size                          0.16 ms |
+// +---------------------------------------------------+
 typedef b32 (*GLF_FillCanvasCondition)(Vec2s32 pixel, Vec2f32 origin);
 static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
                                          UIElement *canvas,
                                          GLF_FillCanvasCondition cond) {
+        START_BLOCK("Fill");
         if (!canvas) {
                 return;
         }
@@ -313,6 +324,172 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
         }
 
         arena_pop_at(a, resetPos);
+        END_BLOCK;
+        PRINT_PROFILER;
+}
+
+#define GLF_CHUNK_SIZE 64
+
+// Marks the chunk as visited in the bit array.
+static void glf_mark_chunk_visited(u8 *visited, Vec2s16 chunk, u32 chunksX) {
+        u64 num = chunk.y * chunksX + chunk.x;
+        u64 byte = num / 8;
+        u8 mask = (1 << (num % 8));
+        visited[byte] |= mask;
+}
+
+// Returns 1 if the chunk is mark has visited in the bit array, 0 otherwise.
+// WARN: hr: we always need to check a chunk is inbounds before we check if it's
+// been visited.
+static b32 glf_chunk_visited(u8 *visited, Vec2s16 chunk, u32 chunksX) {
+        u64 num = chunk.y * chunksX + chunk.x;
+        u64 byte = num / 8;
+        u8 mask = (1 << (num % 8));
+        return !!(visited[byte] & mask);
+}
+
+// Returns 1 if pixel has a distance less than radius from the origin, 0
+// otherwise.
+static b32 glf_pixel_within_radius(Vec2s16 pixel, Vec2f32 origin, f32 radius) {
+        f32 xd = (f32)pixel.x + 0.5f - origin.x;
+        f32 yd = (f32)pixel.y + 0.5f - origin.y;
+        f32 d2 = xd * xd + yd * yd;
+        return d2 < radius * radius;
+}
+
+// Returns 1 if the chunk overlaps the drawing circle and hence must have some
+// pixels changed, 0 otherwise.
+static b32 glf_chunk_overlaps_draw(Vec2s16 chunk, Vec2f32 origin, f32 radius) {
+        Rng2f32 bb
+            = r2f32(v2f32(chunk.x * GLF_CHUNK_SIZE, chunk.y * GLF_CHUNK_SIZE),
+                    v2f32((chunk.x + 1) * GLF_CHUNK_SIZE,
+                          (chunk.y + 1) * GLF_CHUNK_SIZE));
+        f32 xClosest = clamp(bb.min.x, origin.x, bb.max.x);
+        f32 yClosest = clamp(bb.min.y, origin.y, bb.max.y);
+
+        f32 dx = xClosest - origin.x;
+        f32 dy = yClosest - origin.y;
+        f32 d2 = dx * dx + dy * dy;
+        return d2 <= radius * radius;
+}
+
+// Returns 1 if any pixels within a chunk map to pixels in the canvas image, 0
+// otehrwise.
+static b32 glf_chunk_within_bounds(Vec2s16 chunk, u32 width, u32 height) {
+        s32 x = chunk.x * GLF_CHUNK_SIZE;
+        s32 y = chunk.y * GLF_CHUNK_SIZE;
+        return (x < width && y < height)
+               && (x + GLF_CHUNK_SIZE > 0 && y + GLF_CHUNK_SIZE > 0);
+}
+
+// Draws in a circle around the point pos on the canvas.The radius of the circle
+// is determined from GLFState.penSizeFactor and the color from
+// GLFState.currentColor.
+static void glf_pen_draw(Vec2f32 pos, UIElement *canvas) {
+        START_BLOCK("AWESOME PEN DRAW");
+
+        Vec4u8 u8color = glf_color_f32_to_u8(glf_state.currentColor);
+        u32 color = 0;
+        memcpy(&color, &u8color, sizeof(u32));
+
+        u32 width = glf_state.width, height = glf_state.height;
+        Vec4u8 *image = glf_state.canvas.data;
+
+        f32 radius
+            = 0.5f + glf_state.penSizeFactor * 0.05f * min(width, height);
+
+        Vec2f32 origin = sub_v2f32(pos, canvas->screenCoords.min);
+        origin = v2f32(origin.x / canvas->computedSize.x * width,
+                       origin.y / canvas->computedSize.y * height);
+
+        Arena *a = glf_state.perFrameArena;
+        u64 resetPos = arena_pos(a);
+
+        // +------------------------------------------------------------------+
+        // | Memory footprint of this algorithm                               |
+        // |                                       4k image   32k image (max) |
+        // |------------------------------------------------------------------|
+        // | visited lookup                            512B              32kB |
+        // | queue                                     32kB               1mB |
+        // | image chunk                               16kB              16kB |
+        // |------------------------------------------------------------------|
+        // | total                                     49kB             1.1mB |
+        // |------------------------------------------------------------------|
+        // | notes:
+        // | 1. The image chunk memory is the size we work on at one time.    |
+        // | We want to make sure that previously processed chunks are being  |
+        // | evicted from the cache rather than the visited lookup and queue. |
+        // | 2. It would be awesome to measure L1 cache misses.               |
+        // +------------------------------------------------------------------+
+
+        u32 chunksX = (width + GLF_CHUNK_SIZE - 1) / GLF_CHUNK_SIZE;
+        u32 chunksY = (height + GLF_CHUNK_SIZE - 1) / GLF_CHUNK_SIZE;
+        u32 numChunks = chunksX * chunksY;
+        u8 *visitedChunks = arena_alloc(a, (numChunks >> 3) + 1);
+        u32 qSize = numChunks;
+        Vec2s16 *queue = arena_alloc(a, qSize * sizeof(Vec2s16));
+        u32 qBegin = 0, qEnd = 0;
+        // how I can cleverly limit the size needed for the queue? Do I need a
+        // queue spot for every chunk? definitely not, but how much do I need?
+        // Maybe I can have a linked list that holds a large number of chunks.
+        // This lowers memory footprint when possible, but requires copying
+        // when we need run out of memory if we want to use wrapping.
+
+        Vec2s32 pi = glf_canvas_pixel_at_screen_pos(canvas->screenCoords, pos);
+        Vec2s16 first = { .x = pi.x / 64, .y = pi.y / 64 };
+        queue[qEnd] = first;
+        qEnd += (glf_chunk_within_bounds(first, width, height)
+                 && !glf_chunk_visited(visitedChunks, first, chunksX));
+
+        while (qBegin != qEnd) {
+                Vec2s16 chunk = queue[qBegin++];
+                qBegin %= numChunks;
+
+                glf_mark_chunk_visited(visitedChunks, chunk, chunksX);
+
+                // hr: process the chunk
+                u32 xLim = clamp_top(width - (chunk.x * GLF_CHUNK_SIZE),
+                                     GLF_CHUNK_SIZE);
+                u32 yLim = clamp_top(height - (chunk.y * GLF_CHUNK_SIZE),
+                                     GLF_CHUNK_SIZE);
+                for (u32 y = 0; y < yLim; y++) {
+                        for (u32 x = 0; x < xLim; x++) {
+                                u32 px = chunk.x * GLF_CHUNK_SIZE + x;
+                                u32 py = chunk.y * GLF_CHUNK_SIZE + y;
+
+                                u32 pixel = 0;
+                                memcpy(&pixel, image + (py * width + px),
+                                       sizeof(u32));
+
+                                b32 within = glf_pixel_within_radius(
+                                    v2s16(px, py), origin, radius);
+                                u32 mask = within - 1;
+
+                                pixel = (pixel & mask) | (color & ~mask);
+                                memcpy(image + (py * width + px), &pixel,
+                                       sizeof(u32));
+                        }
+                }
+
+                // hr: add neighboring chunks to queue if valid
+                Vec2s16 offsets[] = {
+                        { { -1, 0 } }, { { 0, -1 } }, { { 1, 0 } }, { { 0, 1 } }
+                };
+                for (u32 i = 0; i < array_count(offsets); i++) {
+                        Vec2s16 nChunk = add_v2s16(chunk, offsets[i]);
+                        queue[qEnd] = nChunk;
+                        qEnd += (glf_chunk_within_bounds(nChunk, width, height)
+                                 && !glf_chunk_visited(visitedChunks, nChunk,
+                                                       chunksX)
+                                 && glf_chunk_overlaps_draw(nChunk, origin,
+                                                            radius));
+                        qEnd %= numChunks;
+                }
+        }
+        arena_pop_at(a, resetPos);
+
+        END_BLOCK;
+        PRINT_PROFILER;
 }
 
 // Returns 1 if pixel is less than current pen size away from origin position on
@@ -350,6 +527,7 @@ static void glf_flood_fill_canvas(Vec2f32 pos, Vec4f32 color,
 }
 
 int main(int argc, char *argv[]) {
+        SETUP_PROFILER;
 
         GLFArgs args = glf_parse_command_line_args(argc, argv);
         if (!args.valid) {
@@ -496,9 +674,7 @@ int main(int argc, char *argv[]) {
                 UISignal canvasSig = ui_signal_from_element(canvas);
 
                 if (ui_dragging(canvasSig)) {
-                        glf_fill_canvas_on_condition(
-                            ui_mouse_pos(), glf_state.currentColor, canvas,
-                            glf_is_pixel_within_radius);
+                        glf_pen_draw(ui_mouse_pos(), canvas);
                 }
 
                 if (ui_hovering(canvasSig)
@@ -561,6 +737,8 @@ int main(int argc, char *argv[]) {
                     && !equal_v4f32(glf_state.colorPicker,
                                     glf_state.currentColor)) {
                         glf_set_current_color(glf_state.colorPicker);
+                        log_message(string8_lit("New color picked!\n"));
+                        log_dump(os_stderr(), 0);
                 }
 
                 ui_spacer(uiPixelsY(10, 1));

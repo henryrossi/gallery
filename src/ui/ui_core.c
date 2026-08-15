@@ -45,13 +45,6 @@ typedef struct {
 
 static UIState ui_state = { .focused = &ui_nil_element };
 
-#define SLLStackPop_N(head, next) ((head) = (head)->next)
-#define SLLStackPush_N(head, node, next)                                       \
-        ((node)->next = (head), (head) = (node))
-
-#define SLLStackPop(head) SLLStackPop_N(head, next)
-#define SLLStackPush(head, node) SLLStackPush_N(head, node, next)
-
 #define UIStackPopImpl(state, nameUpper, nameLower)                            \
         UI##nameUpper##Node *node = state.nameLower##Stack.top;                \
         if (node != &state.nameLower##StackBottom) {                           \
@@ -111,6 +104,43 @@ static b32 ui_element_is_nil(UIElement *e) {
         return e == &ui_nil_element;
 }
 
+// hr: UIElement list utility
+typedef struct UIElementNode UIElementNode;
+struct UIElementNode {
+        UIElement *element;
+        UIElementNode *next;
+};
+
+readonly static UIElementNode ui_nil_element_node = {
+        &ui_nil_element,
+        &ui_nil_element_node,
+};
+
+typedef struct {
+        UIElementNode *first;
+        UIElementNode *last;
+        u64 count;
+} UIElementList;
+
+static b32 ui_element_list_is_empty(UIElementList *list) {
+        return list->count == 0;
+}
+
+static void ui_element_list_push(Arena *a, UIElementList *list, UIElement *e) {
+        UIElementNode *node = arena_alloc(a, sizeof(*node));
+        node->element = e;
+        SLLQueuePush_NZ(&ui_nil_element_node, list->first, list->last, node,
+                        next);
+        list->count++;
+}
+
+static UIElement *ui_element_list_dequeue(UIElementList *list) {
+        UIElement *res = list->first->element;
+        SLLQueuePop_NZ(&ui_nil_element_node, list->first, list->last, next);
+        list->count--;
+        return res;
+}
+
 static Vec2f32 ui_content_scale(void) {
         Vec2f32 res = { .x = 1, .y = 1 };
         glfwGetWindowContentScale(r_state.window, &res.x, &res.y);
@@ -138,70 +168,6 @@ static void ui_set_focused(UIElement *e, String8 *text) {
 
 static UIElement *ui_get_focused(void) {
         return ui_state.focused;
-}
-
-static inline u32 ui_element_list_is_empty(UIElementList *list) {
-        return list->first == 0;
-}
-
-static void ui_element_list_append(Arena *arena, UIElementList *list,
-                                   UIElement *element) {
-        UIElementNode *node = arena_alloc(arena, sizeof(UIElementNode));
-        node->element = element;
-        node->next = 0;
-
-        if (ui_element_list_is_empty(list)) {
-                list->first = node;
-                list->last = node;
-        } else {
-                list->last->next = node;
-                list->last = node;
-        }
-}
-
-static UIElement *ui_element_list_pop_first(UIElementList *list) {
-        UIElement *res = list->first->element;
-        list->first = list->first->next;
-        if (ui_element_list_is_empty(list)) {
-                list->last = 0;
-        }
-        return res;
-}
-
-static UIElement *ui_element_list_pop_last(UIElementList *list) {
-        UIElement *res = list->last->element;
-
-        if (list->first == list->last) {
-                list->first = 0;
-                list->last = 0;
-        } else {
-                UIElementNode *penult = list->first;
-                while (penult->next != list->last) {
-                        penult = penult->next;
-                }
-                penult->next = 0;
-                list->last = penult;
-        }
-
-        return res;
-}
-
-static String8 ui_find_hash_within_string(String8 str) {
-        String8 res = str;
-        u64 hashSignifierPos = string8_find_substr(str, string8_lit("##"));
-        if (hashSignifierPos < str.length) {
-                res = string8_skip(str, hashSignifierPos);
-        }
-        return res;
-}
-
-static String8 ui_find_text_within_string(String8 str) {
-        String8 res = str;
-        u64 hashSignifierPos = string8_find_substr(str, string8_lit("##"));
-        if (hashSignifierPos < str.length) {
-                res = string8_prune(str, hashSignifierPos);
-        }
-        return res;
 }
 
 static UISemanticSize uiSemanticSize(UI_SizeKind kind, f32 value,
@@ -261,16 +227,17 @@ static void setup_ui_state(void) {
         ui_state.defaultFont
             = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
         if (!ui_state.defaultFont) {
-                fprintf(stderr, "Failed to load default font");
+                log_message(string8_lit("Failed to load default font\n"));
                 os_abort(1);
         }
 
-        u64 elementSize = sizeof(UIElement *);
-
         ui_state.bucketCount = 0xF00;
-        ui_state.buckets
-            = arena_alloc(ui_state.arena, elementSize * ui_state.bucketCount);
-        ui_state.eFree = 0;
+        u64 tableSize = sizeof(UIElement *) * ui_state.bucketCount;
+        ui_state.buckets = arena_alloc(ui_state.arena, tableSize);
+        for (u64 i = 0; i < ui_state.bucketCount; i++) {
+                ui_state.buckets[i] = &ui_nil_element;
+        }
+        ui_state.eFree = &ui_nil_element;
 
         ui_state.charInputBuf.data
             = arena_alloc(ui_state.arena, UI_CHAR_INPUT_BUF_LENGTH);
@@ -281,11 +248,11 @@ static void setup_ui_state(void) {
         }
 
         UIElement *root = arena_alloc(ui_state.arena, sizeof(UIElement));
-        root->parent = 0;
-        root->next = 0;
-        root->prev = 0;
-        root->firstChild = 0;
-        root->lastChild = 0;
+        root->parent = &ui_nil_element;
+        root->next = &ui_nil_element;
+        root->prev = &ui_nil_element;
+        root->firstChild = &ui_nil_element;
+        root->lastChild = &ui_nil_element;
         root->layoutDirection = UI_Axis2d_Y;
         root->lastFrameTouched = UINT64_MAX;
 
@@ -330,6 +297,18 @@ static b32 ui_begin_frame(void) {
                 if (ui_state.charInputBuf.length) {
                         *ui_state.focusedText = string8_concat_f(
                             fl, fText, ui_state.charInputBuf);
+                        // clang-format off
+// WARN:                  ∆
+// hr: if this allocation | fails, what are my options? Ideally we have a 
+// strong guarantee of memory preallocation (we know about failure as soon as
+// possible) as with an arena, but this is tricky due to potential memory 
+// fragmentation. What to do? Merge consecutive blocks? What if that's not 
+// possible because fragmentation is awful. Copy to a temp buffer and layout 
+// more compactly? In this specific case, if I can keep total allocation a 
+// fraction of allocator size I don't foresee many issues (hopefully).
+// For further discussion see: "The Easiest Way to Handle Errors Is To Not Have
+// Them" Ryan Fleury
+                        // clang-format on
                         if (freelist_contains_mem(fl, fText.data)) {
                                 string8_destroy_f(fl, fText);
                         }
@@ -342,50 +321,56 @@ static b32 ui_begin_frame(void) {
 }
 
 static UIElement *ui_cache_lookup(u64 key) {
-        if (key == 0) {
-                return 0;
-        }
-        u64 index = key % ui_state.bucketCount;
-        UIElement *res = ui_state.buckets[index];
-        while (res && res->key != key) {
-                res = res->hashNext;
+        UIElement *res = &ui_nil_element;
+
+        if (!ui_key_match(key, 0)) {
+                u64 index = key % ui_state.bucketCount;
+                for (UIElement *e = ui_state.buckets[index];
+                     !ui_element_is_nil(e); e = e->hashNext) {
+                        if (ui_key_match(key, e->key)) {
+                                res = e;
+                                break;
+                        }
+                }
         }
         return res;
 }
 
-static void ui_cache_add(UIElement *element) {
-        u64 index = element->key % ui_state.bucketCount;
-        UIElement *existing = ui_state.buckets[index];
-        if (existing == 0) {
-                ui_state.buckets[index] = element;
-                element->hashNext = 0;
-                element->hashPrev = 0;
-        } else {
-                while (existing->hashNext) {
-                        existing = existing->hashNext;
+static void ui_element_cache_add(UIElement *element) {
+        if (!ui_element_is_nil(element)) {
+                u64 index = element->key % ui_state.bucketCount;
+                UIElement *existing = ui_state.buckets[index];
+                if (ui_element_is_nil(existing)) {
+                        ui_state.buckets[index] = element;
+                        element->hashNext = &ui_nil_element;
+                        element->hashPrev = &ui_nil_element;
+                } else {
+                        while (!ui_element_is_nil(existing->hashNext)) {
+                                existing = existing->hashNext;
+                        }
+                        existing->hashNext = element;
+                        element->hashPrev = existing;
+                        element->hashNext = &ui_nil_element;
                 }
-                existing->hashNext = element;
-                element->hashPrev = existing;
-                element->hashNext = 0;
         }
 }
 
-static void ui_cache_prune(u64 frame) {
+static void ui_element_cache_prune(u64 frame) {
         for (u64 i = 0; i < ui_state.bucketCount; i++) {
                 UIElement *e = ui_state.buckets[i];
-                while (e) {
+                while (!ui_element_is_nil(e)) {
                         UIElement *next = e->hashNext;
                         if (e->lastFrameTouched < frame) {
-                                if (e->hashPrev == 0) {
+                                if (ui_element_is_nil(e->hashPrev)) {
                                         ui_state.buckets[i] = e->hashNext;
                                 } else {
                                         e->hashPrev->hashNext = e->hashNext;
                                 }
-                                if (e->hashNext) {
+                                if (!ui_element_is_nil(e->hashNext)) {
                                         e->hashNext->hashPrev = e->hashPrev;
                                 }
 
-                                e->hashPrev = 0;
+                                e->hashPrev = &ui_nil_element;
                                 e->hashNext = ui_state.eFree;
                                 ui_state.eFree = e;
                         }
@@ -399,35 +384,40 @@ static b32 ui_key_match(u64 a, u64 b) {
         return res;
 }
 
+#define ui_auto_pop_stack(name, _name)                                         \
+        if (ui_state.name##Stack.autoPop) {                                    \
+                ui_pop_##_name();                                              \
+                ui_state.name##Stack.autoPop = 0;                              \
+        }
 static UIElement *ui_build_element_from_key(UI_ElementFlags flags, u64 key) {
         UIElement *res = ui_cache_lookup(key);
-
-        if (res == 0) {
-                if (ui_state.eFree) {
+        if (ui_element_is_nil(res)) {
+                if (ui_element_is_nil(ui_state.eFree)) {
+                        res = arena_alloc(ui_state.arena, sizeof(UIElement));
+                } else {
                         res = ui_state.eFree;
                         ui_state.eFree = res->hashNext;
-                } else {
-                        res = arena_alloc(ui_state.arena, sizeof(UIElement));
                 }
                 res->key = key;
-                ui_cache_add(res);
+                ui_element_cache_add(res);
         }
 
         UIElement *parent = ui_top_parent();
 
         res->parent = parent;
-        res->next = 0;
-        res->prev = parent->lastChild;
-        res->firstChild = 0;
-        res->lastChild = 0;
 
-        if (!parent->firstChild) {
+        res->next = &ui_nil_element;
+        res->prev = parent->lastChild;
+        if (ui_element_is_nil(parent->firstChild)) {
                 parent->firstChild = res;
         }
-        if (parent->lastChild) {
+        if (!ui_element_is_nil(parent->lastChild)) {
                 parent->lastChild->next = res;
         }
         parent->lastChild = res;
+
+        res->firstChild = &ui_nil_element;
+        res->lastChild = &ui_nil_element;
 
         res->flags = flags;
         res->layoutDirection = parent->layoutDirection; // NOTE: hr: this needs
@@ -448,47 +438,35 @@ static UIElement *ui_build_element_from_key(UI_ElementFlags flags, u64 key) {
         res->texture = 0;
 
         // hr: auto pop stacks
-        if (ui_state.parentStack.autoPop) {
-                ui_pop_parent();
-                ui_state.parentStack.autoPop = 0;
-        }
-        if (ui_state.widthStack.autoPop) {
-                ui_pop_width();
-                ui_state.widthStack.autoPop = 0;
-        }
-        if (ui_state.heightStack.autoPop) {
-                ui_pop_height();
-                ui_state.heightStack.autoPop = 0;
-        }
-        if (ui_state.textSizeStack.autoPop) {
-                ui_pop_text_size();
-                ui_state.textSizeStack.autoPop = 0;
-        }
-        if (ui_state.textColorStack.autoPop) {
-                ui_pop_text_color();
-                ui_state.textColorStack.autoPop = 0;
-        }
-        if (ui_state.backgroundColorStack.autoPop) {
-                ui_pop_background_color();
-                ui_state.backgroundColorStack.autoPop = 0;
-        }
-        if (ui_state.borderColorStack.autoPop) {
-                ui_pop_border_color();
-                ui_state.borderColorStack.autoPop = 0;
-        }
-        if (ui_state.borderSizeStack.autoPop) {
-                ui_pop_border_size();
-                ui_state.borderSizeStack.autoPop = 0;
-        }
-        if (ui_state.cornerRadiusStack.autoPop) {
-                ui_pop_corner_radius();
-                ui_state.cornerRadiusStack.autoPop = 0;
-        }
-        if (ui_state.paddingStack.autoPop) {
-                ui_pop_padding();
-                ui_state.paddingStack.autoPop = 0;
-        }
+        ui_auto_pop_stack(parent, parent);
+        ui_auto_pop_stack(width, width);
+        ui_auto_pop_stack(height, height);
+        ui_auto_pop_stack(textSize, text_size);
+        ui_auto_pop_stack(textColor, text_color);
+        ui_auto_pop_stack(backgroundColor, background_color);
+        ui_auto_pop_stack(borderColor, border_color);
+        ui_auto_pop_stack(borderSize, border_size);
+        ui_auto_pop_stack(cornerRadius, corner_radius);
+        ui_auto_pop_stack(padding, padding);
 
+        return res;
+}
+
+static String8 ui_find_hash_within_string(String8 str) {
+        String8 res = str;
+        u64 hashSignifierPos = string8_find_substr(str, string8_lit("##"));
+        if (hashSignifierPos < str.length) {
+                res = string8_skip(str, hashSignifierPos);
+        }
+        return res;
+}
+
+static String8 ui_find_text_within_string(String8 str) {
+        String8 res = str;
+        u64 hashSignifierPos = string8_find_substr(str, string8_lit("##"));
+        if (hashSignifierPos < str.length) {
+                res = string8_prune(str, hashSignifierPos);
+        }
         return res;
 }
 
@@ -536,9 +514,6 @@ static void ui_autolayout_calc_preorder(UIElement *e, UI_Axis2d axis) {
                         computedSize += (e->padding.x + e->padding.z);
                         computedSize += (2 * e->borderSize);
                 } else {
-                        // TODO: hr: we need an algorithm that can
-                        // compute how many lines of text a paragraph is
-                        // given it's width.
                         computedSize = e->textSize * ui_content_scale().y;
                         computedSize += (e->padding.y + e->padding.w);
                         computedSize += (2 * e->borderSize);
@@ -568,8 +543,8 @@ static void ui_autolayout_calc_postorder(UIElement *e, UI_Axis2d axis) {
 
         switch (size.kind) {
         case UI_SizeKind_SumOfChildren:
-                for (UIElement *child = e->firstChild; child;
-                     child = child->next) {
+                for (UIElement *child = e->firstChild;
+                     !ui_element_is_nil(child); child = child->next) {
                         if (axis == e->layoutDirection) {
                                 computedSize += (axis == UI_Axis2d_X)
                                                     ? child->computedSize.x
@@ -621,7 +596,8 @@ static void ui_autolayout_rec_postorder(UIElement *e) {
                 return;
         }
 
-        for (UIElement *child = e->firstChild; child; child = child->next) {
+        for (UIElement *child = e->firstChild; !ui_element_is_nil(child);
+             child = child->next) {
                 ui_autolayout_rec_postorder(child);
         }
 
@@ -637,21 +613,24 @@ static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
         if (e->layoutDirection == axis) {
                 f32 sum = 0.0f;
                 f32 strictnessTotal = 0.0f;
-                for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
+                     ch = ch->next) {
                         sum += ch->computedSize.v[axis];
                         strictnessTotal += (1.0f - ch->size[axis].strictness);
                 }
                 f32 discrp = sum - cap;
                 if (discrp > 0 && !nequal_f32(strictnessTotal, 0.0f, 0.0001)) {
                         f32 f = discrp / strictnessTotal;
-                        for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                        for (UIElement *ch = e->firstChild;
+                             !ui_element_is_nil(ch); ch = ch->next) {
                                 f32 r = f * (1 - ch->size[axis].strictness);
                                 ch->computedSize.v[axis] -= r;
                         }
                 }
 
         } else {
-                for (UIElement *ch = e->firstChild; ch; ch = ch->next) {
+                for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
+                     ch = ch->next) {
                         if (ch->size[axis].strictness < 1.0f) {
                                 ch->computedSize.v[axis]
                                     = min(ch->computedSize.v[axis], cap);
@@ -677,16 +656,16 @@ static void ui_element_autolayout(void) {
         root->size[UI_Axis2d_Y].value = screenExtent.y;
 
         UIElementList queue = { 0 };
-        ui_element_list_append(scratch, &queue, root);
+        ui_element_list_push(scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
-                UIElement *e = ui_element_list_pop_first(&queue);
+                UIElement *e = ui_element_list_dequeue(&queue);
                 UIElement *child = e->firstChild;
 
                 ui_autolayout_calc_preorder(e, UI_Axis2d_X);
                 ui_autolayout_calc_preorder(e, UI_Axis2d_Y);
 
-                while (child) {
-                        ui_element_list_append(scratch, &queue, child);
+                while (!ui_element_is_nil(child)) {
+                        ui_element_list_push(scratch, &queue, child);
                         child = child->next;
                 }
         }
@@ -705,9 +684,9 @@ static void ui_element_autolayout(void) {
         arena_pop_at(scratch, resetPos);
         queue.first = 0;
         queue.last = 0;
-        ui_element_list_append(scratch, &queue, root);
+        ui_element_list_push(scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
-                UIElement *cur = ui_element_list_pop_first(&queue);
+                UIElement *cur = ui_element_list_dequeue(&queue);
                 cur->lastFrameTouched = frame;
 
                 // hr: solve violations
@@ -716,11 +695,12 @@ static void ui_element_autolayout(void) {
 
                 // hr: calculate relative positions and screen
                 // coordinates
-                for (UIElement *child = cur->firstChild; child;
-                     child = child->next) {
-                        ui_element_list_append(scratch, &queue, child);
+                for (UIElement *child = cur->firstChild;
+                     !ui_element_is_nil(child); child = child->next) {
+                        ui_element_list_push(scratch, &queue, child);
                         UIElement *prev = child->prev;
-                        if (!prev || cur->layoutDirection == UI_Axis2d_None) {
+                        if (ui_element_is_nil(prev)
+                            || cur->layoutDirection == UI_Axis2d_None) {
                                 child->relPosition.x = 0.0f;
                                 child->relPosition.y = 0.0f;
                         } else if (cur->layoutDirection == UI_Axis2d_X) {
@@ -746,13 +726,13 @@ static void ui_element_autolayout(void) {
         }
 
         // hr: clipping
-        ui_element_list_append(scratch, &queue, root);
+        ui_element_list_push(scratch, &queue, root);
         while (!ui_element_list_is_empty(&queue)) {
-                UIElement *cur = ui_element_list_pop_first(&queue);
+                UIElement *cur = ui_element_list_dequeue(&queue);
 
-                for (UIElement *child = cur->firstChild; child;
-                     child = child->next) {
-                        ui_element_list_append(scratch, &queue, child);
+                for (UIElement *child = cur->firstChild;
+                     !ui_element_is_nil(child); child = child->next) {
+                        ui_element_list_push(scratch, &queue, child);
 
                         // NOTE: hr: does this work recursively? What if child
                         // has child that needs to be clipped? Furthurmore we
@@ -823,7 +803,8 @@ static void ui_draw_element_rec(UIElement *e) {
                         e->textColor);
         }
 
-        for (UIElement *child = e->firstChild; child; child = child->next) {
+        for (UIElement *child = e->firstChild; !ui_element_is_nil(child);
+             child = child->next) {
                 ui_draw_element_rec(child);
         }
 }
@@ -836,10 +817,10 @@ static void ui_draw_elements(void) {
         r_dispatch_batch();
 
         u64 frame = r_get_frame_count();
-        ui_cache_prune(frame);
+        ui_element_cache_prune(frame);
 
-        ui_state.root->firstChild = 0;
-        ui_state.root->lastChild = 0;
+        ui_state.root->firstChild = &ui_nil_element;
+        ui_state.root->lastChild = &ui_nil_element;
         // reset everything
         while (ui_state.parentStack.top != &ui_state.parentStackBottom) {
                 ui_pop_parent();

@@ -1,7 +1,9 @@
 #ifndef OS_INC_H
 #define OS_INC_H
 
-#include "bedrock/bedrock_inc.h"
+#include "bedrock/bedrock_arena.h"
+#include "bedrock/bedrock_core.h"
+#include "bedrock/bedrock_string.h"
 
 typedef struct {
         u64 pageFaults;
@@ -51,6 +53,18 @@ static OS_FileCode os_move_file_pos(OSFile file, s64 offset);
 static OS_FileCode os_read_file(OSFile file, void *ptr, u64 size);
 static OS_FileCode os_write_file(OSFile file, void *ptr, u64 size);
 static void os_close_file(OSFile file);
+
+static OSFile os_stdin(void);
+static OSFile os_stdout(void);
+static OSFile os_stderr(void);
+
+typedef struct {
+        void *addrs;
+        u64 count;
+} Stacktrace;
+
+static Stacktrace os_get_stack_trace(Arena *arena);
+static void os_write_stack_trace(OSFile file, Stacktrace st);
 
 #if __MACH__
 #include "os/mach/os_mach.h"

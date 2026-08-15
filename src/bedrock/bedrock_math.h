@@ -9,6 +9,15 @@ static b32 nequal_f32(f32 a, f32 b, f32 epsilon);
 //           their functions and scalar functions
 
 // 2 Vectors
+typedef union Vec2s16 Vec2s16;
+union Vec2s16 {
+        struct {
+                s16 x;
+                s16 y;
+        };
+        s16 v[2];
+};
+
 typedef union Vec2u32 Vec2u32;
 union Vec2u32 {
         struct {
@@ -130,6 +139,11 @@ union Rng2f32 {
 };
 
 // hr: Vector Ops
+#define v2s16(x, y) vec2s16(x, y)
+static Vec2s16 vec2s16(s16 x, s16 y);
+static Vec2s16 add_v2s16(Vec2s16 a, Vec2s16 b);
+static b32 equal_v2s16(Vec2s16 a, Vec2s16 b);
+
 #define v2u32(x, y) vec2u32(x, y)
 static Vec2u32 vec2u32(u32 x, u32 y);
 

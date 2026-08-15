@@ -88,7 +88,7 @@ static RState r_state = { 0 };
 
 static void r_check_vkresult(VkResult res, char *msg) {
         if (res != VK_SUCCESS) {
-                printf("ASSERT: %s %s\n", msg, string_VkResult(res));
+                log_messagef("ASSERT: %s %s\n", msg, string_VkResult(res));
                 os_abort(1);
         }
 }

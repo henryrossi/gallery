@@ -157,7 +157,7 @@ static Vec4f32 ui_hsv_to_rgb(Vec4f32 hsv) {
         Vec4f32 rgb = { 0 };
 
         if (hsv.x < 0.0f || hsv.x >= 2.0f * M_PI) {
-                fprintf(stderr, "Hue outside of range");
+                log_message(string8_lit("Hue outside of range\n"));
                 os_abort(1);
         }
         if (hsv.x < thirdPi) {

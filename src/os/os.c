@@ -1,4 +1,5 @@
 #include "os/os.h"
+#include "bedrock/bedrock_logs.h"
 
 #include <stdlib.h>
 
@@ -13,5 +14,7 @@
 #endif
 
 static void os_abort(s32 exitCode) {
+        OSFile stderror = os_stderr();
+        log_dump(stderror, 1);
         exit(exitCode);
 }
