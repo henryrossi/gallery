@@ -24,10 +24,8 @@ static String8 string8_copy_f(Freelist *f, String8 str);
 static void string8_destroy_f(Freelist *f, String8 str);
 static String8 string8_empty(void);
 
-#ifdef STRING8F
 static String8 string8fv(Arena *arena, char *fmt, va_list args);
 static String8 string8f(Arena *arena, char *fmt, ...);
-#endif
 
 static u8 string8_at(String8 str, u64 index);
 static b32 string8_set(String8 str, u64 index, u8 c);

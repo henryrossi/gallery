@@ -87,24 +87,6 @@ readonly static UIElement ui_nil_element = {
         &ui_nil_element, &ui_nil_element, &ui_nil_element,
 };
 
-// NOTE: hr: it would be nice to be rid of this or clean it up
-typedef struct UIElementNode UIElementNode;
-struct UIElementNode {
-        UIElement *element;
-        UIElementNode *next;
-};
-
-typedef struct UIElementList UIElementList;
-struct UIElementList {
-        UIElementNode *first;
-        UIElementNode *last;
-};
-
-static void ui_element_list_append(Arena *arena, UIElementList *list,
-                                   UIElement *element);
-static UIElement *ui_element_list_pop_first(UIElementList *list);
-static UIElement *ui_element_list_pop_last(UIElementList *list);
-
 typedef enum {
         UI_SignalFlag_LeftPressed = (1 << 0),
         UI_SignalFlag_MiddlePressed = (1 << 1),

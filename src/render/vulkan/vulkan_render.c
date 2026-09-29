@@ -19,12 +19,13 @@ VkDebugUtilsMessengerEXT r_debug_messenger;
 
 // Proxy functions for debug extension
 static VkResult r_create_debug_utils_messenger_ext(
-    VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-    const VkAllocationCallbacks *pAllocator,
-    VkDebugUtilsMessengerEXT *pDebugMessenger) {
+        VkInstance instance,
+        const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+        const VkAllocationCallbacks *pAllocator,
+        VkDebugUtilsMessengerEXT *pDebugMessenger) {
         PFN_vkCreateDebugUtilsMessengerEXT func
-            = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-                instance, "vkCreateDebugUtilsMessengerEXT");
+                = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+                        instance, "vkCreateDebugUtilsMessengerEXT");
         if (func != NULL) {
                 return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
         } else {
@@ -38,8 +39,8 @@ r_destroy_debug_utils_messenger_ext(VkInstance instance,
                                     VkDebugUtilsMessengerEXT debugMessenger,
                                     const VkAllocationCallbacks *pAllocator) {
         PFN_vkDestroyDebugUtilsMessengerEXT func
-            = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-                instance, "vkDestroyDebugUtilsMessengerEXT");
+                = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+                        instance, "vkDestroyDebugUtilsMessengerEXT");
         if (func != NULL) {
                 func(instance, debugMessenger, pAllocator);
         }
@@ -55,17 +56,17 @@ r_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 }
 
 static void r_populate_debug_messenger_createinfo(
-    VkDebugUtilsMessengerCreateInfoEXT *createinfo) {
+        VkDebugUtilsMessengerCreateInfoEXT *createinfo) {
         createinfo->sType
-            = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+                = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         createinfo->messageSeverity
-            // = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
-            = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-              | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+                // = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+                = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                  | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         createinfo->messageType
-            = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-              | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-              | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+                  | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                  | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         createinfo->pfnUserCallback = r_debug_callback;
         createinfo->pUserData = NULL;
 }
@@ -75,7 +76,7 @@ static int r_setup_debug_messenger(VkInstance instance) {
         VkDebugUtilsMessengerCreateInfoEXT createinfo = { 0 };
         r_populate_debug_messenger_createinfo(&createinfo);
         VkResult res = r_create_debug_utils_messenger_ext(
-            instance, &createinfo, NULL, &r_debug_messenger);
+                instance, &createinfo, NULL, &r_debug_messenger);
         if (res != VK_SUCCESS) {
                 fprintf(stderr, "Failed to create debug messenger. %s\n",
                         string_VkResult(res));
@@ -88,7 +89,7 @@ static RState r_state = { 0 };
 
 static void r_check_vkresult(VkResult res, char *msg) {
         if (res != VK_SUCCESS) {
-                printf("ASSERT: %s %s\n", msg, string_VkResult(res));
+                log_messagef("ASSERT: %s %s\n", msg, string_VkResult(res));
                 os_abort(1);
         }
 }
@@ -119,7 +120,7 @@ static void r_framebuffer_resize_callback(GLFWwindow *window, int width,
 static const char **r_get_required_extensions(Arena *a, u32 *extCount) {
         u32 glfwExtCount = 0;
         const char **glfwExts
-            = glfwGetRequiredInstanceExtensions(&glfwExtCount);
+                = glfwGetRequiredInstanceExtensions(&glfwExtCount);
 
         u32 platExtCount = 0;
 #ifdef __MACH__
@@ -127,7 +128,7 @@ static const char **r_get_required_extensions(Arena *a, u32 *extCount) {
 #endif
 
         u32 count
-            = r_validation_layers_enabled + glfwExtCount + platExtCount + 1;
+                = r_validation_layers_enabled + glfwExtCount + platExtCount + 1;
         const char **extNames = arena_alloc(a, sizeof(char *) * count);
 
         for (int i = 0; i < glfwExtCount; i++) {
@@ -140,11 +141,11 @@ static const char **r_get_required_extensions(Arena *a, u32 *extCount) {
 
 #ifdef __MACH__
         extNames[glfwExtCount + r_validation_layers_enabled]
-            = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+                = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
 #endif
 
         extNames[count - 1]
-            = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+                = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
 
         *extCount = count;
         return extNames;
@@ -156,7 +157,7 @@ static b32 r_check_validation_layer_support(Arena *a) {
         r_assert(layerCount != 0, "Failed to find any vulkan layers");
 
         VkLayerProperties *layersAvailable
-            = arena_alloc(a, sizeof(VkLayerProperties *) * layerCount);
+                = arena_alloc(a, sizeof(VkLayerProperties *) * layerCount);
         vkEnumerateInstanceLayerProperties(&layerCount, layersAvailable);
 
         for (u32 i = 0; i < r_validation_layer_count; i++) {
@@ -190,8 +191,8 @@ static b32 r_device_supports_extensions(Arena *a, VkPhysicalDevice device) {
         u32 availableCount = 0;
         vkEnumerateDeviceExtensionProperties(device, 0, &availableCount, 0);
 
-        VkExtensionProperties *available
-            = arena_alloc(a, sizeof(VkExtensionProperties) * availableCount);
+        VkExtensionProperties *available = arena_alloc(
+                a, sizeof(VkExtensionProperties) * availableCount);
         vkEnumerateDeviceExtensionProperties(device, 0, &availableCount,
                                              available);
 
@@ -240,8 +241,8 @@ static void
 r_choose_swapchain_image_count(VkSurfaceCapabilitiesKHR capabilities) {
         r_state.imageCount = clamp_bot(capabilities.minImageCount, 2);
         if (capabilities.maxImageCount != 0) {
-                r_state.imageCount
-                    = clamp_top(r_state.imageCount, capabilities.maxImageCount);
+                r_state.imageCount = clamp_top(r_state.imageCount,
+                                               capabilities.maxImageCount);
         }
 }
 
@@ -252,11 +253,12 @@ static void r_choose_swapchain_extent(VkSurfaceCapabilitiesKHR cap) {
                 int height = 0;
                 glfwGetFramebufferSize(r_state.window, &width, &height);
 
-                r_state.resolution.width = clamp(
-                    cap.minImageExtent.width, width, cap.maxImageExtent.width);
+                r_state.resolution.width
+                        = clamp(cap.minImageExtent.width, width,
+                                cap.maxImageExtent.width);
                 r_state.resolution.height
-                    = clamp(cap.minImageExtent.height, height,
-                            cap.maxImageExtent.height);
+                        = clamp(cap.minImageExtent.height, height,
+                                cap.maxImageExtent.height);
         }
 }
 
@@ -277,10 +279,10 @@ static void r_query_swapchain_support(VkPhysicalDevice device, Arena *a,
 
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, r_state.surface,
                                                   presentModesCount, 0);
-        *presentModes
-            = arena_alloc(a, sizeof(VkPresentModeKHR) * (*presentModesCount));
+        *presentModes = arena_alloc(a, sizeof(VkPresentModeKHR)
+                                               * (*presentModesCount));
         vkGetPhysicalDeviceSurfacePresentModesKHR(
-            device, r_state.surface, presentModesCount, *presentModes);
+                device, r_state.surface, presentModesCount, *presentModes);
 }
 
 static void r_pick_physical_device(Arena *a) {
@@ -289,7 +291,7 @@ static void r_pick_physical_device(Arena *a) {
         r_assert(deviceCount != 0, "No physical devices found");
 
         VkPhysicalDevice *devices
-            = arena_alloc(a, sizeof(VkPhysicalDevice) * deviceCount);
+                = arena_alloc(a, sizeof(VkPhysicalDevice) * deviceCount);
         vkEnumeratePhysicalDevices(r_state.instance, &deviceCount, devices);
 
         for (u32 i = 0; i < deviceCount; i++) {
@@ -306,7 +308,7 @@ static void r_pick_physical_device(Arena *a) {
                 vkGetPhysicalDeviceProperties2(device, &props);
 
                 b32 supportsExtensions
-                    = r_device_supports_extensions(a, device);
+                        = r_device_supports_extensions(a, device);
 
                 Arena *scratch = r_get_arena();
                 u64 resetPos = arena_pos(scratch);
@@ -325,13 +327,13 @@ static void r_pick_physical_device(Arena *a) {
                 vkGetPhysicalDeviceQueueFamilyProperties(device,
                                                          &queueFamilyCount, 0);
                 VkQueueFamilyProperties *queueFamilyProperties = arena_alloc(
-                    a, sizeof(VkQueueFamilyProperties) * queueFamilyCount);
+                        a, sizeof(VkQueueFamilyProperties) * queueFamilyCount);
                 vkGetPhysicalDeviceQueueFamilyProperties(
-                    device, &queueFamilyCount, queueFamilyProperties);
+                        device, &queueFamilyCount, queueFamilyProperties);
                 for (u32 j = 0; j < queueFamilyCount; j++) {
                         b32 supportsPresent = 0;
                         vkGetPhysicalDeviceSurfaceSupportKHR(
-                            device, j, r_state.surface, &supportsPresent);
+                                device, j, r_state.surface, &supportsPresent);
 
                         b32 graphicsQueue = queueFamilyProperties[j].queueFlags
                                             & VK_QUEUE_GRAPHICS_BIT;
@@ -350,7 +352,7 @@ static void r_pick_physical_device(Arena *a) {
                                 r_choose_swapchain_image_count(capabilities);
                                 r_choose_swapchain_extent(capabilities);
                                 r_state.preTransform
-                                    = capabilities.currentTransform;
+                                        = capabilities.currentTransform;
 
                                 arena_pop_at(scratch, resetPos);
                                 return;
@@ -368,7 +370,7 @@ s64 r_find_memory_type(u32 typeFilter, VkMemoryPropertyFlags props) {
         for (u32 i = 0; i < memProps.memoryTypeCount; i++) {
                 if (typeFilter & (1 << i)
                     && (memProps.memoryTypes[i].propertyFlags & props)
-                           == props) {
+                               == props) {
                         return i;
                 }
         }
@@ -387,7 +389,7 @@ static void r_create_buffer(VkBuffer *buffer, VkDeviceMemory *memory,
         };
 
         VkResult res
-            = vkCreateBuffer(r_state.device, &bufferCreateInfo, 0, buffer);
+                = vkCreateBuffer(r_state.device, &bufferCreateInfo, 0, buffer);
         r_check_vkresult(res, "Failed to create buffer");
 
         VkMemoryRequirements memRequirements;
@@ -484,7 +486,7 @@ static void r_create_image(RTexture *texture, VkFormat format,
                 .usage = usage,
         };
         VkResult result = vkGetPhysicalDeviceImageFormatProperties2(
-            r_state.physicalDevice, &formatInfo, &imageFormatProperties);
+                r_state.physicalDevice, &formatInfo, &imageFormatProperties);
         if (result != VK_SUCCESS) {
                 // The format is not supported with the given settings.
                 // Handle this scenario.
@@ -573,10 +575,10 @@ static void r_create_texture(u8 *pixels, u32 width, u32 height, u32 channels,
         r_create_buffer(&stagingBuffer, &stagingBufferMemory, imageSize,
                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                            | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                                | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         r_create_image(texture, format, VK_IMAGE_TILING_LINEAR,
                        VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                           | VK_IMAGE_USAGE_SAMPLED_BIT,
+                               | VK_IMAGE_USAGE_SAMPLED_BIT,
                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
         r_copy_to_image(pixels, imageSize, stagingBuffer, stagingBufferMemory,
@@ -616,7 +618,7 @@ static void r_create_dynamic_texture(Arena *a, u32 width, u32 height,
                                 &dTex->stagingMemory[i], width * height * 4,
                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                                    | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                                        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
                 // NOTE: hr: this function call allocates unnecessary
                 // staging buffers
                 r_create_texture((u8 *)dTex->data, width, height, 4,
@@ -652,7 +654,7 @@ static VkShaderModule r_create_shader_module(String8 filename) {
         };
 
         VkResult res
-            = vkCreateShaderModule(r_state.device, &createInfo, 0, &shader);
+                = vkCreateShaderModule(r_state.device, &createInfo, 0, &shader);
         r_check_vkresult(res, "Failed to create shader module");
 
         return shader;
@@ -767,7 +769,7 @@ r_create_graphics_pipeline(RGraphicsPipelineCreateInfo *createInfo) {
 
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkResult res = vkCreateGraphicsPipelines(
-            device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &pipeline);
+                device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &pipeline);
         r_check_vkresult(res, "Failed to create graphics pipelines");
 
         vkDestroyShaderModule(device, vert, NULL);
@@ -799,20 +801,20 @@ static void r_create_swapchain(void) {
                 .clipped = VK_TRUE,
         };
         VkResult res = vkCreateSwapchainKHR(
-            r_state.device, &swapchainCreateInfo, 0, &r_state.swapchain);
+                r_state.device, &swapchainCreateInfo, 0, &r_state.swapchain);
         r_check_vkresult(res, "Failed to create swapchain");
 
         vkGetSwapchainImagesKHR(r_state.device, r_state.swapchain,
                                 &r_state.imageCount, 0);
         r_state.swapchainImages
-            = arena_alloc(arena, sizeof(VkImage) * r_state.imageCount);
+                = arena_alloc(arena, sizeof(VkImage) * r_state.imageCount);
         vkGetSwapchainImagesKHR(r_state.device, r_state.swapchain,
                                 &r_state.imageCount, r_state.swapchainImages);
 
         r_state.maxFramesInFlight = r_state.imageCount;
 
         r_state.swapchainImageViews
-            = arena_alloc(arena, sizeof(VkImageView) * r_state.imageCount);
+                = arena_alloc(arena, sizeof(VkImageView) * r_state.imageCount);
         for (u32 i = 0; i < r_state.imageCount; i++) {
                 VkImageViewCreateInfo imageViewCreateInfo = {
                         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -838,8 +840,8 @@ static void r_create_swapchain(void) {
 
 static void r_create_framebuffers(void) {
         Arena *arena = r_state.swapchainArena;
-        r_state.swapchainFramebuffers
-            = arena_alloc(arena, sizeof(VkFramebuffer) * r_state.imageCount);
+        r_state.swapchainFramebuffers = arena_alloc(
+                arena, sizeof(VkFramebuffer) * r_state.imageCount);
 
         for (uint32_t i = 0; i < r_state.imageCount; i++) {
                 VkImageView attachments[] = {
@@ -857,8 +859,8 @@ static void r_create_framebuffers(void) {
                 };
 
                 VkResult res = vkCreateFramebuffer(
-                    r_state.device, &framebufferCreateInfo, 0,
-                    &r_state.swapchainFramebuffers[i]);
+                        r_state.device, &framebufferCreateInfo, 0,
+                        &r_state.swapchainFramebuffers[i]);
                 r_check_vkresult(res, "Failed to create framebuffer");
         }
 }
@@ -1064,7 +1066,7 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                 .commandBufferCount = r_state.maxFramesInFlight,
         };
         r_state.renderCmdBuffers = arena_alloc(
-            arena, sizeof(VkCommandBuffer) * r_state.maxFramesInFlight);
+                arena, sizeof(VkCommandBuffer) * r_state.maxFramesInFlight);
         res = vkAllocateCommandBuffers(r_state.device,
                                        &commandBufferAllocationInfo,
                                        r_state.renderCmdBuffers);
@@ -1084,12 +1086,12 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         // r_state.maxTextures = r_state.physicalDeviceProps.properties.limits
         //                           .maxPerStageDescriptorSampledImages;
 
-        r_state.maxTextures
-            = min(r_state.deviceIndexingProps
-                      .maxPerStageDescriptorUpdateAfterBindSampledImages,
-                  r_state.deviceIndexingProps
-                          .maxDescriptorSetUpdateAfterBindSampledImages
-                      / r_state.maxFramesInFlight);
+        r_state.maxTextures = min(
+                r_state.deviceIndexingProps
+                        .maxPerStageDescriptorUpdateAfterBindSampledImages,
+                r_state.deviceIndexingProps
+                                .maxDescriptorSetUpdateAfterBindSampledImages
+                        / r_state.maxFramesInFlight);
         if (r_state.maxTextures > 1024) {
                 r_state.maxTextures = 1024;
         }
@@ -1109,16 +1111,15 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         };
         VkDescriptorBindingFlags descriptorBindingFlags[2] = {
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT
-                    | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT,
+                        | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT,
                 0,
         };
-        VkDescriptorSetLayoutBindingFlagsCreateInfo
-            descriptorSetLayoutBindingFlags = {
-                    .sType
-                    = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                    .bindingCount = 2,
-                    .pBindingFlags = descriptorBindingFlags,
-            };
+        VkDescriptorSetLayoutBindingFlagsCreateInfo descriptorSetLayoutBindingFlags = {
+                .sType
+                = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = 2,
+                .pBindingFlags = descriptorBindingFlags,
+        };
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .pNext = &descriptorSetLayoutBindingFlags,
@@ -1279,11 +1280,11 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         };
 
         r_state.imageAvailableSemaphore = arena_alloc(
-            r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
+                r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
         r_state.renderFinishedSemaphore = arena_alloc(
-            r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
+                r_state.arena, sizeof(VkSemaphore) * r_state.maxFramesInFlight);
         r_state.inflightFence = arena_alloc(
-            r_state.arena, sizeof(VkFence) * r_state.maxFramesInFlight);
+                r_state.arena, sizeof(VkFence) * r_state.maxFramesInFlight);
 
         for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
                 res = vkCreateSemaphore(r_state.device, &semaphoreInfo, 0,
@@ -1301,22 +1302,22 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
 
         r_state.maxRects = 512;
         VkDeviceSize instanceSize
-            = sizeof(RRectInstanceData) * r_state.maxRects;
+                = sizeof(RRectInstanceData) * r_state.maxRects;
         u32 frames = r_state.maxFramesInFlight;
         r_state.instancesData
-            = arena_alloc(arena, sizeof(RRectInstanceData *) * frames);
+                = arena_alloc(arena, sizeof(RRectInstanceData *) * frames);
         r_state.stagingBuffers = arena_alloc(arena, sizeof(VkBuffer) * frames);
         r_state.stagingsMemory
-            = arena_alloc(arena, sizeof(VkDeviceMemory) * frames);
+                = arena_alloc(arena, sizeof(VkDeviceMemory) * frames);
         r_state.instanceBuffers = arena_alloc(arena, sizeof(VkBuffer) * frames);
         r_state.instancesMemory
-            = arena_alloc(arena, sizeof(VkDeviceMemory) * frames);
+                = arena_alloc(arena, sizeof(VkDeviceMemory) * frames);
         for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
                 r_create_buffer(r_state.stagingBuffers + i,
                                 r_state.stagingsMemory + i, instanceSize,
                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                                    | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                                        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
                 vkMapMemory(r_state.device, *(r_state.stagingsMemory + i), 0,
                             instanceSize, 0,
@@ -1325,7 +1326,7 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                 r_create_buffer(r_state.instanceBuffers + i,
                                 r_state.instancesMemory + i, instanceSize,
                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT
-                                    | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                        | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         }
 
@@ -1355,7 +1356,7 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         r_check_vkresult(res, "Failed to create descriptor pool");
 
         r_state.descriptorSets = arena_alloc(
-            arena, sizeof(VkDescriptorSet) * r_state.maxFramesInFlight);
+                arena, sizeof(VkDescriptorSet) * r_state.maxFramesInFlight);
         for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
                 VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
                         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1378,7 +1379,7 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
                 .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                 .anisotropyEnable = VK_TRUE,
                 .maxAnisotropy = r_state.physicalDeviceProps.properties.limits
-                                     .maxSamplerAnisotropy,
+                                         .maxSamplerAnisotropy,
                 .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
                 .unnormalizedCoordinates = VK_FALSE,
                 .compareEnable = VK_FALSE,
@@ -1410,7 +1411,7 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
         }
 
         r_state.indexingInfo = arena_alloc(
-            arena, sizeof(RIndexingInfo) * r_state.maxFramesInFlight);
+                arena, sizeof(RIndexingInfo) * r_state.maxFramesInFlight);
         for (u32 i = 0; i < r_state.maxFramesInFlight; i++) {
                 RIndexingInfo ii = r_state.indexingInfo[i];
                 u32 maxTexs = r_state.maxTextures;
@@ -1433,9 +1434,9 @@ static void r_init_backend(const char *name, u32 width, u32 height) {
 
         r_state.writeDescriptorSetsCount = 0;
         r_state.writeDescriptorSets = arena_alloc(
-            arena, sizeof(VkWriteDescriptorSet) * r_state.maxTextures);
+                arena, sizeof(VkWriteDescriptorSet) * r_state.maxTextures);
         r_state.writeImageInfo = arena_alloc(
-            arena, sizeof(VkDescriptorImageInfo) * r_state.maxTextures);
+                arena, sizeof(VkDescriptorImageInfo) * r_state.maxTextures);
 
         u64 blankSize = 32 * 32 * 4;
         u8 *blankPixels = arena_alloc(arena, blankSize);
@@ -1467,9 +1468,9 @@ static b32 r_begin_frame(void) {
                         VK_TRUE, UINT64_MAX);
 
         VkResult res = vkAcquireNextImageKHR(
-            r_state.device, r_state.swapchain, UINT64_MAX,
-            r_state.imageAvailableSemaphore[currentFrame], VK_NULL_HANDLE,
-            &r_state.imageIdx);
+                r_state.device, r_state.swapchain, UINT64_MAX,
+                r_state.imageAvailableSemaphore[currentFrame], VK_NULL_HANDLE,
+                &r_state.imageIdx);
         if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR
             || r_state.framebufferResized) {
                 r_state.framebufferResized = 0;

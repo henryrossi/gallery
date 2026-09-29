@@ -6,4 +6,4 @@ BreakBeforeBinaryOperators: All
 Cpp11BracedListStyle: false
 IndentWidth: 8
 TabWidth: 8
-
+ContinuationIndentWidth: 8

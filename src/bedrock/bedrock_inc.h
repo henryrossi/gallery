@@ -4,6 +4,7 @@
 #include "bedrock_arena.h"
 #include "bedrock_core.h"
 #include "bedrock_freelist.h"
+#include "bedrock_logs.h"
 #include "bedrock_math.h"
 #include "bedrock_string.h"
 

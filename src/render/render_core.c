@@ -3,7 +3,7 @@
 
 static void r_assert(b32 flag, char *msg) {
         if (!flag) {
-                printf("ASSERT: %s\n", msg);
+                log_messagef("ASSERT: %s\n", msg);
                 os_abort(1);
         }
 }

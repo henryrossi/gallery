@@ -1,4 +1,5 @@
 #include "bedrock/bedrock_arena.h"
+#include "bedrock_logs.h"
 #include "os/os.h"
 
 static u64 arena_default_block_size = mb(8);
@@ -9,10 +10,11 @@ static Arena *make_arena_(ArenaParams *p) {
         blockSize = align_pow2(blockSize, OS_PAGESIZE);
         Arena *res = os_commit(blockSize);
         if (!res) {
-                printf("ERROR: Arena at %s:%d\n", p->createdFile,
-                       p->createdLine);
-                return 0;
-                // os_abort(1); // hr: remove for test, come back to this
+#ifdef STRING8F
+                log_messagef("ERROR: Failed to create arena at %s:%d\n",
+                             p->createdFile, p->createdLine);
+#endif
+                os_abort(1);
         }
 
         res->prev = 0;
@@ -37,7 +39,6 @@ static void *arena_alloc(Arena *a, u64 size) {
                 };
                 Arena *new = make_arena_(&params);
                 if (!new) {
-                        fprintf(stderr, "Error comes from arena allocation\n");
                         return 0;
                 }
 
@@ -65,11 +66,10 @@ static u64 arena_pos(Arena *a) {
 static b32 arena_pop_at(Arena *a, u64 pos) {
         Arena *top = a->top;
         if (pos > top->base + top->pos) {
-                fprintf(stderr,
-                        "ERROR: Arena at %s:%d - popped beyond allocation "
-                        "(%llu -> %llu)\n",
-                        a->createdFile, a->createdLine, top->base + top->size,
-                        pos);
+                log_messagef("ERROR: Arena at %s:%d - popped beyond allocation "
+                             "(%llu -> %llu)\n",
+                             a->createdFile, a->createdLine,
+                             top->base + top->size, pos);
                 return 0;
         }
 
@@ -108,9 +108,12 @@ static void arena_pop(Arena *a, u64 amt) {
         if (pos >= amt) {
                 arena_pop_at(a, pos - amt);
         } else {
-                printf("ERROR: Arena at %s:%d - popped an amount which is "
-                       "larger than the arena\n",
-                       a->createdFile, a->createdLine);
+#ifdef STRING8F
+                log_messagef(
+                    "ERROR: Arena at %s:%d - popped an amount which is "
+                    "larger than the arena\n",
+                    a->createdFile, a->createdLine);
+#endif
                 os_abort(1);
         }
 }

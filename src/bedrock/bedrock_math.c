@@ -8,6 +8,16 @@ static b32 nequal_f32(f32 a, f32 b, f32 epsilon) {
         return d < epsilon * (fabs(a) + fabs(b));
 }
 
+static Vec2s16 vec2s16(s16 x, s16 y) {
+        Vec2s16 res = { .x = x, .y = y };
+        return res;
+}
+
+static Vec2s16 add_v2s16(Vec2s16 a, Vec2s16 b) {
+        Vec2s16 res = { .x = a.x + b.x, .y = a.y + b.y };
+        return res;
+}
+
 static Vec2u32 vec2u32(u32 x, u32 y) {
         Vec2u32 res = { .x = x, .y = y };
         return res;

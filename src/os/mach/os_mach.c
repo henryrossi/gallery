@@ -1,7 +1,7 @@
-#include "bedrock/bedrock_string.h"
 #include "os/os.h"
 
 #include <errno.h>
+#include <execinfo.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -10,8 +10,9 @@
 static void *os_commit(u64 size) {
         void *res = mmap(NULL, size, PROT_READ | PROT_WRITE,
                          MAP_PRIVATE | MAP_ANON, -1, 0);
-        if (res == MAP_FAILED)
+        if (res == MAP_FAILED) {
                 perror("ERROR: Memory allocation failed");
+        }
         return res;
 }
 
@@ -132,4 +133,22 @@ static OS_FileCode os_write_file(OSFile file, void *ptr, u64 size) {
 
 static void os_close_file(OSFile file) {
         close(file.handle);
+}
+
+static OSFile os_stderr(void) {
+        OSFile res = { STDERR_FILENO };
+        return res;
+}
+
+static Stacktrace os_get_stack_trace(Arena *arena) {
+        Stacktrace res = { 0 };
+        u64 max = 48;
+        res.addrs = arena_alloc(arena, sizeof(void *) * max);
+        res.count = backtrace(res.addrs, max);
+        arena_pop(arena, sizeof(void *) * (max - res.count));
+        return res;
+}
+
+static void os_write_stack_trace(OSFile file, Stacktrace st) {
+        backtrace_symbols_fd(st.addrs, st.count, file.handle);
 }
