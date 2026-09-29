@@ -58,19 +58,19 @@ typedef uint32_t b32;
 // hr: doubly-linked-lists
 #define DLLInsert_NPZ(nil, first, last, prior, node, next, prev)               \
         (CheckNil(nil, first)                                                  \
-             ? ((first) = (last) = (node), SetNil(nil, (node)->next),          \
-                SetNil(nil, (node)->prev))                                     \
+                 ? ((first) = (last) = (node), SetNil(nil, (node)->next),      \
+                    SetNil(nil, (node)->prev))                                 \
          : CheckNil(nil, prior)                                                \
-             ? ((node)->next = (first), (first)->prev = (node),                \
-                (first) = (node), SetNil(nil, (node)->prev))                   \
+                 ? ((node)->next = (first), (first)->prev = (node),            \
+                    (first) = (node), SetNil(nil, (node)->prev))               \
          : ((prior) == (last))                                                 \
-             ? ((last)->next = (node), (node)->prev = (last), (last) = (node), \
-                SetNil(nil, (node)->next))                                     \
-             : (((!CheckNil(nil, prior) && CheckNil(nil, (prior)->next))       \
-                     ? (0)                                                     \
-                     : ((prior)->next->prev = (node))),                        \
-                ((node)->next = (prior)->next), ((prior)->next = (node)),      \
-                ((node)->prev = (prior))))
+                 ? ((last)->next = (node), (node)->prev = (last),              \
+                    (last) = (node), SetNil(nil, (node)->next))                \
+                 : (((!CheckNil(nil, prior) && CheckNil(nil, (prior)->next))   \
+                             ? (0)                                             \
+                             : ((prior)->next->prev = (node))),                \
+                    ((node)->next = (prior)->next), ((prior)->next = (node)),  \
+                    ((node)->prev = (prior))))
 #define DLLPushBack_NPZ(nil, first, last, node, next, prev)                    \
         DLLInsert_NPZ(nil, first, last, last, node, next, prev)
 #define DLLPushFront_NPZ(nil, first, last, node, next, prev)                   \
@@ -104,13 +104,13 @@ typedef uint32_t b32;
 // hr: singly-linked, doubly-headed lists (queues)
 #define SLLQueuePush_NZ(nil, first, last, node, next)                          \
         (CheckNil(nil, first)                                                  \
-             ? ((first) = (last) = (node), SetNil(nil, (node)->next))          \
-             : ((last)->next = (node), (last) = (node),                        \
-                SetNil(nil, (node)->next)))
+                 ? ((first) = (last) = (node), SetNil(nil, (node)->next))      \
+                 : ((last)->next = (node), (last) = (node),                    \
+                    SetNil(nil, (node)->next)))
 #define SLLQueuePushFront_NZ(nil, first, last, node, next)                     \
         (CheckNil(nil, first)                                                  \
-             ? ((first) = (last) = (node), SetNil(nil, (node)->next))          \
-             : ((node)->next = (first), (first) = (node)))
+                 ? ((first) = (last) = (node), SetNil(nil, (node)->next))      \
+                 : ((node)->next = (first), (first) = (node)))
 #define SLLQueuePop_NZ(nil, first, last, next)                                 \
         ((first) == (last) ? (SetNil(nil, first), SetNil(nil, last))           \
                            : ((first) = (first)->next))

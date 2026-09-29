@@ -15,6 +15,7 @@ static void log_message(String8 str) {
         msg->str = str;
         msg->callstack = os_get_stack_trace(log_arena);
         DLLPushBack(log_messages.first, log_messages.last, msg);
+        log_messages.count++;
 }
 
 static void log_messagef(char *fmt, ...) {
@@ -30,7 +31,7 @@ static void log_dump(OSFile file, u64 limit) {
         if (limit && limit < log_messages.count) {
                 msg = log_messages.last;
         }
-        for (u64 i = 0; i < limit; i++) {
+        for (u64 i = 0; i < limit && msg->prev; i++) {
                 msg = msg->prev;
         }
         for (; msg; msg = msg->next) {

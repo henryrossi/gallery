@@ -1,165 +1,154 @@
 #include "bedrock/bedrock_inc.h"
+#include "perf.h"
 
 #include <dlfcn.h>
-#include <stddef.h>
 #include <sys/time.h>
 
-// Cross-platform class constants.
+// hr: class constants.
 #define KPC_CLASS_FIXED (0)
 #define KPC_CLASS_CONFIGURABLE (1)
 #define KPC_CLASS_POWER (2)
 #define KPC_CLASS_RAWPMU (3)
 
-// Cross-platform class mask constants.
-#define KPC_CLASS_FIXED_MASK (1u << KPC_CLASS_FIXED)               // 1
-#define KPC_CLASS_CONFIGURABLE_MASK (1u << KPC_CLASS_CONFIGURABLE) // 2
-#define KPC_CLASS_POWER_MASK (1u << KPC_CLASS_POWER)               // 4
-#define KPC_CLASS_RAWPMU_MASK (1u << KPC_CLASS_RAWPMU)             // 8
+// hr: class mask constants.
+#define KPC_CLASS_FIXED_MASK (1u << KPC_CLASS_FIXED)
+#define KPC_CLASS_CONFIGURABLE_MASK (1u << KPC_CLASS_CONFIGURABLE)
+#define KPC_CLASS_POWER_MASK (1u << KPC_CLASS_POWER)
+#define KPC_CLASS_RAWPMU_MASK (1u << KPC_CLASS_RAWPMU)
 
-// PMU version constants.
-#define KPC_PMU_ERROR (0)     // Error
-#define KPC_PMU_INTEL_V3 (1)  // Intel
-#define KPC_PMU_ARM_APPLE (2) // ARM64
-#define KPC_PMU_INTEL_V2 (3)  // Old Intel
-#define KPC_PMU_ARM_V2 (4)    // Old ARM
-//
+// hr: KPEP CPU archtecture constants.
+#define KPEP_ARCH_I386 0
+#define KPEP_ARCH_X86_64 1
+#define KPEP_ARCH_ARM 2
+#define KPEP_ARCH_ARM64 3
+
 #define KPC_MAX_COUNTERS 32
 
-/// KPEP event (size: 48/28 bytes on 64/32 bit OS)
 typedef struct kpep_event {
-        const char
-            *name; ///< Unique name of a event, such as "INST_RETIRED.ANY".
-        const char *description; ///< Description for this event.
-        const char *errata;      ///< Errata, currently NULL.
-        const char *alias;    ///< Alias name, such as "Instructions", "Cycles".
-        const char *fallback; ///< Fallback event name for fixed counter.
-        uint32_t mask;
-        uint8_t number;
-        uint8_t umask;
-        uint8_t reserved;
-        uint8_t is_fixed;
+        const char *name;
+        const char *description;
+        const char *errata;
+        const char *alias;
+        const char *fallback;
+        u32 mask;
+        u8 number;
+        u8 umask;
+        u8 reserved;
+        u8 is_fixed;
 } kpep_event;
 
-/// KPEP database (size: 144/80 bytes on 64/32 bit OS)
 typedef struct kpep_db {
-        const char *name;   ///< Database name, such as "haswell".
-        const char *cpu_id; ///< Plist name, such as "cpu_7_8_10b282dc".
-        const char
-            *marketing_name; ///< Marketing name, such as "Intel Haswell".
-        void *plist_data;    ///< Plist data (CFDataRef), currently NULL.
-        void *event_map; ///< All events (CFDict<CFSTR(event_name), kpep_event
-                         ///< *>).
-        kpep_event *event_arr; ///< Event struct buffer (sizeof(kpep_event) *
-                               ///< events_count).
-        kpep_event *
-            *fixed_event_arr; ///< Fixed counter events (sizeof(kpep_event *) *
-                              ///< fixed_counter_count)
-        void *alias_map; ///< All aliases (CFDict<CFSTR(event_name), kpep_event
-                         ///< *>).
+        const char *name;
+        const char *cpu_id; // hr: Plist name, such as "cpu_7_8_10b282dc".
+        const char *marketing_name;
+        void *plist_data; // hr: Plist data (CFDataRef)
+        void *event_map;  // hr: Events (CFDict<CFSTR(event_name), kpep_event).
+        kpep_event *event_arr; // hr: Event struct buffer
+                               //     size: (sizeof(kpep_event) * events_count).
+        kpep_event **fixed_event_arr; // hr: Fixed counter events
+                                      //     size: (sizeof(kpep_event) *
+                                      //     fixed_counter_count)
+        void *alias_map; // hr: Aliases (CFDict<CFSTR(event_name), kpep_event).
         size_t reserved_1;
         size_t reserved_2;
         size_t reserved_3;
-        size_t event_count; ///< All events count.
+        size_t event_count;
         size_t alias_count;
         size_t fixed_counter_count;
         size_t config_counter_count;
         size_t power_counter_count;
-        uint32_t archtecture; ///< see `KPEP CPU archtecture constants` above.
-        uint32_t fixed_counter_bits;
-        uint32_t config_counter_bits;
-        uint32_t power_counter_bits;
+        u32 archtecture; // hr: see `KPEP CPU archtecture constants` above.
+        u32 fixed_counter_bits;
+        u32 config_counter_bits;
+        u32 power_counter_bits;
 } kpep_db;
 
-/// KPEP config (size: 80/44 bytes on 64/32 bit OS)
-typedef struct kpep_config {
+typedef struct kpep_config_t {
         kpep_db *db;
-        kpep_event *
-            *ev_arr;     ///< (sizeof(kpep_event *) * counter_count), init NULL
-        size_t *ev_map;  ///< (sizeof(usize *) * counter_count), init 0
-        size_t *ev_idx;  ///< (sizeof(usize *) * counter_count), init -1
-        uint32_t *flags; ///< (sizeof(u32 *) * counter_count), init 0
-        uint64_t *kpc_periods; ///< (sizeof(uint64_t *) * counter_count), init 0
-        size_t event_count;    /// kpep_config_events_count()
+        kpep_event **ev_arr; // hr: (sizeof(kpep_event *) * counter_count)
+        size_t *ev_map;      // hr: (sizeof(usize_t *) * counter_count)
+        size_t *ev_idx;      // hr: (sizeof(usize_t *) * counter_count)
+        u32 *flags;          // hr: (sizeof(u32 *) * counter_count)
+        u64 *kpc_periods;    // hr: (sizeof(u64 *) * counter_count)
+        size_t event_count;  // hr: kpep_config_t_events_count()
         size_t counter_count;
-        uint32_t classes; ///< See `class mask constants` above.
-        uint32_t config_counter;
-        uint32_t power_counter;
-        uint32_t reserved;
-} kpep_config;
+        u32 classes; // hr: see `class mask constants` above.
+        u32 config_counter;
+        u32 power_counter;
+        u32 reserved;
+} kpep_config_t;
 
-/// Error code for kpep_config_xxx() and kpep_db_xxx() functions.
+// hr: error codes for kpep_config_t_xxx() and kpep_db_xxx() functions.
 typedef enum {
-        KPEP_CONFIG_ERROR_NONE = 0,
-        KPEP_CONFIG_ERROR_INVALID_ARGUMENT = 1,
-        KPEP_CONFIG_ERROR_OUT_OF_MEMORY = 2,
-        KPEP_CONFIG_ERROR_IO = 3,
-        KPEP_CONFIG_ERROR_BUFFER_TOO_SMALL = 4,
-        KPEP_CONFIG_ERROR_CUR_SYSTEM_UNKNOWN = 5,
-        KPEP_CONFIG_ERROR_DB_PATH_INVALID = 6,
-        KPEP_CONFIG_ERROR_DB_NOT_FOUND = 7,
-        KPEP_CONFIG_ERROR_DB_ARCH_UNSUPPORTED = 8,
-        KPEP_CONFIG_ERROR_DB_VERSION_UNSUPPORTED = 9,
-        KPEP_CONFIG_ERROR_DB_CORRUPT = 10,
-        KPEP_CONFIG_ERROR_EVENT_NOT_FOUND = 11,
-        KPEP_CONFIG_ERROR_CONFLICTING_EVENTS = 12,
-        KPEP_CONFIG_ERROR_COUNTERS_NOT_FORCED = 13,
-        KPEP_CONFIG_ERROR_EVENT_UNAVAILABLE = 14,
-        KPEP_CONFIG_ERROR_ERRNO = 15,
-        KPEP_CONFIG_ERROR_MAX
-} kpep_config_error_code;
+        kpep_config_t_ERROR_NONE = 0,
+        kpep_config_t_ERROR_INVALID_ARGUMENT = 1,
+        kpep_config_t_ERROR_OUT_OF_MEMORY = 2,
+        kpep_config_t_ERROR_IO = 3,
+        kpep_config_t_ERROR_BUFFER_TOO_SMALL = 4,
+        kpep_config_t_ERROR_CUR_SYSTEM_UNKNOWN = 5,
+        kpep_config_t_ERROR_DB_PATH_INVALID = 6,
+        kpep_config_t_ERROR_DB_NOT_FOUND = 7,
+        kpep_config_t_ERROR_DB_ARCH_UNSUPPORTED = 8,
+        kpep_config_t_ERROR_DB_VERSION_UNSUPPORTED = 9,
+        kpep_config_t_ERROR_DB_CORRUPT = 10,
+        kpep_config_t_ERROR_EVENT_NOT_FOUND = 11,
+        kpep_config_t_ERROR_CONFLICTING_EVENTS = 12,
+        kpep_config_t_ERROR_COUNTERS_NOT_FORCED = 13,
+        kpep_config_t_ERROR_EVENT_UNAVAILABLE = 14,
+        kpep_config_t_ERROR_ERRNO = 15,
+        kpep_config_t_ERROR_MAX
+} kpep_config_t_error_code;
 
-/// Error description for kpep_config_error_code.
-static const char *kpep_config_error_names[KPEP_CONFIG_ERROR_MAX]
-    = { "none",
-        "invalid argument",
-        "out of memory",
-        "I/O",
-        "buffer too small",
-        "current system unknown",
-        "database path invalid",
-        "database not found",
-        "database architecture unsupported",
-        "database version unsupported",
-        "database corrupt",
-        "event not found",
-        "conflicting events",
-        "all counters must be forced",
-        "event unavailable",
-        "check errno" };
+static String8 kpep_config_t_error_names[kpep_config_t_ERROR_MAX] = {
+        ccstring8_lit("none"),
+        ccstring8_lit("invalid argument"),
+        ccstring8_lit("out of memory"),
+        ccstring8_lit("I/O"),
+        ccstring8_lit("buffer too small"),
+        ccstring8_lit("current system unknown"),
+        ccstring8_lit("database path invalid"),
+        ccstring8_lit("database not found"),
+        ccstring8_lit("database architecture unsupported"),
+        ccstring8_lit("database version unsupported"),
+        ccstring8_lit("database corrupt"),
+        ccstring8_lit("event not found"),
+        ccstring8_lit("conflicting events"),
+        ccstring8_lit("all counters must be forced"),
+        ccstring8_lit("event unavailable"),
+        ccstring8_lit("check errno"),
+};
 
-/// Error description.
-static const char *kpep_config_error_desc(int code) {
-        if (0 <= code && code < KPEP_CONFIG_ERROR_MAX) {
-                return kpep_config_error_names[code];
+static String8 kpep_config_t_error_desc(u32 code) {
+        if (0 <= code && code < kpep_config_t_ERROR_MAX) {
+                return kpep_config_t_error_names[code];
         }
-        return "unknown error";
+        return string8_lit("unknown error");
 }
 
 #define lib_path_kperf "/System/Library/PrivateFrameworks/kperf.framework/kperf"
 #define lib_path_kperfdata                                                     \
         "/System/Library/PrivateFrameworks/kperfdata.framework/kperfdata"
 
-typedef uint64_t kpc_config_t;
+typedef u64 kpc_config_t;
 
 static int (*kpc_force_all_ctrs_get)(int *val_out);
 static int (*kpc_force_all_ctrs_set)(int val);
-static int (*kpc_set_config)(uint32_t classes, kpc_config_t *config);
-static int (*kpc_set_counting)(uint32_t classes);
-static int (*kpc_set_thread_counting)(uint32_t classes);
-static int (*kpc_get_thread_counters)(uint32_t tid, uint32_t buf_count,
-                                      uint64_t *buf);
+static int (*kpc_set_config)(u32 classes, kpc_config_t *config);
+static int (*kpc_set_counting)(u32 classes);
+static int (*kpc_set_thread_counting)(u32 classes);
+static int (*kpc_get_thread_counters)(u32 tid, u32 buf_count, u64 *buf);
 
 static int (*kpep_db_create)(const char *name, kpep_db **db_ptr);
-static int (*kpep_config_create)(kpep_db *db, kpep_config **cfg_ptr);
-static int (*kpep_config_force_counters)(kpep_config *cfg);
+static int (*kpep_config_create)(kpep_db *db, kpep_config_t **cfg_ptr);
+static int (*kpep_config_force_counters)(kpep_config_t *cfg);
 static int (*kpep_db_event)(kpep_db *db, const char *name, kpep_event **ev_ptr);
-static int (*kpep_config_add_event)(kpep_config *cfg, kpep_event **ev_ptr,
-                                    uint32_t flag, uint32_t *err);
-static int (*kpep_config_kpc_classes)(kpep_config *cfg, uint32_t *classes);
-static int (*kpep_config_kpc_count)(kpep_config *cfg, size_t *count_ptr);
-static int (*kpep_config_kpc_map)(kpep_config *cfg, size_t *buf,
+static int (*kpep_config_add_event)(kpep_config_t *cfg, kpep_event **ev_ptr,
+                                    u32 flag, u32 *err);
+static int (*kpep_config_kpc_classes)(kpep_config_t *cfg, u32 *classes);
+static int (*kpep_config_kpc_count)(kpep_config_t *cfg, size_t *count_ptr);
+static int (*kpep_config_kpc_map)(kpep_config_t *cfg, size_t *buf,
                                   size_t buf_size);
-static int (*kpep_config_kpc)(kpep_config *cfg, kpc_config_t *buf,
+static int (*kpep_config_kpc)(kpep_config_t *cfg, kpc_config_t *buf,
                               size_t buf_size);
 
 typedef enum {
@@ -167,29 +156,29 @@ typedef enum {
         KPC_FORCE_ALL_CTRS_SET,
         KPC_GET_CONFIG_COUNT,
         KPC_SET_CONFIG,
-        KP_SET_COUNTING,
+        KPC_SET_COUNTING,
         KPC_SET_THREAD_COUNTING,
         KPC_GET_THREAD_COUNTERS,
-} kperf_lib_symbol;
+} KperfLibSymbol;
 
 typedef enum {
         KPEP_DB_CREATE,
-        KPEP_CONFIG_CREATE,
-        KPEP_CONFIG_FORCE_COUNTERS,
+        kpep_config_t_CREATE,
+        kpep_config_t_FORCE_COUNTERS,
         KPEP_DB_EVENT,
-        KPEP_CONFIG_ADD_EVENT,
-        KPEP_CONFIG_KPC_CLASSES,
-        KPEP_CONFIG_KPC_COUNT,
-        KPEP_CONFIG_KPC_MAP,
-        KPEP_CONFIG_KPC,
-} kperfdata_lib_symbol;
+        kpep_config_t_ADD_EVENT,
+        kpep_config_t_KPC_CLASSES,
+        kpep_config_t_KPC_COUNT,
+        kpep_config_t_KPC_MAP,
+        kpep_config_t_KPC,
+} KperfdataLibSymbol;
 
 typedef struct {
         const char *name;
         void **impl;
-} lib_symbol;
+} PerfLibSymbol;
 
-lib_symbol kperf_lib_symbols[] = {
+static PerfLibSymbol kperf_lib_symbols[] = {
         { "kpc_force_all_ctrs_get", (void **)&kpc_force_all_ctrs_get },
         { "kpc_force_all_ctrs_set", (void **)&kpc_force_all_ctrs_set },
         { "kpc_set_config", (void **)&kpc_set_config },
@@ -198,7 +187,7 @@ lib_symbol kperf_lib_symbols[] = {
         { "kpc_get_thread_counters", (void **)&kpc_get_thread_counters },
 };
 
-lib_symbol kperfdata_lib_symbols[] = {
+static PerfLibSymbol kperfdata_lib_symbols[] = {
         { "kpep_db_create", (void **)&kpep_db_create },
         { "kpep_config_create", (void **)&kpep_config_create },
         { "kpep_config_force_counters", (void **)&kpep_config_force_counters },
@@ -210,25 +199,18 @@ lib_symbol kperfdata_lib_symbols[] = {
         { "kpep_config_kpc", (void **)&kpep_config_kpc },
 };
 
-static void *kperf_lib_handle = NULL;
-static void *kperfdata_lib_handle = NULL;
+static void *kperf_lib_handle = 0;
+static void *kperfdata_lib_handle = 0;
 
+#define PERF_EVENT_NAME_MAX 8
 typedef struct {
-        uint64_t cycles;
-        uint64_t branches;
-        uint64_t missed_branches;
-        uint64_t instructions;
-} perf_counters;
+        const char *alias;
+        const char *names[PERF_EVENT_NAME_MAX];
+} PerfEventAlias;
 
-#define EVENT_NAME_MAX 8
-typedef struct {
-        const char *alias;                 /// name for print
-        const char *names[EVENT_NAME_MAX]; /// name from pmc db
-} event_alias;
-
-/// Event names from /usr/share/kpep/<name>.plist
-#define EV_COUNT 4
-static const event_alias profile_events[] = {
+#define PERF_EVENT_COUNT 7
+// hr: event names from /usr/share/kpep/<name>.plist
+static const PerfEventAlias perf_profile_events[PERF_EVENT_COUNT] = {
         { "cycles",
           {
                   "FIXED_CYCLES",            // Apple A7-A15
@@ -254,233 +236,210 @@ static const event_alias profile_events[] = {
                   "BR_MISP_RETIRED.ALL_BRANCHES", // Intel Core 2th-10th
                   "BR_INST_RETIRED.MISPRED",      // Intel Yonah, Merom
           } },
+        { "l1d-misses-load",
+          {
+                  "L1D_CACHE_MISS_LD", // Apple A15
+          } },
+        { "l1d-misses-store",
+          {
+                  "L1D_CACHE_MISS_ST", // Apple A15
+          } },
+        { "l1d-tlb-misses",
+          {
+                  "L1D_TLB_MISS", // Apple A15
+          } },
+
 };
 
-uint32_t classes = 0;
-size_t reg_count = 0;
-kpc_config_t regs[KPC_MAX_COUNTERS] = { 0 };
-size_t counter_map[KPC_MAX_COUNTERS] = { 0 };
-uint64_t counters_0[KPC_MAX_COUNTERS] = { 0 };
-uint64_t counters_1[KPC_MAX_COUNTERS] = { 0 };
+static u32 perf_classes = 0;
+static size_t perf_reg_count = 0;
+static kpc_config_t perf_regs[KPC_MAX_COUNTERS] = { 0 };
+static size_t perf_counter_map[KPC_MAX_COUNTERS] = { 0 };
+static u64 perf_counters[KPC_MAX_COUNTERS] = { 0 };
 
-static kpep_event *get_event(kpep_db *db, const event_alias *alias) {
-        for (size_t j = 0; j < EVENT_NAME_MAX; j++) {
+static kpep_event *perf_get_event(kpep_db *db, const PerfEventAlias *alias) {
+        for (size_t j = 0; j < PERF_EVENT_NAME_MAX; j++) {
                 const char *name = alias->names[j];
-                if (!name)
+                if (!name) {
                         break;
-                kpep_event *ev = NULL;
+                }
+                kpep_event *ev = 0;
                 if (kpep_db_event(db, name, &ev) == 0) {
                         return ev;
                 }
         }
-        return NULL;
+        return 0;
 }
 
-static int lib_init(void) {
+static void perf_lib_init(void) {
         kperf_lib_handle = dlopen(lib_path_kperf, RTLD_LAZY);
         if (!kperf_lib_handle) {
-                fprintf(stderr, "Failed to load kperf.framework, message: %s.",
-                        dlerror());
-                return 1;
+                char *err = dlerror();
+                String8 msg = { (u8 *)err, strlen(err) };
+                log_message(msg);
+                os_abort(1);
         }
         kperfdata_lib_handle = dlopen(lib_path_kperfdata, RTLD_LAZY);
         if (!kperfdata_lib_handle) {
-                fprintf(stderr,
-                        "Failed to load kperfdata.framework, message: %s.",
-                        dlerror());
-                return 1;
+                char *err = dlerror();
+                String8 msg = { (u8 *)err, strlen(err) };
+                log_message(msg);
+                os_abort(1);
         }
 
-        // load symbol address from dynamic library
-        for (uint32_t i = 0;
-             i < sizeof(kperf_lib_symbols) / sizeof(kperf_lib_symbols[0]);
-             i++) {
-                const lib_symbol *symbol = &kperf_lib_symbols[i];
+        // hr:  load symbol address from dynamic library
+        for (u32 i = 0; i < array_count(kperf_lib_symbols); i++) {
+                PerfLibSymbol *symbol = &kperf_lib_symbols[i];
                 *symbol->impl = dlsym(kperf_lib_handle, symbol->name);
-                if (!*symbol->impl) {
-                        fprintf(stderr, "Failed to load kperf function: %s.",
-                                symbol->name);
-                        return 1;
+                if (!symbol->impl) {
+                        log_message(string8_lit(
+                                "Failed to load kperf function.\n"));
+                        os_abort(1);
                 }
         }
-        for (uint32_t i = 0; i < sizeof(kperfdata_lib_symbols)
-                                     / sizeof(kperfdata_lib_symbols[0]);
-             i++) {
-                const lib_symbol *symbol = &kperfdata_lib_symbols[i];
+        for (u32 i = 0; i < array_count(kperfdata_lib_symbols); i++) {
+                PerfLibSymbol *symbol = &kperfdata_lib_symbols[i];
                 *symbol->impl = dlsym(kperfdata_lib_handle, symbol->name);
-                if (!*symbol->impl) {
-                        fprintf(stderr,
-                                "Failed to load kperfdata function: %s.",
-                                symbol->name);
-                        return 1;
+                if (!symbol->impl) {
+                        log_message(string8_lit(
+                                "Failed to load kperfdata function.\n"));
+                        os_abort(1);
                 }
         }
-
-        return 0;
 }
 
-static u32 perf_setup_timer(void) {
-        u32 ret = 0;
-        if (lib_init()) {
-                fprintf(stderr,
-                        "Failed to initialize kperf and kperfdata libraries\n");
-                return 1;
+static void perf_setup_counters(void) {
+        perf_lib_init();
+
+        // hr: check permission
+        int forceCtrs = 0;
+        if (kpc_force_all_ctrs_get(&forceCtrs)) {
+                log_message(string8_lit("Permission denied, xnu/kpc requires "
+                                        "root privileges.\n"));
+                os_abort(1);
         }
 
-        // check permission
-        int force_ctrs = 0;
-        if (kpc_force_all_ctrs_get(&force_ctrs)) {
-                printf(
-                    "Permission denied, xnu/kpc requires root privileges.\n");
-                return 1;
+        // hr: load pmc db
+        kpep_db *db = 0;
+        if (kpep_db_create(0, &db)) {
+                goto error;
         }
 
-        // load pmc db
-        kpep_db *db = NULL;
-        if ((ret = kpep_db_create(NULL, &db))) {
-                printf("Error: cannot load pmc database: %d.\n", ret);
-                return 1;
+        // hr: create a config
+        kpep_config_t *cfg = 0;
+        if (kpep_config_create(db, &cfg)) {
+                goto error;
         }
-        // printf("loaded db: %s (%s)\n", db->name, db->marketing_name);
-        // printf("number of fixed counters: %zu\n", db->fixed_counter_count);
-        // printf("number of configurable counters: %zu\n",
-        //        db->config_counter_count);
-
-        // create a config
-        kpep_config *cfg = NULL;
-        if ((ret = kpep_config_create(db, &cfg))) {
-                printf("Failed to create kpep config: %d (%s).\n", ret,
-                       kpep_config_error_desc(ret));
-                return 1;
-        }
-        if ((ret = kpep_config_force_counters(cfg))) {
-                printf("Failed to force counters: %d (%s).\n", ret,
-                       kpep_config_error_desc(ret));
-                return 1;
+        if (kpep_config_force_counters(cfg)) {
+                goto error;
         }
 
-        // get events
-        kpep_event *ev_arr[EV_COUNT] = { 0 };
-        for (size_t i = 0; i < EV_COUNT; i++) {
-                const event_alias *alias = profile_events + i;
-                ev_arr[i] = get_event(db, alias);
+        // hr: get events
+        kpep_event *ev_arr[PERF_EVENT_COUNT] = { 0 };
+        for (u32 i = 0; i < PERF_EVENT_COUNT; i++) {
+                const PerfEventAlias *alias = perf_profile_events + i;
+                ev_arr[i] = perf_get_event(db, alias);
                 if (!ev_arr[i]) {
-                        printf("Cannot find event: %s.\n", alias->alias);
-                        return 1;
+                        goto error;
                 }
         }
 
-        // add event to config
-        for (size_t i = 0; i < EV_COUNT; i++) {
+        // hr: add event to config
+        for (u32 i = 0; i < PERF_EVENT_COUNT; i++) {
                 kpep_event *ev = ev_arr[i];
-                if ((ret = kpep_config_add_event(cfg, &ev, 0, NULL))) {
-                        printf("Failed to add event: %d (%s).\n", ret,
-                               kpep_config_error_desc(ret));
-                        return 1;
+                if (kpep_config_add_event(cfg, &ev, 0, 0)) {
+                        goto error;
                 }
         }
 
-        // prepare buffer and config
-        if ((ret = kpep_config_kpc_classes(cfg, &classes))) {
-                printf("Failed get kpc classes: %d (%s).\n", ret,
-                       kpep_config_error_desc(ret));
-                return 1;
+        // hr: prepare buffer and config
+        if (kpep_config_kpc_classes(cfg, &perf_classes)) {
+                goto error;
         }
-        if ((ret = kpep_config_kpc_count(cfg, &reg_count))) {
-                printf("Failed get kpc count: %d (%s).\n", ret,
-                       kpep_config_error_desc(ret));
-                return 1;
+        if (kpep_config_kpc_count(cfg, &perf_reg_count)) {
+                goto error;
         }
-        if ((ret
-             = kpep_config_kpc_map(cfg, counter_map, sizeof(counter_map)))) {
-                printf("Failed get kpc map: %d (%s).\n", ret,
-                       kpep_config_error_desc(ret));
-                return 1;
+        if (kpep_config_kpc_map(cfg, perf_counter_map,
+                                sizeof(perf_counter_map))) {
+                goto error;
         }
-        if ((ret = kpep_config_kpc(cfg, regs, sizeof(regs)))) {
-                printf("Failed get kpc registers: %d (%s).\n", ret,
-                       kpep_config_error_desc(ret));
-                return 1;
+        if (kpep_config_kpc(cfg, perf_regs, sizeof(perf_regs))) {
+                goto error;
         }
 
-        // set config to kernel
-        if ((ret = kpc_force_all_ctrs_set(1))) {
-                printf("Failed force all ctrs: %d.\n", ret);
-                return 1;
+        // hr: set config to kernel
+        if (kpc_force_all_ctrs_set(1)) {
+                goto error;
         }
-        if ((classes & KPC_CLASS_CONFIGURABLE_MASK) && reg_count) {
-                if ((ret = kpc_set_config(classes, regs))) {
-                        printf("Failed set kpc config: %d.\n", ret);
-                        return 1;
+        if ((perf_classes & KPC_CLASS_CONFIGURABLE_MASK) && perf_reg_count) {
+                if (kpc_set_config(perf_classes, perf_regs)) {
+                        goto error;
                 }
         }
 
-        // start counting
-        if ((ret = kpc_set_counting(classes))) {
-                printf("Failed set counting: %d.\n", ret);
-                return 1;
+        // hr: start counting
+        if (kpc_set_counting(perf_classes)) {
+                goto error;
         }
-        if ((ret = kpc_set_thread_counting(classes))) {
-                printf("Failed set thread counting: %d.\n", ret);
-                return 1;
+        if (kpc_set_thread_counting(perf_classes)) {
+                goto error;
         }
 
-        return 0;
+        return;
+error:
+        log_message(string8_lit("Failed to set up performance counters.\n"));
+        os_abort(1);
 }
 
-static inline void get_counters(perf_counters *pc) {
-        int ret = 0;
-        if ((ret = kpc_get_thread_counters(0, KPC_MAX_COUNTERS, counters_0))) {
-                fprintf(stderr, "Failed get thread counters before: %d.\n",
-                        ret);
+static PerfMetrics perf_read_counters(void) {
+        PerfMetrics res = { 0 };
+        if (kpc_get_thread_counters(0, KPC_MAX_COUNTERS, perf_counters)) {
+                log_message(string8_lit(
+                        "Failed to get thread performance counters.\n"));
+                log_dump(os_stderr(), 1);
         }
-        pc->cycles = counters_0[counter_map[0]];
-        pc->branches = counters_0[counter_map[1]];
-        pc->missed_branches = counters_0[counter_map[2]];
-        pc->instructions = counters_0[counter_map[3]];
+        res.cycles = perf_counters[perf_counter_map[0]];
+        res.branches = perf_counters[perf_counter_map[1]];
+        res.branchMisses = perf_counters[perf_counter_map[2]];
+        res.l1dLoadMisses = perf_counters[perf_counter_map[3]];
+        res.l1dStoreMisses = perf_counters[perf_counter_map[4]];
+        res.l1dTLBMisses = perf_counters[perf_counter_map[5]];
+        return res;
 }
 
-static u64 perf_read_cpu_timer(void) {
-        perf_counters pc;
-        get_counters(&pc);
-        return pc.cycles;
-}
-
-static uint64_t perf_os_timer_freq(void) {
+static u64 perf_os_timer_freq(void) {
         return 1000000;
 }
 
-static uint64_t perf_read_os_timer(void) {
+static u64 perf_read_os_timer(void) {
         struct timeval value;
         gettimeofday(&value, 0);
-
-        uint64_t result = perf_os_timer_freq() * (uint64_t)value.tv_sec
-                          + (uint64_t)value.tv_usec;
+        u64 freq = perf_os_timer_freq();
+        u64 result = freq * (u64)value.tv_sec + (u64)value.tv_usec;
         return result;
 }
 
-// WARN: hr: does this return cycles per second?
-static uint64_t perf_estimate_cpu_timer_freq(void) {
-        uint64_t MillisecondsToWait = 100;
-        uint64_t OSFreq = perf_os_timer_freq();
+static u64 perf_estimate_cpu_timer_freq(void) {
+        u64 msToWait = 100;
+        u64 osFreq = perf_os_timer_freq();
 
-        uint64_t CPUStart = perf_read_cpu_timer();
-        uint64_t OSStart = perf_read_os_timer();
-        uint64_t OSEnd = 0;
-        uint64_t OSElapsed = 0;
-        uint64_t OSWaitTime = OSFreq * MillisecondsToWait / 1000;
-        while (OSElapsed < OSWaitTime) {
-                OSEnd = perf_read_os_timer();
-                OSElapsed = OSEnd - OSStart;
+        u64 cpuStart = perf_read_counters().cycles;
+        u64 osStart = perf_read_os_timer();
+        u64 osEnd = 0;
+        u64 osElapsed = 0;
+        u64 osWaitTime = osFreq * msToWait / 1000;
+        while (osElapsed < osWaitTime) {
+                osEnd = perf_read_os_timer();
+                osElapsed = osEnd - osStart;
         }
 
-        uint64_t CPUEnd = perf_read_cpu_timer();
-        uint64_t CPUElapsed = CPUEnd - CPUStart;
+        u64 cpuEnd = perf_read_counters().cycles;
+        u64 cpuElapsed = cpuEnd - cpuStart;
 
-        uint64_t CPUFreq = 0;
-        if (OSElapsed) {
-                CPUFreq = OSFreq * CPUElapsed / OSElapsed;
+        u64 cpuFreq = 0;
+        if (osElapsed) {
+                cpuFreq = osFreq * cpuElapsed / osElapsed;
         }
 
-        return CPUFreq;
+        return cpuFreq;
 }

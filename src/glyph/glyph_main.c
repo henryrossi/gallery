@@ -9,8 +9,6 @@
 #include "draw/draw.h"
 #include "ui/ui_core.h"
 #include "ui/ui_inc.h"
-
-#define PERF_IMPLEMENTATION
 #include "perf/perf.h"
 
 #include "bedrock/bedrock_inc.c"
@@ -19,6 +17,7 @@
 #include "font/font.c"
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
+#include "perf/perf.c"
 // clang-format on
 
 typedef struct {
@@ -69,7 +68,7 @@ static int glf_save_canvas_to_png(void) {
 static u8 *glf_read_canvas_input_file(const char *filename, u32 *width,
                                       u32 *height, u32 *n) {
         u8 *data
-            = stbi_load(filename, (int *)width, (int *)height, (int *)n, 0);
+                = stbi_load(filename, (int *)width, (int *)height, (int *)n, 0);
         if (!data) {
                 fprintf(stderr, "Failed to read input file: %s\n", filename);
                 return 0;
@@ -79,8 +78,8 @@ static u8 *glf_read_canvas_input_file(const char *filename, u32 *width,
 }
 
 static Vec4u8 glf_color_f32_to_u8(Vec4f32 color) {
-        Vec4u8 res
-            = v4u8(color.x * 255, color.y * 255, color.z * 255, color.w * 255);
+        Vec4u8 res = v4u8(color.x * 255, color.y * 255, color.z * 255,
+                          color.w * 255);
         return res;
 }
 
@@ -126,10 +125,10 @@ static Vec2s32 glf_canvas_pixel_at_screen_pos(Rng2f32 canvasArea,
                                               Vec2f32 screenPos) {
         if (contains_r2f32(canvasArea, screenPos)) {
                 Vec2f32 canvas
-                    = add_v2f32(canvasArea.max,
-                                v2f32(-canvasArea.min.x, -canvasArea.min.y));
+                        = add_v2f32(canvasArea.max, v2f32(-canvasArea.min.x,
+                                                          -canvasArea.min.y));
                 Vec2f32 mouseRel = add_v2f32(
-                    screenPos, v2f32(-canvasArea.min.x, -canvasArea.min.y));
+                        screenPos, v2f32(-canvasArea.min.x, -canvasArea.min.y));
                 f32 xf = clamp(0, mouseRel.x / canvas.x, 1);
                 f32 yf = clamp(0, mouseRel.y / canvas.y, 1);
                 s32 x = xf * glf_state.width;
@@ -146,7 +145,7 @@ static void glf_color_history_ui(void) {
         ui_push_height(uiSizeSumOfChildren(1));
         ui_next_background_color(v4f32(1, 0, 0, 1));
         UIElement *e
-            = ui_build_element_from_string(0, string8_lit("top container"));
+                = ui_build_element_from_string(0, string8_lit("top container"));
         ui_push_parent(e);
 
         ui_push_border_color(v4f32(0, 0, 0, 0));
@@ -155,7 +154,7 @@ static void glf_color_history_ui(void) {
                 Vec4f32 color = r > 1 ? v4f32(0, 1, 0, 1) : v4f32(0, 0, 1, 1);
                 ui_next_background_color(color);
                 e = ui_build_element_from_string(
-                    0, string8f(ui_frame_arena(), "row %d", r));
+                        0, string8f(ui_frame_arena(), "row %d", r));
                 e->layoutDirection = UI_Axis2d_X;
                 ui_push_parent(e);
 
@@ -168,10 +167,10 @@ static void glf_color_history_ui(void) {
                         String8 strc = string8_skip(str, i);
 
                         e = ui_build_element_from_string(
-                            UI_ElementFlag_DrawBorder
-                                | UI_ElementFlag_DrawBackground
-                                | UI_ElementFlag_Clickable,
-                            strc);
+                                UI_ElementFlag_DrawBorder
+                                        | UI_ElementFlag_DrawBackground
+                                        | UI_ElementFlag_Clickable,
+                                strc);
 
                         UISignal sig = ui_signal_from_element(e);
                         if (ui_clicked(sig)) {
@@ -195,7 +194,7 @@ static void glf_copy_image(u8 *src, u8 *dst, u32 width, u32 height, u32 srcN,
                            u32 dstN) {
         if (srcN < 3 || dstN < 3) {
                 log_message(
-                    string8_lit("Failed to copy image with 4 channels\n"));
+                        string8_lit("Failed to copy image with 4 channels\n"));
                 os_abort(1);
         }
 
@@ -293,8 +292,8 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
                 if (cond(cur->v, origin)) {
                         // hr: fill canvas pixel
                         glf_state.canvas
-                            .data[cur->v.y * glf_state.width + cur->v.x]
-                            = glf_color_f32_to_u8(color);
+                                .data[cur->v.y * glf_state.width + cur->v.x]
+                                = glf_color_f32_to_u8(color);
 
                         glf_visit_pixel(visited, buckets, cur);
 
@@ -308,13 +307,13 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
                         for (u32 i = 0; i < array_count(offsets); i++) {
                                 Vec2s32 n = add_v2s32(cur->v, offsets[i]);
                                 b32 withinBounds
-                                    = n.x >= 0 && n.x < glf_state.width
-                                      && n.y >= 0 && n.y < glf_state.height;
+                                        = n.x >= 0 && n.x < glf_state.width
+                                          && n.y >= 0 && n.y < glf_state.height;
                                 if (withinBounds
                                     && !glf_visited_pixel(visited, buckets,
                                                           n)) {
                                         Vec2s32Node *node
-                                            = arena_alloc(a, sizeof(*node));
+                                                = arena_alloc(a, sizeof(*node));
                                         node->v = n;
                                         node->n = q;
                                         q = node;
@@ -325,7 +324,6 @@ static void glf_fill_canvas_on_condition(Vec2f32 pos, Vec4f32 color,
 
         arena_pop_at(a, resetPos);
         END_BLOCK;
-        PRINT_PROFILER;
 }
 
 #define GLF_CHUNK_SIZE 64
@@ -351,6 +349,9 @@ static b32 glf_chunk_visited(u8 *visited, Vec2s16 chunk, u32 chunksX) {
 // Returns 1 if pixel has a distance less than radius from the origin, 0
 // otherwise.
 static b32 glf_pixel_within_radius(Vec2s16 pixel, Vec2f32 origin, f32 radius) {
+        // TODO: hr: to extend our drawing algorithm we can check if the pixel
+        // is within a shape made from circles at two different point (origin,
+        // this frame's mouse pos, and last frame's mouse pos) and in between.
         f32 xd = (f32)pixel.x + 0.5f - origin.x;
         f32 yd = (f32)pixel.y + 0.5f - origin.y;
         f32 d2 = xd * xd + yd * yd;
@@ -360,10 +361,10 @@ static b32 glf_pixel_within_radius(Vec2s16 pixel, Vec2f32 origin, f32 radius) {
 // Returns 1 if the chunk overlaps the drawing circle and hence must have some
 // pixels changed, 0 otherwise.
 static b32 glf_chunk_overlaps_draw(Vec2s16 chunk, Vec2f32 origin, f32 radius) {
-        Rng2f32 bb
-            = r2f32(v2f32(chunk.x * GLF_CHUNK_SIZE, chunk.y * GLF_CHUNK_SIZE),
-                    v2f32((chunk.x + 1) * GLF_CHUNK_SIZE,
-                          (chunk.y + 1) * GLF_CHUNK_SIZE));
+        Rng2f32 bb = r2f32(
+                v2f32(chunk.x * GLF_CHUNK_SIZE, chunk.y * GLF_CHUNK_SIZE),
+                v2f32((chunk.x + 1) * GLF_CHUNK_SIZE,
+                      (chunk.y + 1) * GLF_CHUNK_SIZE));
         f32 xClosest = clamp(bb.min.x, origin.x, bb.max.x);
         f32 yClosest = clamp(bb.min.y, origin.y, bb.max.y);
 
@@ -388,15 +389,14 @@ static b32 glf_chunk_within_bounds(Vec2s16 chunk, u32 width, u32 height) {
 static void glf_pen_draw(Vec2f32 pos, UIElement *canvas) {
         START_BLOCK("AWESOME PEN DRAW");
 
-        Vec4u8 u8color = glf_color_f32_to_u8(glf_state.currentColor);
-        u32 color = 0;
-        memcpy(&color, &u8color, sizeof(u32));
-
+        Vec4u8 color = glf_color_f32_to_u8(glf_state.currentColor);
         u32 width = glf_state.width, height = glf_state.height;
-        Vec4u8 *image = glf_state.canvas.data;
+        // u32 color = 0;
+        // memcpy(&color, &u8color, sizeof(u32));
+        // Vec4u8 *image = glf_state.canvas.data;
 
         f32 radius
-            = 0.5f + glf_state.penSizeFactor * 0.05f * min(width, height);
+                = 0.5f + glf_state.penSizeFactor * 0.05f * min(width, height);
 
         Vec2f32 origin = sub_v2f32(pos, canvas->screenCoords.min);
         origin = v2f32(origin.x / canvas->computedSize.x * width,
@@ -457,17 +457,24 @@ static void glf_pen_draw(Vec2f32 pos, UIElement *canvas) {
                                 u32 px = chunk.x * GLF_CHUNK_SIZE + x;
                                 u32 py = chunk.y * GLF_CHUNK_SIZE + y;
 
-                                u32 pixel = 0;
-                                memcpy(&pixel, image + (py * width + px),
-                                       sizeof(u32));
-
                                 b32 within = glf_pixel_within_radius(
-                                    v2s16(px, py), origin, radius);
-                                u32 mask = within - 1;
+                                        v2s16(px, py), origin, radius);
+                                if (within) {
+                                        glf_state.canvas.data[py * width + px]
+                                                = color;
+                                }
 
-                                pixel = (pixel & mask) | (color & ~mask);
-                                memcpy(image + (py * width + px), &pixel,
-                                       sizeof(u32));
+                                // hr: It seems this is slightly slower because,
+                                // although it cuts down branch mispredictions,
+                                // every read from the image misses the L1
+                                // cache. It's obviously just not there.
+                                //
+                                // u32 pixel = 0;
+                                // memcpy(&pixel, image + (py * width + px),
+                                // sizeof(u32)); u32 mask = within - 1; pixel =
+                                // (pixel & mask) | (color & ~mask);
+                                // memcpy(image + (py * width + px), &pixel,
+                                //        sizeof(u32));
                         }
                 }
 
@@ -489,7 +496,6 @@ static void glf_pen_draw(Vec2f32 pos, UIElement *canvas) {
         arena_pop_at(a, resetPos);
 
         END_BLOCK;
-        PRINT_PROFILER;
 }
 
 // Returns 1 if pixel is less than current pen size away from origin position on
@@ -497,7 +503,7 @@ static void glf_pen_draw(Vec2f32 pos, UIElement *canvas) {
 static b32 glf_is_pixel_within_radius(Vec2s32 pixel, Vec2f32 origin) {
         f32 radius = 0.5f
                      + glf_state.penSizeFactor * 0.05f
-                           * min(glf_state.width, glf_state.height);
+                               * min(glf_state.width, glf_state.height);
 
         Vec2f32 c = v2f32((f32)pixel.x + 0.5f, (f32)pixel.y + 0.5f);
         f32 xd = c.x - origin.x;
@@ -579,6 +585,7 @@ int main(int argc, char *argv[]) {
         String8 textInput = string8_lit("example");
 
         while (!glfwWindowShouldClose(r_state.window)) {
+                START_BLOCK("Main Loop");
                 b32 res = ui_begin_frame();
                 if (res) {
                         continue;
@@ -598,7 +605,7 @@ int main(int argc, char *argv[]) {
                 f32 pady = uiPixelsY(ui_top_text_size(), 0).value * 0.25f;
                 ui_next_padding(v4f32(padx, pady, padx, pady));
                 UIElement *e = ui_build_element_from_string(
-                    UI_ElementFlag_DrawBackground, string8_empty());
+                        UI_ElementFlag_DrawBackground, string8_empty());
                 e->layoutDirection = UI_Axis2d_X;
                 ui_push_parent(e);
 
@@ -614,8 +621,9 @@ int main(int argc, char *argv[]) {
                 ui_pop_parent();
 
                 ui_push_height(uiPct(
-                    100, 0)); // WARN: hr: changing this strictness to 0 (which
-                              // it should be less than 1) breaks the layout
+                        100,
+                        0)); // WARN: hr: changing this strictness to 0 (which
+                             // it should be less than 1) breaks the layout
                 e = ui_build_element_from_string(0, string8_empty());
                 e->layoutDirection = UI_Axis2d_X;
                 ui_push_parent(e);
@@ -646,13 +654,13 @@ int main(int argc, char *argv[]) {
 
                 f32 availAspRatio = e->computedSize.x / e->computedSize.y;
                 f32 imageAspRatio
-                    = (f32)glf_state.width / (f32)glf_state.height;
+                        = (f32)glf_state.width / (f32)glf_state.height;
                 if (availAspRatio < imageAspRatio) {
                         e->layoutDirection = UI_Axis2d_Y;
                         ui_spacer(uiPct(50, 0.5));
                         ui_next_width(uiPct(100, 1));
                         ui_next_height(
-                            uiPixels(e->computedSize.x / imageAspRatio, 1));
+                                uiPixels(e->computedSize.x / imageAspRatio, 1));
                         // NOTE: hr: approximating a pixel amount rather
                         // than using uiRatio helps in the case when
                         // there is very little spacing. Using the later,
@@ -664,13 +672,13 @@ int main(int argc, char *argv[]) {
                         e->layoutDirection = UI_Axis2d_X;
                         ui_spacer(uiPct(50, 0.5));
                         ui_next_width(
-                            uiPixels(e->computedSize.y * imageAspRatio, 1));
+                                uiPixels(e->computedSize.y * imageAspRatio, 1));
                         ui_next_height(uiPct(100, 1));
                 }
 
                 ui_next_background_color(white);
                 UIElement *canvas = ui_build_element_from_string(
-                    UI_ElementFlag_DrawBackground, c);
+                        UI_ElementFlag_DrawBackground, c);
                 UISignal canvasSig = ui_signal_from_element(canvas);
 
                 if (ui_dragging(canvasSig)) {
@@ -684,7 +692,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 RTexture *canvas_tex
-                    = r_prep_dynamic_texture(&glf_state.canvas);
+                        = r_prep_dynamic_texture(&glf_state.canvas);
                 ui_element_attach_texture(canvas, canvas_tex);
 
                 ui_spacer(uiPct(50, 0.5));
@@ -758,23 +766,32 @@ int main(int argc, char *argv[]) {
                         glf_state.pressedPick = 1;
                 } else if (ui_mouse_over(canvasSig) && glf_state.pressedPick) {
                         Vec2s32 i = glf_canvas_pixel_at_screen_pos(
-                            canvas->screenCoords, ui_mouse_pos());
+                                canvas->screenCoords, ui_mouse_pos());
                         if (i.x >= 0) {
                                 Vec4u8 color
-                                    = glf_state.canvas
-                                          .data[i.y * glf_state.width + i.x];
+                                        = glf_state.canvas
+                                                  .data[i.y * glf_state.width
+                                                        + i.x];
                                 glf_set_current_color(
-                                    glf_color_u8_to_f32(color));
+                                        glf_color_u8_to_f32(color));
                         }
                         glf_state.pressedPick = 0;
                 }
 
+                START_BLOCK("Autolayout");
                 ui_element_autolayout();
+                END_BLOCK;
 
+                START_BLOCK("Draw");
                 ui_draw_elements();
 
                 // TODO: hr: more loop management
                 r_end_frame();
+                END_BLOCK;
+
+                END_BLOCK;
+                PRINT_PROFILER;
+                RESET_PROFILER;
         }
 
         f_destroy_font(ui_state.defaultFont);
