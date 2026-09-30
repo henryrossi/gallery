@@ -8,7 +8,7 @@ Use the RESET_PROFILER macro when you want to reset the profiler, for instance b
 
 Here's a simple example of a program that reads in a json file, parses the json, and performs some computation on it.
 
-int main(int argc, char *argv[]) {
+```int main(int argc, char *argv[]) {
   SETUP_PROFILER;
   char *filename = argv[1];
 
@@ -26,15 +26,15 @@ int main(int argc, char *argv[]) {
 
   PRINT_PROFILER;
   return 0;
-}
+}```
 
 Given a 1GB input json file, this example program outputs the following performance report:
 
-+------------------------------------------------------------------------------+
+```+------------------------------------------------------------------------------+
 |               name id  hits    time     branch miss      L1d miss    L1d TLB |
 |------------------------------------------------------------------------------|
 |          read json  1     1  204.5ms  571.0  ( 0.0%)  328.0  (27.7%)  142.0  |
 |         parse json  2     1   11.0s    19.9g (21.8%)  165.5m (82.5%)   11.4m |
 |        computation  3     1  751.8ms  490.1m (11.5%)   19.7m (77.1%)  594.8k |
-+------------------------------------------------------------------------------+
++------------------------------------------------------------------------------+```
 
