@@ -8,7 +8,8 @@ Use the RESET_PROFILER macro when you want to reset the profiler, for instance b
 
 Here's a simple example of a program that reads in a json file, parses the json, and performs some computation on it.
 
-```int main(int argc, char *argv[]) {
+```
+int main(int argc, char *argv[]) {
   SETUP_PROFILER;
   char *filename = argv[1];
 
@@ -29,9 +30,10 @@ Here's a simple example of a program that reads in a json file, parses the json,
 }
 ```
 
-Given a 1GB input json file, this example program outputs the following performance report:
+Given a 1gb input json file, this example program outputs the following performance report:
 
-```+------------------------------------------------------------------------------+
+```
++------------------------------------------------------------------------------+
 |               name id  hits    time     branch miss      L1d miss    L1d TLB |
 |------------------------------------------------------------------------------|
 |          read json  1     1  204.5ms  571.0  ( 0.0%)  328.0  (27.7%)  142.0  |
@@ -40,3 +42,6 @@ Given a 1GB input json file, this example program outputs the following performa
 +------------------------------------------------------------------------------+
 ```
 
+Note here the read json code block seems pretty well optimized (it uses fread()). It reads roughly 5 gbs per second if it reads a 1gb file in 200ms. 
+The code block that parses the json is much slower, processing roughly 0.09 gbs per second. We see that it mispredicts branches and misses the L1 data
+cache way more (yes, that is 19.9 giga-misses of branches or 19,900,000,000 misses).
