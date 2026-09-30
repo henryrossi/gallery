@@ -44,4 +44,4 @@ Given a 1gb input json file, this example program outputs the following performa
 
 Note here the read json code block seems pretty well optimized (it uses fread()). It reads roughly 5 gbs per second if it reads a 1gb file in 200ms. 
 The code block that parses the json is much slower, processing roughly 0.09 gbs per second. We see that it mispredicts branches and misses the L1 data
-cache way more (yes, that is 19.9 giga-misses of branches or 19,900,000,000 misses).
+cache an astronomical amount of times! (Yes, that is 19.9 giga-misses of branches or 19,900,000,000 misses).
