@@ -21,19 +21,22 @@ int main(int argc, char *argv[]) {
         r_init_backend("grove", 1000, 800);
 
         setup_ui_state();
-        Arena *arena = make_arena(kb(6));
+        // Arena *arena = make_arena(kb(6));
 
         RTexture t = { 0 };
         r_load_texture("resources/texture.jpg", &t);
 
-        String8 str0 = string8_lit("Button 0");
-        String8 str1 = string8_lit("Buttony 1");
-        String8 str10 = string8_concat(
-            arena, str1,
-            string8_lit("###This is the hashed part of the string"));
-        String8 str3 = string8_lit("El Chalupa");
+        Vec4f32 red = v4f32(1, 0, 0, 1);
+        Vec4f32 yellow = v4f32(1, 1, 0, 1);
+        Vec4f32 blue = v4f32(0, 0, 1, 1);
+        Vec4f32 green = v4f32(0, 1, 0, 1);
 
-        f32 val = 0;
+        b32 clip = 0;
+        b32 vertical = 0;
+        f32 redSize = 100.0f;
+        f32 blueSize = 100.0f;
+        f32 greenSize = 100.0f;
+
         while (!glfwWindowShouldClose(r_state.window)) {
                 // TODO: hr: loop management
                 b32 res = ui_begin_frame();
@@ -42,39 +45,105 @@ int main(int argc, char *argv[]) {
                 }
                 ui_push_text_size(16.0f);
 
-                ui_button(str1);
-                if (ui_clicked(ui_button(str3))) {
-                        glfwSetWindowShouldClose(r_state.window, GLFW_TRUE);
+                ui_push_width(uiPct(100, 1));
+                ui_push_height(uiSizeSumOfChildren(1));
+                UIElement *e = ui_build_element_from_string(0, string8_empty());
+                ui_push_parent(e);
+
+                // mass ui style push with macros?
+                // single ui element mass set (mass set next)?
+
+                e = ui_build_element_from_string(0, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
+                ui_push_parent(e);
+                if (ui_clicked(ui_button(string8_lit("swap clip")))) {
+                        clip = !clip;
                 }
-                ui_button(str0);
-                ui_slider(&val, v4f32(1, 1, 1, 1), str10);
+                if (ui_clicked(ui_button(string8_lit("swap direction")))) {
+                        vertical = !vertical;
+                }
+                ui_pop_parent();
 
-                Vec4f32 red = v4f32(1, 0, 0, 1);
-                Vec4f32 yellow = v4f32(1, 1, 0, 1);
-                Vec4f32 blue = v4f32(0, 0, 1, 1);
-
-                ui_next_background_color(red);
-                ui_next_width(uiPixelsX(500, 1));
-                ui_next_height(uiPixelsY(500, 1));
-                UIElement *e = ui_build_element_from_string(
-                    UI_ElementFlag_DrawBackground | UI_ElementFlag_Clip,
-                    string8_lit("box"));
+                // ui_direction_layout style stack?
+                e = ui_build_element_from_string(0, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
                 ui_push_parent(e);
+                ui_text(string8_lit("Red box: "));
+                if (ui_clicked(ui_button(string8_lit("+##redinc")))) {
+                        redSize = clamp(0, redSize + 50, 1000);
+                }
+                if (ui_clicked(ui_button(string8_lit("-##reddec")))) {
+                        redSize = clamp(0, redSize - 50, 1000);
+                }
+                ui_pop_parent();
 
+                e = ui_build_element_from_string(0, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
+                ui_push_parent(e);
+                ui_text(string8_lit("Blue box: "));
+                if (ui_clicked(ui_button(string8_lit("+##blueinc")))) {
+                        blueSize = clamp(0, blueSize + 50, 500);
+                }
+                if (ui_clicked(ui_button(string8_lit("-###bluedec")))) {
+                        blueSize = clamp(0, blueSize - 50, 500);
+                }
+                ui_pop_parent();
+
+                e = ui_build_element_from_string(0, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
+                ui_push_parent(e);
+                ui_text(string8_lit("Green box: "));
+                if (ui_clicked(ui_button(string8_lit("+##greeninc")))) {
+                        greenSize = clamp(0, greenSize + 50, 500);
+                }
+                if (ui_clicked(ui_button(string8_lit("-###greendec")))) {
+                        greenSize = clamp(0, greenSize - 50, 500);
+                }
+                ui_pop_parent();
+
+                ui_pop_width();
+                ui_pop_height();
+                ui_pop_parent();
+
+                e = ui_build_element_from_string(0, string8_empty());
+                e->layoutDirection = UI_Axis2d_X;
+                ui_push_parent(e);
+                ui_spacer(uiPixelsX(200, 1));
+
+                ui_next_width(uiPixelsX(400, 1));
+                ui_next_height(uiPixelsX(400, 1));
+                UI_ElementFlags flags = UI_ElementFlag_DrawBackground;
+                flags |= (UI_ElementFlag_Clip * clip);
                 ui_next_background_color(yellow);
-                ui_next_width(uiPixelsX(1000, 1));
-                ui_next_height(uiPixelsY(200, 1));
-                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
-                                                 string8_empty());
-                ui_element_attach_texture(e, &t);
-                ui_push_parent(e);
+                e = ui_build_element_from_string(flags,
+                                                 string8_lit("yellow parent"));
+                e->layoutDirection = vertical ? UI_Axis2d_Y : UI_Axis2d_X;
+                ui_parent(e) {
+                        flags = UI_ElementFlag_DrawBackground;
+                        ui_next_width(uiPixelsX(redSize, 1));
+                        ui_next_height(uiPixelsX(redSize, 1));
+                        ui_next_background_color(red);
+                        e = ui_build_element_from_string(
+                                flags, string8_lit("red child"));
+                        ui_element_attach_texture(e, &t);
+                        ui_next_width(uiPixelsX(blueSize, 1));
+                        ui_next_height(uiPixelsX(blueSize, 1));
+                        ui_next_background_color(blue);
+                        e = ui_build_element_from_string(
+                                flags, string8_lit("blue child"));
+                        ui_element_attach_texture(e, &t);
 
-                ui_next_background_color(blue);
-                ui_next_width(uiPixelsX(1500, 1));
-                ui_next_height(uiPixelsY(100, 1));
-                e = ui_build_element_from_string(UI_ElementFlag_DrawBackground,
-                                                 string8_empty());
-                ui_element_attach_texture(e, &t);
+                        ui_parent(e) {
+                                ui_next_width(uiPixelsX(greenSize, 1));
+                                ui_next_height(uiPixelsX(greenSize, 1));
+                                ui_next_background_color(green);
+                                UIElement *eg = ui_build_element_from_string(
+                                        flags, string8_lit("green subchild"));
+                                ui_element_attach_texture(eg, &t);
+                        }
+                }
+
+                ui_pop_parent();
 
                 ui_element_autolayout();
                 ui_draw_elements();

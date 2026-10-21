@@ -26,7 +26,7 @@ typedef enum {
         UI_SizeKind_Null,
         UI_SizeKind_Pixels,
         UI_SizeKind_TextContent,
-        UI_SizeKind_PercentOfParent,
+        UI_SizeKind_PctOfParent,
         UI_SizeKind_SumOfChildren,
         UI_SizeKind_OtherAxisRatio,
 } UI_SizeKind;
@@ -44,9 +44,10 @@ typedef enum {
         UI_ElementFlag_DrawBorder = (1 << 3),
         UI_ElementFlag_DrawBackground = (1 << 4),
         UI_ElementFlag_DrawDropShadow = (1 << 5),
-        UI_ElementFlag_Clip = (1 << 6),
-        UI_ElementFlag_HotAnimation = (1 << 7),
-        UI_ElementFlag_ActiveAnimation = (1 << 8),
+        UI_ElementFlag_overflowVisibleX = (1 << 6),
+        UI_ElementFlag_overflowVisibleY = (1 << 7),
+        UI_ElementFlag_HotAnimation = (1 << 8),
+        UI_ElementFlag_ActiveAnimation = (1 << 9),
 } UI_ElementFlags;
 
 typedef struct UIElement UIElement;
@@ -73,13 +74,14 @@ struct UIElement {
         f32 borderSize;
         f32 cornerRadius;
         Vec4f32 padding;
+        Vec2f32 scrollOffset;
         RTexture *texture;
 
         // hr: autolayout computed
-        Vec2f32 relPosition;
+        Vec2f32 relativePos;
         Vec2f32 computedSize;
         Rng2f32 screenCoords;
-        Rng2f32 texRange;
+        Rng2f32 viewBox;
 };
 
 readonly static UIElement ui_nil_element = {

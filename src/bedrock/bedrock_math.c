@@ -108,12 +108,22 @@ static Rng2f32 rng2f32(Vec2f32 a, Vec2f32 b) {
 
 static Rng2f32 shift_r2f32(Rng2f32 r, Vec2f32 a) {
         Rng2f32 res
-            = { .min = add_v2f32(r.min, a), .max = add_v2f32(r.max, a) };
+                = { .min = add_v2f32(r.min, a), .max = add_v2f32(r.max, a) };
         return res;
 }
 
 static b32 contains_r2f32(Rng2f32 r, Vec2f32 a) {
         b32 res = (a.x > r.min.x && a.x < r.max.x)
                   && (a.y > r.min.y && a.y < r.max.y);
+        return res;
+}
+
+static Rng2f32 intersection_r2f32(Rng2f32 a, Rng2f32 b) {
+        Rng2f32 res = {
+                .x0 = max(a.x0, b.x0),
+                .y0 = max(a.y0, b.y0),
+                .x1 = min(a.x1, b.x1),
+                .y1 = min(a.y1, b.y1),
+        };
         return res;
 }

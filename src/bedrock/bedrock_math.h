@@ -180,5 +180,6 @@ static Rng2u32 rng2u32(Vec2u32 a, Vec2u32 b);
 static Rng2f32 rng2f32(Vec2f32 a, Vec2f32 b);
 static Rng2f32 shift_r2f32(Rng2f32 r, Vec2f32 a);
 static b32 contains_r2f32(Rng2f32 r, Vec2f32 a);
+static Rng2f32 intersection_r2f32(Rng2f32 a, Rng2f32 b);
 
 #endif // BEDROCK_MATH_H

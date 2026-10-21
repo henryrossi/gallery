@@ -15,6 +15,7 @@ typedef struct {
 
 static FFont *f_init_font(String8 filename);
 
+static Vec2f32 f_text_extent(FFont *font, f32 size, String8 str);
 static f32 f_text_length(FFont *font, f32 size, String8 str);
 
 static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,

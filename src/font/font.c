@@ -88,6 +88,11 @@ static f32 f_text_length(FFont *font, f32 size, String8 str) {
         return q.x1 * scale;
 }
 
+static Vec2f32 f_text_extent(FFont *font, f32 size, String8 str) {
+        Vec2f32 res = { .x = f_text_length(font, size, str), .y = size };
+        return res;
+}
+
 static void f_char_draw_info(FFont *font, f32 size, u8 c, Rng2f32 *pos,
                              Rng2f32 *src) {
         f32 x = 0.0f;

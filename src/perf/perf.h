@@ -42,4 +42,10 @@ static u64 perf_estimate_cpu_timer_freq(void);
 #define RESET_PROFILER perf_reset_profiler()
 #define PRINT_PROFILER perf_print_profiler()
 
+static void perf_setup_profiler(void);
+static void perf_start_profiler_block(String8 name, u32 id);
+static void perf_end_profiler_block(void);
+static void perf_reset_profiler(void);
+static void perf_print_profiler(void);
+
 #endif // PERF_PERF_H

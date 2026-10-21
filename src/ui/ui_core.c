@@ -225,7 +225,7 @@ static void setup_ui_state(void) {
         ui_state.freelist = make_freelist(mb(1));
 
         ui_state.defaultFont
-            = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
+                = f_init_font(string8_lit("resources/RobotoMono-Regular.ttf"));
         if (!ui_state.defaultFont) {
                 log_message(string8_lit("Failed to load default font\n"));
                 os_abort(1);
@@ -240,7 +240,7 @@ static void setup_ui_state(void) {
         ui_state.eFree = &ui_nil_element;
 
         ui_state.charInputBuf.data
-            = arena_alloc(ui_state.arena, UI_CHAR_INPUT_BUF_LENGTH);
+                = arena_alloc(ui_state.arena, UI_CHAR_INPUT_BUF_LENGTH);
 
         for (u32 i = 0; i < UI_Button_Count; i++) {
                 ui_state.pressOrigin[i] = v2f32(-1.0f, -1.0f);
@@ -267,15 +267,15 @@ static void setup_ui_state(void) {
         ui_state.cornerRadiusStackBottom.v = 0;
         ui_state.paddingStackBottom.v = v4f32(0, 0, 0, 0);
         ui_state.widthStackBottom.v
-            = uiSemanticSize(UI_SizeKind_PercentOfParent, 100, 1);
+                = uiSemanticSize(UI_SizeKind_PctOfParent, 100, 1);
         ui_state.heightStackBottom.v
-            = uiSemanticSize(UI_SizeKind_PercentOfParent, 100, 1);
+                = uiSemanticSize(UI_SizeKind_PctOfParent, 100, 1);
 
         ui_state.parentStack.top = &ui_state.parentStackBottom;
         ui_state.textSizeStack.top = &ui_state.textSizeStackBottom;
         ui_state.textColorStack.top = &ui_state.textColorStackBottom;
         ui_state.backgroundColorStack.top
-            = &ui_state.backgroundColorStackBottom;
+                = &ui_state.backgroundColorStackBottom;
         ui_state.borderColorStack.top = &ui_state.borderColorStackBottom;
         ui_state.borderSizeStack.top = &ui_state.borderSizeStackBottom;
         ui_state.cornerRadiusStack.top = &ui_state.cornerRadiusStackBottom;
@@ -296,7 +296,7 @@ static b32 ui_begin_frame(void) {
 
                 if (ui_state.charInputBuf.length) {
                         *ui_state.focusedText = string8_concat_f(
-                            fl, fText, ui_state.charInputBuf);
+                                fl, fText, ui_state.charInputBuf);
                         // clang-format off
 // WARN:                  ∆
 // hr: if this allocation | fails, what are my options? Ideally we have a 
@@ -452,6 +452,10 @@ static UIElement *ui_build_element_from_key(UI_ElementFlags flags, u64 key) {
         return res;
 }
 
+// WARN: hr: currently, having two element strings with the same hash, i.e
+// being equal after the first '##', causes a collision. This is not detected
+// by the current code, and it is not handled gracefully. I've seen it cause an
+// infinite loop in the autolayout queue.
 static String8 ui_find_hash_within_string(String8 str) {
         String8 res = str;
         u64 hashSignifierPos = string8_find_substr(str, string8_lit("##"));
@@ -498,284 +502,384 @@ static UIElement *ui_build_element_from_stringfv(UI_ElementFlags flags,
 
 /* UI autolayout algorithm functions */
 
-static void ui_autolayout_calc_preorder(UIElement *e, UI_Axis2d axis) {
-        UISemanticSize size = e->size[axis];
-        f32 computedSize = 0.0f;
-        f32 parentSize = e->parent ? e->parent->computedSize.v[axis] : 0.0f;
+// static void ui_autolayout_calc_preorder(UIElement *e, UI_Axis2d axis) {
+//         UISemanticSize size = e->size[axis];
+//         f32 computedSize = 0.0f;
+//         f32 parentSize = e->parent ? e->parent->computedSize.v[axis] : 0.0f;
+//
+//         switch (size.kind) {
+//         case UI_SizeKind_Pixels:
+//                 computedSize = size.value;
+//                 break;
+//         case UI_SizeKind_TextContent:
+//                 if (axis == UI_Axis2d_X) {
+//                         computedSize = f_text_length(ui_state.defaultFont,
+//                                                      e->textSize, e->text);
+//                         computedSize += (e->padding.x + e->padding.z);
+//                         computedSize += (2 * e->borderSize);
+//                 } else {
+//                         computedSize = e->textSize * ui_content_scale().y;
+//                         computedSize += (e->padding.y + e->padding.w);
+//                         computedSize += (2 * e->borderSize);
+//                 }
+//                 break;
+//         case UI_SizeKind_PercentOfParent:
+//                 if (axis == UI_Axis2d_X) {
+//                         parentSize -= e->padding.x + e->padding.z;
+//                         computedSize = parentSize * size.value * 0.01f;
+//                 } else {
+//                         parentSize -= e->padding.y + e->padding.w;
+//                         computedSize = parentSize * size.value * 0.01f;
+//                 }
+//                 break;
+//         case UI_SizeKind_SumOfChildren:
+//         case UI_SizeKind_OtherAxisRatio:
+//         case UI_SizeKind_Null:
+//                 return;
+//         }
+//
+//         e->computedSize.v[axis] = computedSize;
+// }
+//
+// static void ui_autolayout_calc_postorder(UIElement *e, UI_Axis2d axis) {
+//         UISemanticSize size = e->size[axis];
+//         f32 computedSize = 0.0f;
+//
+//         switch (size.kind) {
+//         case UI_SizeKind_SumOfChildren:
+//                 for (UIElement *child = e->firstChild;
+//                      !ui_element_is_nil(child); child = child->next) {
+//                         if (axis == e->layoutDirection) {
+//                                 computedSize += (axis == UI_Axis2d_X)
+//                                                         ?
+//                                                         child->computedSize.x
+//                                                         :
+//                                                         child->computedSize.y;
+//                         } else {
+//                                 f32 childSize = (axis == UI_Axis2d_X)
+//                                                         ?
+//                                                         child->computedSize.x
+//                                                         :
+//                                                         child->computedSize.y;
+//                                 computedSize = max(computedSize, childSize);
+//                         }
+//                 }
+//
+//                 if (e->flags & UI_ElementFlag_DrawBorder) {
+//                         computedSize += (2 * e->borderSize);
+//                 }
+//                 if (axis == UI_Axis2d_X) {
+//                         computedSize += (e->padding.x + e->padding.z);
+//                         e->computedSize.x = computedSize;
+//                 } else {
+//                         computedSize += (e->padding.y + e->padding.w);
+//                         e->computedSize.y = computedSize;
+//                 }
+//                 break;
+//         case UI_SizeKind_OtherAxisRatio:
+//                 if (axis == UI_Axis2d_X) {
+//                         computedSize = e->computedSize.y;
+//                         computedSize -= (e->padding.y + e->padding.w);
+//                         computedSize *= size.value;
+//                         computedSize += (e->padding.x + e->padding.z);
+//                         e->computedSize.x = computedSize;
+//                 } else {
+//                         computedSize = e->computedSize.x;
+//                         computedSize -= (e->padding.x + e->padding.z);
+//                         computedSize *= size.value;
+//                         computedSize += (e->padding.y + e->padding.w);
+//                         e->computedSize.y = computedSize;
+//                 }
+//                 break;
+//         case UI_SizeKind_Pixels:
+//         case UI_SizeKind_TextContent:
+//         case UI_SizeKind_PercentOfParent:
+//         case UI_SizeKind_Null:
+//                 return;
+//         }
+// }
+//
+// static void ui_autolayout_rec_postorder(UIElement *e) {
+//         if (!e) {
+//                 return;
+//         }
+//
+//         for (UIElement *child = e->firstChild; !ui_element_is_nil(child);
+//              child = child->next) {
+//                 ui_autolayout_rec_postorder(child);
+//         }
+//
+//         ui_autolayout_calc_postorder(e, UI_Axis2d_X);
+//         ui_autolayout_calc_postorder(e, UI_Axis2d_Y);
+// }
+//
+// static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
+//         f32 pad = axis == UI_Axis2d_X ? e->padding.x + e->padding.z
+//                                       : e->padding.y + e->padding.w;
+//         f32 cap = e->computedSize.v[axis] - pad;
+//
+//         if (e->layoutDirection == axis) {
+//                 f32 sum = 0.0f;
+//                 f32 strictnessTotal = 0.0f;
+//                 for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
+//                      ch = ch->next) {
+//                         sum += ch->computedSize.v[axis];
+//                         strictnessTotal += (1.0f -
+//                         ch->size[axis].strictness);
+//                 }
+//                 f32 discrp = sum - cap;
+//                 if (discrp > 0 && !nequal_f32(strictnessTotal, 0.0f, 0.0001))
+//                 {
+//                         f32 f = discrp / strictnessTotal;
+//                         for (UIElement *ch = e->firstChild;
+//                              !ui_element_is_nil(ch); ch = ch->next) {
+//                                 f32 r = f * (1 - ch->size[axis].strictness);
+//                                 ch->computedSize.v[axis] -= r;
+//                         }
+//                 }
+//
+//         } else {
+//                 for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
+//                      ch = ch->next) {
+//                         if (ch->size[axis].strictness < 1.0f) {
+//                                 ch->computedSize.v[axis]
+//                                         = min(ch->computedSize.v[axis], cap);
+//                         }
+//                 }
+//         }
+// }
 
-        switch (size.kind) {
-        case UI_SizeKind_Pixels:
-                computedSize = size.value;
-                break;
-        case UI_SizeKind_TextContent:
-                if (axis == UI_Axis2d_X) {
-                        computedSize = f_text_length(ui_state.defaultFont,
-                                                     e->textSize, e->text);
-                        computedSize += (e->padding.x + e->padding.z);
-                        computedSize += (2 * e->borderSize);
-                } else {
-                        computedSize = e->textSize * ui_content_scale().y;
-                        computedSize += (e->padding.y + e->padding.w);
-                        computedSize += (2 * e->borderSize);
-                }
-                break;
-        case UI_SizeKind_PercentOfParent:
-                if (axis == UI_Axis2d_X) {
-                        parentSize -= e->padding.x + e->padding.z;
-                        computedSize = parentSize * size.value * 0.01f;
-                } else {
-                        parentSize -= e->padding.y + e->padding.w;
-                        computedSize = parentSize * size.value * 0.01f;
-                }
-                break;
-        case UI_SizeKind_SumOfChildren:
-        case UI_SizeKind_OtherAxisRatio:
-        case UI_SizeKind_Null:
-                return;
+// WARN: hr: we currently don't handle padding. I'm thinking of making padding a
+// single value rather than four.
+
+static void ui_compute_size_no_dependencies(UIElement *e, UI_Axis2d axis) {
+        switch (e->size[axis].kind) {
+        default: break;
+        case UI_SizeKind_Pixels: {
+                e->computedSize.v[axis] = e->size[axis].value;
+        } break;
+        case UI_SizeKind_TextContent: {
+                e->computedSize.v[axis] = f_text_extent(ui_state.defaultFont,
+                                                        e->textSize, e->text)
+                                                  .v[axis];
+        } break;
         }
-
-        e->computedSize.v[axis] = computedSize;
 }
 
-static void ui_autolayout_calc_postorder(UIElement *e, UI_Axis2d axis) {
-        UISemanticSize size = e->size[axis];
-        f32 computedSize = 0.0f;
+static void ui_compute_size_upwards_dependent(UIElement *e, UI_Axis2d axis) {
+        switch (e->size[axis].kind) {
+        default: break;
+        case UI_SizeKind_PctOfParent: {
+                UIElement *sizedAncestor = &ui_nil_element;
+                for (UIElement *p = e->parent; !ui_element_is_nil(p);
+                     p = p->parent) {
+                        if (p->size[axis].kind == UI_SizeKind_Pixels
+                            || p->size[axis].kind == UI_SizeKind_TextContent
+                            || p->size[axis].kind == UI_SizeKind_PctOfParent) {
+                                sizedAncestor = p;
+                                break;
+                        }
+                }
+                f32 size = sizedAncestor->computedSize.v[axis]
+                           * e->size[axis].value;
+                e->computedSize.v[axis] = size;
+        } break;
+        }
+}
 
-        switch (size.kind) {
-        case UI_SizeKind_SumOfChildren:
+static void ui_compute_size_downwards_dependent(UIElement *e, UI_Axis2d axis) {
+        switch (e->size[axis].kind) {
+        default: break;
+        case UI_SizeKind_SumOfChildren: {
+                f32 size = 0;
                 for (UIElement *child = e->firstChild;
                      !ui_element_is_nil(child); child = child->next) {
                         if (axis == e->layoutDirection) {
-                                computedSize += (axis == UI_Axis2d_X)
-                                                    ? child->computedSize.x
-                                                    : child->computedSize.y;
+                                size += child->computedSize.v[axis];
                         } else {
-                                f32 childSize = (axis == UI_Axis2d_X)
-                                                    ? child->computedSize.x
-                                                    : child->computedSize.y;
-                                computedSize = max(computedSize, childSize);
+                                size = max(size, child->computedSize.v[axis]);
                         }
                 }
-
-                if (e->flags & UI_ElementFlag_DrawBorder) {
-                        computedSize += (2 * e->borderSize);
-                }
-                if (axis == UI_Axis2d_X) {
-                        computedSize += (e->padding.x + e->padding.z);
-                        e->computedSize.x = computedSize;
-                } else {
-                        computedSize += (e->padding.y + e->padding.w);
-                        e->computedSize.y = computedSize;
-                }
-                break;
-        case UI_SizeKind_OtherAxisRatio:
-                if (axis == UI_Axis2d_X) {
-                        computedSize = e->computedSize.y;
-                        computedSize -= (e->padding.y + e->padding.w);
-                        computedSize *= size.value;
-                        computedSize += (e->padding.x + e->padding.z);
-                        e->computedSize.x = computedSize;
-                } else {
-                        computedSize = e->computedSize.x;
-                        computedSize -= (e->padding.x + e->padding.z);
-                        computedSize *= size.value;
-                        computedSize += (e->padding.y + e->padding.w);
-                        e->computedSize.y = computedSize;
-                }
-                break;
-        case UI_SizeKind_Pixels:
-        case UI_SizeKind_TextContent:
-        case UI_SizeKind_PercentOfParent:
-        case UI_SizeKind_Null:
-                return;
+                e->computedSize.v[axis] = size;
+        } break;
         }
 }
 
-static void ui_autolayout_rec_postorder(UIElement *e) {
-        if (!e) {
-                return;
-        }
-
+static void ui_compute_sizes(UIElement *e, UI_Axis2d axis) {
+        ui_compute_size_no_dependencies(e, axis);
+        ui_compute_size_upwards_dependent(e, axis);
         for (UIElement *child = e->firstChild; !ui_element_is_nil(child);
              child = child->next) {
-                ui_autolayout_rec_postorder(child);
+                ui_compute_sizes(child, axis);
         }
-
-        ui_autolayout_calc_postorder(e, UI_Axis2d_X);
-        ui_autolayout_calc_postorder(e, UI_Axis2d_Y);
+        ui_compute_size_downwards_dependent(e, axis);
 }
 
-static void ui_solve_violations_on_axis(UIElement *e, UI_Axis2d axis) {
-        f32 pad = axis == UI_Axis2d_X ? e->padding.x + e->padding.z
-                                      : e->padding.y + e->padding.w;
-        f32 cap = e->computedSize.v[axis] - pad;
-
-        if (e->layoutDirection == axis) {
-                f32 sum = 0.0f;
-                f32 strictnessTotal = 0.0f;
-                for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
-                     ch = ch->next) {
-                        sum += ch->computedSize.v[axis];
-                        strictnessTotal += (1.0f - ch->size[axis].strictness);
-                }
-                f32 discrp = sum - cap;
-                if (discrp > 0 && !nequal_f32(strictnessTotal, 0.0f, 0.0001)) {
-                        f32 f = discrp / strictnessTotal;
-                        for (UIElement *ch = e->firstChild;
-                             !ui_element_is_nil(ch); ch = ch->next) {
-                                f32 r = f * (1 - ch->size[axis].strictness);
-                                ch->computedSize.v[axis] -= r;
-                        }
-                }
-
-        } else {
-                for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
-                     ch = ch->next) {
-                        if (ch->size[axis].strictness < 1.0f) {
-                                ch->computedSize.v[axis]
-                                    = min(ch->computedSize.v[axis], cap);
-                        }
-                }
+static void ui_compute_sizes_axis_dependent(UIElement *e, UI_Axis2d axis) {
+        switch (e->size[axis].kind) {
+        default: break;
+        case UI_SizeKind_OtherAxisRatio: {
+                UI_Axis2d other = axis == UI_Axis2d_X ? axis + 1 : axis - 1;
+                f32 size = e->computedSize.v[other] * e->size[axis].value;
+                e->computedSize.v[axis] = size;
+        } break;
+        }
+        for (UIElement *child = e->firstChild; !ui_element_is_nil(child);
+             child = child->next) {
+                ui_compute_sizes_axis_dependent(child, axis);
         }
 }
 
+static void ui_solve_layout_violations(UIElement *e, UI_Axis2d axis) {
+        f32 discrep = e->computedSize.v[axis];
+        f32 leeway = 0.0f;
+
+        for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
+             ch = ch->next) {
+                discrep -= ch->computedSize.v[axis];
+                leeway += 1.0f - ch->size[axis].strictness;
+        }
+        discrep = clamp_top(discrep, 0.0f);
+        f32 f = discrep / leeway;
+
+        for (UIElement *ch = e->firstChild; !ui_element_is_nil(ch);
+             ch = ch->next) {
+                f32 strictness = ch->size[axis].strictness;
+                f32 size = ch->computedSize.v[axis];
+                if (axis == e->layoutDirection) {
+                        size -= ((1.0f - strictness) * f);
+                } else {
+                        if (strictness < 1.0f) {
+                                size = min(size, e->computedSize.v[axis]);
+                        }
+                }
+                ch->computedSize.v[axis] = size;
+        }
+}
+
+static void ui_layout_position(UIElement *e, UI_Axis2d axis) {
+}
+
+static void ui_autolayout_root(UIElement *root) {
+        for (UI_Axis2d axis = 0; axis < UI_Axis2d_Count; axis++) {
+                ui_compute_sizes(root, axis);
+        }
+
+        for (UI_Axis2d axis = 0; axis < UI_Axis2d_Count; axis++) {
+                ui_compute_sizes_axis_dependent(root, axis);
+                ui_solve_layout_violations(root, axis);
+                ui_layout_position(root, axis);
+        }
+}
+
+// hr: rename 'ui end build'
 static void ui_element_autolayout(void) {
-        Arena *scratch = ui_build_arena();
-        u64 resetPos = arena_pos(scratch);
-        Vec2f32 screenExtent = r_get_window_size();
         UIElement *root = ui_state.root;
-        Vec4f32 bg = ui_state.backgroundColorStackBottom.v;
-        root->backgroundColors[0] = bg;
-        root->backgroundColors[1] = bg;
-        root->backgroundColors[2] = bg;
-        root->backgroundColors[3] = bg;
-        // TODO: hr: hacky! need to fix
-        root->size[UI_Axis2d_X].kind = UI_SizeKind_Pixels;
-        root->size[UI_Axis2d_X].value = screenExtent.x;
-        root->size[UI_Axis2d_Y].kind = UI_SizeKind_Pixels;
-        root->size[UI_Axis2d_Y].value = screenExtent.y;
 
-        UIElementList queue = { 0 };
-        ui_element_list_push(scratch, &queue, root);
-        while (!ui_element_list_is_empty(&queue)) {
-                UIElement *e = ui_element_list_dequeue(&queue);
-                UIElement *child = e->firstChild;
-
-                ui_autolayout_calc_preorder(e, UI_Axis2d_X);
-                ui_autolayout_calc_preorder(e, UI_Axis2d_Y);
-
-                while (!ui_element_is_nil(child)) {
-                        ui_element_list_push(scratch, &queue, child);
-                        child = child->next;
-                }
-        }
-
-        ui_autolayout_rec_postorder(root);
-
-        // hr: Solve violations where children exceed parent
-
-        // hr: Compute relative positions and on screen coords
-        //     Here we can apply margins, which will also be relevant to
-        //     the violation calculation above
-        root->screenCoords.p0 = v2f32(0, 0);
-        root->screenCoords.p1 = root->computedSize;
-        u64 frame = r_get_frame_count();
-
-        arena_pop_at(scratch, resetPos);
-        queue.first = 0;
-        queue.last = 0;
-        ui_element_list_push(scratch, &queue, root);
-        while (!ui_element_list_is_empty(&queue)) {
-                UIElement *cur = ui_element_list_dequeue(&queue);
-                cur->lastFrameTouched = frame;
-
-                // hr: solve violations
-                ui_solve_violations_on_axis(cur, UI_Axis2d_X);
-                ui_solve_violations_on_axis(cur, UI_Axis2d_Y);
-
-                // hr: calculate relative positions and screen
-                // coordinates
-                for (UIElement *child = cur->firstChild;
-                     !ui_element_is_nil(child); child = child->next) {
-                        ui_element_list_push(scratch, &queue, child);
-                        UIElement *prev = child->prev;
-                        if (ui_element_is_nil(prev)
-                            || cur->layoutDirection == UI_Axis2d_None) {
-                                child->relPosition.x = 0.0f;
-                                child->relPosition.y = 0.0f;
-                        } else if (cur->layoutDirection == UI_Axis2d_X) {
-                                child->relPosition.x = prev->relPosition.x
-                                                       + prev->computedSize.x;
-                                child->relPosition.y = 0.0f;
-                        } else if (cur->layoutDirection == UI_Axis2d_Y) {
-                                child->relPosition.x = 0.0f;
-                                child->relPosition.y = prev->relPosition.y
-                                                       + prev->computedSize.y;
-                        }
-
-                        Vec2f32 paddedParentPos
-                            = add_v2f32(cur->screenCoords.p0,
-                                        v2f32(cur->padding.x, cur->padding.y));
-                        child->screenCoords.p0
-                            = add_v2f32(paddedParentPos, child->relPosition);
-                        child->screenCoords.p1 = add_v2f32(
-                            child->computedSize, child->screenCoords.p0);
-                }
-
-                cur->texRange = rng2f32(v2f32(0, 0), v2f32(1, 1));
-        }
-
-        // hr: clipping
-        ui_element_list_push(scratch, &queue, root);
-        while (!ui_element_list_is_empty(&queue)) {
-                UIElement *cur = ui_element_list_dequeue(&queue);
-
-                for (UIElement *child = cur->firstChild;
-                     !ui_element_is_nil(child); child = child->next) {
-                        ui_element_list_push(scratch, &queue, child);
-
-                        // NOTE: hr: does this work recursively? What if child
-                        // has child that needs to be clipped? Furthurmore we
-                        // need to extend what we are doing here if we want to
-                        // clip text halfway through a character.
-
-                        if (cur->flags & UI_ElementFlag_Clip) {
-                                child->flags
-                                    = child->flags | UI_ElementFlag_Clip;
-
-                                Vec2f32 c0 = child->screenCoords.min;
-                                Vec2f32 c1 = child->screenCoords.max;
-                                Vec2f32 p0 = cur->screenCoords.min;
-                                Vec2f32 p1 = cur->screenCoords.max;
-                                if (p0.x > c0.x) {
-                                        child->texRange.min.x
-                                            = 1.0f
-                                              - ((p1.x - p0.x) / (c1.x - c0.x));
-                                        c0.x = p0.x;
-                                }
-                                if (p0.y > c0.y) {
-                                        child->texRange.min.y
-                                            = 1.0f
-                                              - ((p1.y - p0.y) / (c1.y - c0.y));
-                                        c0.y = p0.y;
-                                }
-                                if (p1.x < c1.x) {
-                                        child->texRange.max.x
-                                            = ((p1.x - p0.x) / (c1.x - c0.x));
-                                        c1.x = p1.x;
-                                }
-                                if (p1.y < c1.y) {
-                                        child->texRange.max.y
-                                            = ((p1.y - p0.y) / (c1.y - c0.y));
-                                        c1.y = p1.y;
-                                }
-                                child->screenCoords = rng2f32(c0, c1);
-                        }
-                }
-        }
-
-        arena_pop_at(scratch, resetPos);
+        ui_autolayout_root(root);
 }
+
+// static void ui_element_autolayout(void) {
+//         Arena *scratch = ui_build_arena();
+//         u64 resetPos = arena_pos(scratch);
+//         Vec2f32 screenExtent = r_get_window_size();
+//         UIElement *root = ui_state.root;
+//         Vec4f32 bg = ui_state.backgroundColorStackBottom.v;
+//         root->backgroundColors[0] = bg;
+//         root->backgroundColors[1] = bg;
+//         root->backgroundColors[2] = bg;
+//         root->backgroundColors[3] = bg;
+//         // TODO: hr: hacky! need to fix
+//         root->size[UI_Axis2d_X].kind = UI_SizeKind_Pixels;
+//         root->size[UI_Axis2d_X].value = screenExtent.x;
+//         root->size[UI_Axis2d_Y].kind = UI_SizeKind_Pixels;
+//         root->size[UI_Axis2d_Y].value = screenExtent.y;
+//
+//         UIElementList queue = { 0 };
+//         ui_element_list_push(scratch, &queue, root);
+//         while (!ui_element_list_is_empty(&queue)) {
+//                 UIElement *e = ui_element_list_dequeue(&queue);
+//                 UIElement *child = e->firstChild;
+//
+//                 ui_autolayout_calc_preorder(e, UI_Axis2d_X);
+//                 ui_autolayout_calc_preorder(e, UI_Axis2d_Y);
+//
+//                 while (!ui_element_is_nil(child)) {
+//                         ui_element_list_push(scratch, &queue, child);
+//                         child = child->next;
+//                 }
+//         }
+//
+//         ui_autolayout_rec_postorder(root);
+//
+//         // hr: Solve violations where children exceed parent
+//
+//         // hr: Compute relative positions and on screen coords
+//         //     Here we can apply margins, which will also be relevant
+//         to
+//         //     the violation calculation above
+//         root->screenCoords.p0 = v2f32(0, 0);
+//         root->screenCoords.p1 = root->computedSize;
+//         u64 frame = r_get_frame_count();
+//
+//         arena_pop_at(scratch, resetPos);
+//         queue.first = 0;
+//         queue.last = 0;
+//         ui_element_list_push(scratch, &queue, root);
+//         while (!ui_element_list_is_empty(&queue)) {
+//                 UIElement *cur = ui_element_list_dequeue(&queue);
+//                 cur->lastFrameTouched = frame;
+//
+//                 // hr: solve violations
+//                 ui_solve_violations_on_axis(cur, UI_Axis2d_X);
+//                 ui_solve_violations_on_axis(cur, UI_Axis2d_Y);
+//
+//                 // hr: calculate relative positions and screen
+//                 // coordinates
+//                 for (UIElement *child = cur->firstChild;
+//                      !ui_element_is_nil(child); child = child->next)
+//                      {
+//                         ui_element_list_push(scratch, &queue, child);
+//                         UIElement *prev = child->prev;
+//                         if (ui_element_is_nil(prev)
+//                             || cur->layoutDirection ==
+//                             UI_Axis2d_None) {
+//                                 child->relativePos.x = 0.0f;
+//                                 child->relativePos.y = 0.0f;
+//                         } else if (cur->layoutDirection ==
+//                         UI_Axis2d_X) {
+//                                 child->relativePos.x =
+//                                 prev->relativePos.x
+//                                                        +
+//                                                        prev->computedSize.x;
+//                                 child->relativePos.y = 0.0f;
+//                         } else if (cur->layoutDirection ==
+//                         UI_Axis2d_Y) {
+//                                 child->relativePos.x = 0.0f;
+//                                 child->relativePos.y =
+//                                 prev->relativePos.y
+//                                                        +
+//                                                        prev->computedSize.y;
+//                         }
+//
+//                         Vec2f32 paddedParentPos = add_v2f32(
+//                                 cur->screenCoords.p0,
+//                                 v2f32(cur->padding.x,
+//                                 cur->padding.y));
+//                         child->screenCoords.p0 =
+//                         add_v2f32(paddedParentPos,
+//                                                            child->relativePos);
+//                         child->screenCoords.p1 = add_v2f32(
+//                                 child->computedSize,
+//                                 child->screenCoords.p0);
+//                 }
+//         }
+//
+//         // hr: scroll
+//
+//         // hr: clipping
+//         arena_pop_at(scratch, resetPos);
+// }
 
 static void ui_draw_element_rec(UIElement *e) {
         f32 border = e->borderSize;
@@ -822,6 +926,7 @@ static void ui_draw_elements(void) {
         ui_state.root->firstChild = &ui_nil_element;
         ui_state.root->lastChild = &ui_nil_element;
         // reset everything
+        // hr: ui_reset_auto_stack(lower, underscore)
         while (ui_state.parentStack.top != &ui_state.parentStackBottom) {
                 ui_pop_parent();
         }
@@ -861,7 +966,7 @@ static void ui_draw_elements(void) {
         // runs once at the end of every frame
         u32 left = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_LEFT);
         u32 middle
-            = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_MIDDLE);
+                = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_MIDDLE);
         u32 right = glfwGetMouseButton(r_state.window, GLFW_MOUSE_BUTTON_RIGHT);
 
         // WARN: hr: does this even work? (yes?) it's janky as hell
@@ -902,8 +1007,8 @@ static void ui_element_emboss_from_solid(UIElement *e) {
         f32 v = c.x + c.y + c.z;
         f32 a = (v > 1.5f) ? -0.2f : 0.2f;
         Vec4f32 nc
-            = v4f32(clamp(0.0f, c.x + a, 1.0f), clamp(0.0f, c.y + a, 1.0f),
-                    clamp(0.0f, c.x + a, 1.0f), c.w);
+                = v4f32(clamp(0.0f, c.x + a, 1.0f), clamp(0.0f, c.y + a, 1.0f),
+                        clamp(0.0f, c.x + a, 1.0f), c.w);
         e->backgroundColors[1] = nc;
         e->backgroundColors[3] = nc;
 }
@@ -957,14 +1062,13 @@ static inline UI_SignalFlags ui_mouse_signal(UI_Button button,
                                 if (contains_r2f32(bbox,
                                                    ui_state.prevClick[button])
                                     && (frame - ui_state.prevClickFrame[button])
-                                           < 60) {
-                                        flags
-                                            |= (UI_SignalFlag_LeftDoubleClicked
-                                                << button);
+                                               < 60) {
+                                        flags |= (UI_SignalFlag_LeftDoubleClicked
+                                                  << button);
                                 }
                                 ui_state.prevClickFrame[button] = frame;
                                 ui_state.prevClick[button]
-                                    = ui_state.pressOrigin[button];
+                                        = ui_state.pressOrigin[button];
                                 flags |= (UI_SignalFlag_LeftClicked << button);
                         }
 

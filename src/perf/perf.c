@@ -141,6 +141,8 @@ static void perf__print_profiler(PerfNode *n) {
         } else if (branchMisses > 999) {
                 branchMisses *= 0.001;
                 units = kilo;
+        } else {
+                units = " ";
         }
         printf("%6.1f%s (%4.1f%%) ", branchMisses, units, per);
 
@@ -155,6 +157,8 @@ static void perf__print_profiler(PerfNode *n) {
         } else if (ld1misses > 999) {
                 ld1misses *= 0.001;
                 units = kilo;
+        } else {
+                units = " ";
         }
         printf("%6.1f%s (%4.1f%%) ", ld1misses, units, per);
 
@@ -168,6 +172,8 @@ static void perf__print_profiler(PerfNode *n) {
         } else if (ld1tlbmisses > 999) {
                 ld1tlbmisses *= 0.001;
                 units = kilo;
+        } else {
+                units = " ";
         }
         printf("%6.1f%s |\n", ld1tlbmisses, units);
 

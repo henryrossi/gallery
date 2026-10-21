@@ -253,6 +253,9 @@ static b32 glf_visited_pixel(Vec2s32Node **visited, u32 buckets,
         return res;
 }
 
+// WARN: hr: flood fill doesn't need to 'mark' vertices as visited. It can
+// use the pixel color. Original color is not visited.
+
 // +---------------------------------------------------+
 // | Name                                         Time |
 // |---------------------------------------------------|
