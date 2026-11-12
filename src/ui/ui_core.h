@@ -162,7 +162,7 @@ static f32 ui_scale_value(f32 value, UI_Axis2d scaledBy);
         uiSemanticSize(UI_SizeKind_Pixels, ui_scale_value(p, UI_Axis2d_X), s)
 #define uiPixelsY(p, s)                                                        \
         uiSemanticSize(UI_SizeKind_Pixels, ui_scale_value(p, UI_Axis2d_Y), s)
-#define uiPct(p, s) uiSemanticSize(UI_SizeKind_PercentOfParent, p, s)
+#define uiPct(p, s) uiSemanticSize(UI_SizeKind_PctOfParent, p, s)
 #define uiRatio(r, s) uiSemanticSize(UI_SizeKind_OtherAxisRatio, r, s)
 #define uiSizeSumOfChildren(s) uiSemanticSize(UI_SizeKind_SumOfChildren, 0, s)
 #define uiSizeTextContent(s) uiSemanticSize(UI_SizeKind_TextContent, 0, s)

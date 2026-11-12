@@ -58,7 +58,7 @@ static Vec2f32 mul_v2f32(Vec2f32 a, Vec2f32 b) {
 }
 
 static b32 equal_v2f32(Vec2f32 a, Vec2f32 b) {
-        f32 e = 0.00001;
+        f32 e = 0.00001f;
         b32 res = nequal_f32(a.x, b.x, e) && nequal_f32(a.y, b.y, e);
         return res;
 }

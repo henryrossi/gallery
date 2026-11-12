@@ -138,6 +138,8 @@ union Rng2f32 {
         Vec2f32 v[2];
 };
 
+static b32 nequal_f32(f32 a, f32 b, f32 epsilon);
+
 // hr: Vector Ops
 #define v2s16(x, y) vec2s16(x, y)
 static Vec2s16 vec2s16(s16 x, s16 y);

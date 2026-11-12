@@ -50,8 +50,8 @@ int main(int argc, char *argv[]) {
                 UIElement *e = ui_build_element_from_string(0, string8_empty());
                 ui_push_parent(e);
 
-                // mass ui style push with macros?
-                // single ui element mass set (mass set next)?
+                // TODO: hr: mass ui style push with macros? Single ui element
+                // mass set (mass set next)?
 
                 e = ui_build_element_from_string(0, string8_empty());
                 e->layoutDirection = UI_Axis2d_X;
@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
                 ui_next_width(uiPixelsX(400, 1));
                 ui_next_height(uiPixelsX(400, 1));
                 UI_ElementFlags flags = UI_ElementFlag_DrawBackground;
-                flags |= (UI_ElementFlag_Clip * clip);
+                flags |= (UI_ElementFlag_overflowVisibleX * clip);
                 ui_next_background_color(yellow);
                 e = ui_build_element_from_string(flags,
                                                  string8_lit("yellow parent"));
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
 
                 ui_pop_parent();
 
-                ui_element_autolayout();
+                ui_end_build();
                 ui_draw_elements();
 
                 // TODO: hr: more loop management

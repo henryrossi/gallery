@@ -89,7 +89,10 @@ static f32 f_text_length(FFont *font, f32 size, String8 str) {
 }
 
 static Vec2f32 f_text_extent(FFont *font, f32 size, String8 str) {
-        Vec2f32 res = { .x = f_text_length(font, size, str), .y = size };
+        Vec2f32 res = {
+                .x = f_text_length(font, size, str),
+                .y = size * f_content_scale().y,
+        };
         return res;
 }
 
